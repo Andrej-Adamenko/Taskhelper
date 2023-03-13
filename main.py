@@ -8,10 +8,10 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
-@bot.channel_post_handler(func=channel_id_filter)
+@bot.channel_post_handler(func=channel_id_filter, content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
 def handle_post(post_data):
-	#skip forwarded messages
-	if post_data.forward_from_chat:
+	#skip forwarded messages and messages without text
+	if post_data.forward_from_chat or post_data.text == None:
 		return
 
 	post_url = utils.get_post_url(post_data)

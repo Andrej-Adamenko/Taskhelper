@@ -1,6 +1,10 @@
-import json, logging
+import json, logging, os
 
 def load_config(config_filename):
+	if not os.path.exists(config_filename):
+		logging.error("Config file not found")
+		exit()
+
 	f = open(config_filename, "r")
 	config_json = json.load(f)
 	f.close()
@@ -9,13 +13,13 @@ def load_config(config_filename):
 		logging.error("Bot token not found in config file")
 		exit()
 
+	if "CHANNEL_IDS" not in config_json:
+		logging.error("Channel ids not found in config file")
+		exit()
+
 	config_data_list = []
 	config_data_list.append(config_json["BOT_TOKEN"])
-
-	if "CHANNEL_IDS" in config_json:
-		config_data_list.append(config_json["CHANNEL_IDS"])
-	else:
-		config_data_list.append([])
+	config_data_list.append(config_json["CHANNEL_IDS"])
 
 	return config_data_list
 
