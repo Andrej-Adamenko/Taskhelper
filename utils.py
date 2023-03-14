@@ -26,3 +26,19 @@ def load_config(config_filename):
 def get_post_url(post_data):
 	channel_url = str(post_data.chat.id)[4:]
 	return "https://t.me/c/{0}/{1}".format(channel_url, post_data.message_id)
+
+def offset_entities(entities, offset):
+	if not entities:
+		return []
+
+	for entity in entities:
+		entity.offset += offset
+
+	return entities
+
+def get_previous_link(post_data, post_url):
+	if post_data.entities:
+		for entity in post_data.entities:
+			if entity.offset == 0 and entity.type == "text_link" and entity.url == post_url:
+				return entity
+	return None
