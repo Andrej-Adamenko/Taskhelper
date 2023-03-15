@@ -80,7 +80,7 @@ def start_updating_older_messages(bot, channel_id, dump_chat_id):
 
 		bot.delete_message(chat_id=dump_chat_id, message_id=forwarded_message.message_id)
 
-		if forwarded_message.forward_from_chat.id != channel_id:
+		if forwarded_message.forward_from_chat.id != channel_id or not forwarded_message.text:
 			continue
 
 		forwarded_message.message_id = forwarded_message.forward_from_message_id
