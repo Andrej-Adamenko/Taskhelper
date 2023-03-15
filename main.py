@@ -2,10 +2,13 @@ import telebot
 from telebot import types
 import utils
 
-BOT_TOKEN, CHANNEL_IDS = utils.load_config("config.json")
 LINK_ENDING = ". "
+CONFIG_FILE = "config.json"
+
+BOT_TOKEN, CHANNEL_IDS = utils.load_config(CONFIG_FILE)
 
 bot = telebot.TeleBot(BOT_TOKEN)
+BOT_ID = bot.get_me().id
 
 channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
@@ -52,5 +55,22 @@ def handle_edited_post(post_data):
 
 	edited_post_text = inserted_link_text + LINK_ENDING + post_data.text
 	bot.edit_message_text(text=edited_post_text, chat_id=post_data.chat.id, message_id=post_data.message_id, entities=post_data.entities)
+
+@bot.my_chat_member_handler()
+def handle_joined_channel(message):
+	has_permissions = message.new_chat_member.can_edit_messages
+
+	if has_permissions and message.chat.id in CHANNEL_IDS:
+		return # channel_id already added to config file
+
+	if not has_permissions and message.chat.id not in CHANNEL_IDS:
+		return # channel_id already remove from config file
+
+	if has_permissions:
+		CHANNEL_IDS.append(message.chat.id)
+	else:
+		CHANNEL_IDS.remove(message.chat.id)		
+
+	utils.update_config({"CHANNEL_IDS": CHANNEL_IDS}, CONFIG_FILE)
 
 bot.infinity_polling()
