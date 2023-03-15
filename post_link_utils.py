@@ -1,4 +1,4 @@
-import telebot, utils, time
+import telebot, utils, time, logging
 from telebot.types import MessageEntity
 from telebot.apihelper import ApiTelegramException
 
@@ -85,7 +85,10 @@ def start_updating_older_messages(bot, channel_id, dump_chat_id):
 
 		forwarded_message.message_id = forwarded_message.forward_from_message_id
 		forwarded_message.chat = forwarded_message.forward_from_chat
-		update_post_link(bot, forwarded_message)
+		try:
+			update_post_link(bot, forwarded_message)
+		except ApiTelegramException as E:
+			logging.error(E)
 
 	bot.delete_message(chat_id=last_message.chat.id, message_id=last_message.id)
 
