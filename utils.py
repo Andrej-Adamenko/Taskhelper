@@ -19,6 +19,7 @@ def load_config(config_filename):
 	config_data_list = []
 	config_data_list.append(config_json["BOT_TOKEN"])
 	config_data_list.append(config_json["CHANNEL_IDS"])
+	config_data_list.append(config_json["DUMP_CHAT_ID"])
 
 	return config_data_list
 
@@ -37,12 +38,6 @@ def update_config(updated_config_data, config_filename):
 	f = open(config_filename, "w")
 	json.dump(config_json, f)
 	f.close()
-
-
-
-def get_post_url(post_data):
-	channel_url = str(post_data.chat.id)[4:]
-	return "https://t.me/c/{0}/{1}".format(channel_url, post_data.message_id)
 
 def offset_entities(entities, offset):
 	if not entities:
