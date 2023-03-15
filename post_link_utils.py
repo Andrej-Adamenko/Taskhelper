@@ -68,7 +68,7 @@ def start_updating_older_messages(bot, channel_id, dump_chat_id):
 	last_message = bot.send_message(chat_id=channel_id, text="Started updating older posts. When update is complete this message will be deleted.")
 	current_msg_id = last_message.id - 1
 	while current_msg_id > 0:
-		time.sleep(1)
+		time.sleep(2.5)
 
 		forwarded_message = None
 		try:
