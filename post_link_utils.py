@@ -8,8 +8,24 @@ def get_post_url(post_data):
 	channel_url = str(post_data.chat.id)[4:]
 	return "https://t.me/c/{0}/{1}".format(channel_url, post_data.message_id)
 
+def offset_entities(entities, offset):
+	if not entities:
+		return []
+
+	for entity in entities:
+		entity.offset += offset
+
+	return entities
+
+def get_previous_link(post_data, post_url):
+	if post_data.entities:
+		for entity in post_data.entities:
+			if entity.offset == 0 and entity.type == "text_link" and entity.url == post_url:
+				return entity
+	return None
+
 def insert_link_into_post(bot, post_data, link_text, post_url, additional_offset=0):
-	updated_entities = utils.offset_entities(post_data.entities, len(link_text) + len(LINK_ENDING) + additional_offset)
+	updated_entities = offset_entities(post_data.entities, len(link_text) + len(LINK_ENDING) + additional_offset)
 	updated_entities.append(MessageEntity(type="text_link", offset=0, length=len(link_text), url=post_url))
 
 	edited_post_text = link_text + LINK_ENDING + post_data.text
@@ -27,7 +43,7 @@ def update_post_link(bot, post_data):
 
 	entity_offset = 0
 
-	previous_link = utils.get_previous_link(post_data, post_url)
+	previous_link = get_previous_link(post_data, post_url)
 	if previous_link:
 		if post_data.text.startswith(link_text + LINK_ENDING):
 			return # return if link is correct
@@ -49,7 +65,7 @@ def remove_previous_link(post_data, previous_link):
 	return entity_offset
 
 def start_updating_older_messages(bot, channel_id, dump_chat_id):
-	last_message = bot.send_message(chat_id=channel_id, text="Bot started checking older messages.")
+	last_message = bot.send_message(chat_id=channel_id, text="Started updating older posts. When update is complete this message will be deleted.")
 	current_msg_id = last_message.id - 1
 	while current_msg_id > 0:
 		time.sleep(1)
@@ -70,4 +86,8 @@ def start_updating_older_messages(bot, channel_id, dump_chat_id):
 		forwarded_message.message_id = forwarded_message.forward_from_message_id
 		forwarded_message.chat = forwarded_message.forward_from_chat
 		update_post_link(bot, forwarded_message)
+
+	bot.delete_message(chat_id=last_message.chat.id, message_id=last_message.id)
+
+
 

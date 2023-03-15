@@ -13,6 +13,10 @@ def load_config(config_filename):
 		logging.error("Bot token not found in config file")
 		exit()
 
+	if "DUMP_CHAT_ID" not in config_json:
+		logging.error("Dump chat id not found in config file")
+		exit()
+
 	if "CHANNEL_IDS" not in config_json:
 		config_json["CHANNEL_IDS"] = []
 
@@ -38,19 +42,3 @@ def update_config(updated_config_data, config_filename):
 	f = open(config_filename, "w")
 	json.dump(config_json, f)
 	f.close()
-
-def offset_entities(entities, offset):
-	if not entities:
-		return []
-
-	for entity in entities:
-		entity.offset += offset
-
-	return entities
-
-def get_previous_link(post_data, post_url):
-	if post_data.entities:
-		for entity in post_data.entities:
-			if entity.offset == 0 and entity.type == "text_link" and entity.url == post_url:
-				return entity
-	return None
