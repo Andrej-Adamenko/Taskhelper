@@ -32,12 +32,19 @@ def insert_link_into_post(bot, post_data, link_text, post_url, additional_offset
 	bot.edit_message_text(text=edited_post_text, chat_id=post_data.chat.id, message_id=post_data.message_id, entities=updated_entities)	
 
 def add_link_to_new_post(bot, post_data):
+	#skip forwarded messages and messages without text
+	if get_forwarded_from_id(post_data) or post_data.text == None:
+		return
+
 	post_url = get_post_url(post_data)
 	link_text = str(post_data.message_id)
 
 	insert_link_into_post(bot, post_data, link_text, post_url)
 
 def update_post_link(bot, post_data):
+	if post_data.text == None:
+		return
+
 	post_url = get_post_url(post_data)
 	link_text = str(post_data.message_id)
 
@@ -80,7 +87,7 @@ def start_updating_older_messages(bot, channel_id, dump_chat_id):
 
 		bot.delete_message(chat_id=dump_chat_id, message_id=forwarded_message.message_id)
 
-		if forwarded_message.forward_from_chat.id != channel_id or not forwarded_message.text:
+		if get_forwarded_from_id(forwarded_message) != channel_id or forwarded_message.text == None:
 			continue
 
 		forwarded_message.message_id = forwarded_message.forward_from_message_id
@@ -92,5 +99,11 @@ def start_updating_older_messages(bot, channel_id, dump_chat_id):
 
 	bot.delete_message(chat_id=last_message.chat.id, message_id=last_message.id)
 
+def get_forwarded_from_id(message_data):
+	if message_data.forward_from_chat:
+		return message_data.forward_from_chat.id
+	if message_data.forward_from:
+		return message_data.forward_from.id
 
+	return None
 

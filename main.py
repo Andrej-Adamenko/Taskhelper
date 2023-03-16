@@ -12,17 +12,10 @@ channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
 @bot.channel_post_handler(func=channel_id_filter, content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
 def handle_post(post_data):
-	#skip forwarded messages and messages without text
-	if post_data.forward_from_chat or post_data.text == None:
-		return
-
 	post_link_utils.add_link_to_new_post(bot, post_data)
 
 @bot.edited_channel_post_handler(func=channel_id_filter)
 def handle_edited_post(post_data):
-	if post_data.text == None:
-		return
-
 	post_link_utils.update_post_link(bot, post_data)
 
 @bot.my_chat_member_handler()
