@@ -20,10 +20,14 @@ def load_config(config_filename):
 	if "CHANNEL_IDS" not in config_json:
 		config_json["CHANNEL_IDS"] = []
 
+	if "SUBCHANNEL_DATA" not in config_json:
+		config_json["SUBCHANNEL_DATA"] = []	
+
 	config_data_list = []
 	config_data_list.append(config_json["BOT_TOKEN"])
 	config_data_list.append(config_json["CHANNEL_IDS"])
 	config_data_list.append(config_json["DUMP_CHAT_ID"])
+	config_data_list.append(config_json["SUBCHANNEL_DATA"])
 
 	return config_data_list
 
