@@ -1,4 +1,7 @@
-import json, logging, os
+import json
+import logging
+import os
+
 
 def load_config(config_filename):
 	if not os.path.exists(config_filename):
@@ -31,6 +34,7 @@ def load_config(config_filename):
 
 	return config_data_list
 
+
 def update_config(updated_config_data, config_filename):
 	if not os.path.exists(config_filename):
 		logging.error("Config file not found")
@@ -46,3 +50,22 @@ def update_config(updated_config_data, config_filename):
 	f = open(config_filename, "w")
 	json.dump(config_json, f)
 	f.close()
+
+
+def create_callback_str(callback_prefix, callback_type, *args):
+	arguments_str = ",".join([str(arg) for arg in args])
+	components = [callback_prefix, callback_type]
+	if arguments_str:
+		components.append(arguments_str)
+	callback_str = ",".join(components)
+	return callback_str
+
+
+def offset_entities(entities, offset):
+	if not entities:
+		return []
+
+	for entity in entities:
+		entity.offset += offset
+
+	return entities

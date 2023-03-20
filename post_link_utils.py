@@ -4,129 +4,152 @@ import time
 from telebot.apihelper import ApiTelegramException
 from telebot.types import MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
 
+import utils
+import forwarding_utils
+
 LINK_ENDING = ". "
+
+CALLBACK_PREFIX = "LNK"
 
 
 def get_post_url(post_data):
-    channel_url = str(post_data.chat.id)[4:]
-    return "https://t.me/c/{0}/{1}".format(channel_url, post_data.message_id)
+	channel_url = str(post_data.chat.id)[4:]
+	return "https://t.me/c/{0}/{1}".format(channel_url, post_data.message_id)
 
 
 def offset_entities(entities, offset):
-    if not entities:
-        return []
+	if not entities:
+		return []
 
-    for entity in entities:
-        entity.offset += offset
+	for entity in entities:
+		entity.offset += offset
 
-    return entities
+	return entities
 
 
 def get_previous_link(post_data, post_url):
-    if post_data.entities:
-        for entity in post_data.entities:
-            if entity.offset == 0 and entity.type == "text_link" and entity.url == post_url:
-                return entity
-    return None
+	if post_data.entities:
+		for entity in post_data.entities:
+			if entity.offset == 0 and entity.type == "text_link" and entity.url == post_url:
+				return entity
+	return None
 
 
 def insert_link_into_post(bot, post_data, link_text, post_url, additional_offset=0):
-    updated_entities = offset_entities(post_data.entities, len(link_text) + len(LINK_ENDING) + additional_offset)
-    updated_entities.append(MessageEntity(type="text_link", offset=0, length=len(link_text), url=post_url))
+	updated_entities = offset_entities(post_data.entities, len(link_text) + len(LINK_ENDING) + additional_offset)
+	updated_entities.append(MessageEntity(type="text_link", offset=0, length=len(link_text), url=post_url))
 
-    edited_post_text = link_text + LINK_ENDING + post_data.text
-    bot.edit_message_text(text=edited_post_text, chat_id=post_data.chat.id, message_id=post_data.message_id,
-                          entities=updated_entities)
+	edited_post_text = link_text + LINK_ENDING + post_data.text
+	return bot.edit_message_text(text=edited_post_text, chat_id=post_data.chat.id, message_id=post_data.message_id,
+								 entities=updated_entities, reply_markup=post_data.reply_markup)
 
 
 def add_link_to_new_post(bot, post_data):
-    # skip forwarded messages and messages without text
-    if get_forwarded_from_id(post_data) or post_data.text == None:
-        return
+	# skip forwarded messages and messages without text
+	if get_forwarded_from_id(post_data) or post_data.text == None:
+		return
 
-    post_url = get_post_url(post_data)
-    link_text = str(post_data.message_id)
+	post_url = get_post_url(post_data)
+	link_text = str(post_data.message_id)
 
-    insert_link_into_post(bot, post_data, link_text, post_url)
+	return insert_link_into_post(bot, post_data, link_text, post_url)
 
 
 def update_post_link(bot, post_data):
-    if post_data.text == None:
-        return
+	if post_data.text == None:
+		return
 
-    post_url = get_post_url(post_data)
-    link_text = str(post_data.message_id)
+	post_url = get_post_url(post_data)
+	link_text = str(post_data.message_id)
 
-    entity_offset = 0
+	entity_offset = 0
 
-    previous_link = get_previous_link(post_data, post_url)
-    if previous_link:
-        if post_data.text.startswith(link_text + LINK_ENDING):
-            return  # return if link is correct
-        entity_offset = remove_previous_link(post_data, previous_link)
+	previous_link = get_previous_link(post_data, post_url)
+	if previous_link:
+		if post_data.text.startswith(link_text + LINK_ENDING):
+			return  # return if link is correct
+		entity_offset = remove_previous_link(post_data, previous_link)
 
-    insert_link_into_post(bot, post_data, link_text, post_url, entity_offset)
+	insert_link_into_post(bot, post_data, link_text, post_url, entity_offset)
 
 
 def remove_previous_link(post_data, previous_link):
-    entity_offset = 0
+	entity_offset = 0
 
-    post_data.text = post_data.text[previous_link.length:]
-    entity_offset -= previous_link.length
-    if post_data.text.startswith(LINK_ENDING):
-        post_data.text = post_data.text[len(LINK_ENDING):]
-        entity_offset -= len(LINK_ENDING)
+	post_data.text = post_data.text[previous_link.length:]
+	entity_offset -= previous_link.length
+	if post_data.text.startswith(LINK_ENDING):
+		post_data.text = post_data.text[len(LINK_ENDING):]
+		entity_offset -= len(LINK_ENDING)
 
-    post_data.entities.remove(previous_link)
+	post_data.entities.remove(previous_link)
 
-    return entity_offset
+	return entity_offset
 
 
-def start_updating_older_messages(bot, channel_id, dump_chat_id):
-    last_message = bot.send_message(chat_id=channel_id,
-                                    text="Started updating older posts. When update is complete this message will be deleted.")
-    current_msg_id = last_message.id - 1
-    while current_msg_id > 0:
-        time.sleep(2.5)
+def start_updating_older_messages(bot, channel_id, dump_chat_id, subchannel_data):
+	last_message = bot.send_message(chat_id=channel_id,
+									text="Started updating older posts. When update is complete this message will be deleted.")
+	current_msg_id = last_message.id - 1
+	while current_msg_id > 0:
+		time.sleep(2.5)
 
-        forwarded_message = None
-        try:
-            forwarded_message = bot.forward_message(chat_id=dump_chat_id, from_chat_id=channel_id,
-                                                    message_id=current_msg_id)
-        except ApiTelegramException:
-            continue
-        finally:
-            current_msg_id -= 1
+		forwarded_message = None
+		try:
+			forwarded_message = bot.forward_message(chat_id=dump_chat_id, from_chat_id=channel_id,
+													message_id=current_msg_id)
+			bot.delete_message(chat_id=dump_chat_id, message_id=forwarded_message.message_id)
+		except ApiTelegramException:
+			continue
+		finally:
+			current_msg_id -= 1
 
-        bot.delete_message(chat_id=dump_chat_id, message_id=forwarded_message.message_id)
+		if get_forwarded_from_id(forwarded_message) != channel_id or forwarded_message.text == None:
+			continue
 
-        if get_forwarded_from_id(forwarded_message) != channel_id or forwarded_message.text == None:
-            continue
+		forwarded_message.message_id = forwarded_message.forward_from_message_id
+		forwarded_message.chat = forwarded_message.forward_from_chat
+		try:
+			update_post_link(bot, forwarded_message)
+			hashtags = forwarding_utils.parse_hashtags(forwarded_message)
+			if hashtags:
+				forwarded_data = forwarding_utils.forward_to_subchannel(bot, forwarded_message, subchannel_data, hashtags)
+				forwarded_to, copied_message_id = forwarded_data if forwarded_data else [None, None]
+				forwarding_utils.add_control_buttons(bot, forwarded_message, subchannel_data, forwarded_to, copied_message_id,
+													 hashtags)
+		except ApiTelegramException as E:
+			logging.error("Exception during updating older message - " + str(E))
 
-        forwarded_message.message_id = forwarded_message.forward_from_message_id
-        forwarded_message.chat = forwarded_message.forward_from_chat
-        try:
-            update_post_link(bot, forwarded_message)
-        except ApiTelegramException as E:
-            logging.error(E)
-
-    bot.delete_message(chat_id=last_message.chat.id, message_id=last_message.id)
+	bot.delete_message(chat_id=last_message.chat.id, message_id=last_message.id)
 
 
 def get_forwarded_from_id(message_data):
-    if message_data.forward_from_chat:
-        return message_data.forward_from_chat.id
-    if message_data.forward_from:
-        return message_data.forward_from.id
+	if message_data.forward_from_chat:
+		return message_data.forward_from_chat.id
+	if message_data.forward_from:
+		return message_data.forward_from.id
 
-    return None
+	return None
 
 
 def update_older_messages_question(bot, chat_id):
-    keyboard_markup = InlineKeyboardMarkup()
-    keyboard_markup.row_width = 2
-    keyboard_markup.add(InlineKeyboardButton("Yes", callback_data="cb_yes"),
-                        InlineKeyboardButton("No", callback_data="cb_no"))
-    bot.send_message(chat_id=chat_id,
-                     text="Do you want to start adding links to older posts? (This can take some time, bot will not respond until updating is complete)",
-                     reply_markup=keyboard_markup)
+	buttons = [
+		InlineKeyboardButton("Yes", callback_data=utils.create_callback_str(CALLBACK_PREFIX, "UPD_YES")),
+		InlineKeyboardButton("No", callback_data=utils.create_callback_str(CALLBACK_PREFIX, "UPD_NO"))
+	]
+	keyboard_markup = InlineKeyboardMarkup([buttons])
+
+	question = "Do you want to start adding links to older posts? (This can take some time, bot will not respond until updating is complete)"
+	bot.send_message(chat_id=chat_id, text=question, reply_markup=keyboard_markup)
+
+
+def handle_callback(bot, call, dump_chat_id, subchannel_data):
+	callback_data = call.data[len(CALLBACK_PREFIX) + 1:]
+	chat_id = call.message.chat.id
+
+	if callback_data == "UPD_YES":
+		bot.delete_message(chat_id=chat_id, message_id=call.message.id)
+		start_updating_older_messages(bot, chat_id, dump_chat_id, subchannel_data)
+	elif callback_data == "UPD_YES":
+		bot.delete_message(chat_id=chat_id, message_id=call.message.id)
+
