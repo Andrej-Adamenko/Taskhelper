@@ -59,7 +59,7 @@ def update_post_link(bot, post_data):
 
 	previous_link = get_previous_link(post_data, post_url)
 	if previous_link:
-		if post_data.text.startswith(link_text + LINK_ENDING):
+		if len(link_text) == previous_link.length and post_data.text.startswith(link_text + LINK_ENDING):
 			return  # return if link is correct
 		entity_offset = remove_previous_link(post_data, previous_link)
 
