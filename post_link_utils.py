@@ -151,6 +151,6 @@ def handle_callback(bot, call, dump_chat_id, subchannel_data):
 	if callback_data == "UPD_YES":
 		bot.delete_message(chat_id=chat_id, message_id=call.message.id)
 		start_updating_older_messages(bot, chat_id, dump_chat_id, subchannel_data)
-	elif callback_data == "UPD_YES":
+	elif callback_data == "UPD_NO":
 		bot.delete_message(chat_id=chat_id, message_id=call.message.id)
 
