@@ -23,11 +23,7 @@ channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 						  content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
 def handle_post(post_data):
 	edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
-	hashtags = forwarding_utils.parse_hashtags(edited_post)
-	if hashtags:
-		forwarded_data = forwarding_utils.forward_to_subchannel(bot, edited_post, SUBCHANNEL_DATA, hashtags)
-		forwarded_to, copied_message_id = forwarded_data if forwarded_data else [None, None]
-		forwarding_utils.add_control_buttons(bot, edited_post, SUBCHANNEL_DATA, forwarded_to, copied_message_id, hashtags)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, SUBCHANNEL_DATA)
 
 
 @bot.edited_channel_post_handler(func=channel_id_filter)
