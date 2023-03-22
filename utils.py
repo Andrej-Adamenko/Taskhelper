@@ -8,7 +8,7 @@ def load_config(config_filename):
 		logging.error("Config file not found")
 		exit()
 
-	f = open(config_filename, "r")
+	f = open(config_filename, "r", encoding="utf-8")
 	config_json = json.load(f)
 	f.close()
 
@@ -48,7 +48,7 @@ def update_config(updated_config_data, config_filename):
 		config_json[config_key] = updated_config_data[config_key]
 
 	f = open(config_filename, "w")
-	json.dump(config_json, f)
+	json.dump(config_json, f, indent=4, ensure_ascii=False)
 	f.close()
 
 

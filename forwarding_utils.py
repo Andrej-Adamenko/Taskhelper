@@ -38,14 +38,19 @@ def forward_to_subchannel(bot, post_data, subchannel_data, hashtags):
 	message_id = post_data.message_id
 
 	subchannel_id = get_subchannel_id_from_hashtags(main_channel_id, subchannel_data, hashtags)
-	if subchannel_id:
-		try:
-			copied_message = bot.copy_message(chat_id=subchannel_id, message_id=message_id, from_chat_id=main_channel_id)
-		except ApiTelegramException as E:
-			if E.error_code == 429:
-				raise E
-			return
-		return [subchannel_id, copied_message.message_id]
+	if not subchannel_id:
+		logging.warning("Subchannel not found in config file")
+		return
+
+	try:
+		copied_message = bot.copy_message(chat_id=subchannel_id, message_id=message_id, from_chat_id=main_channel_id)
+		logging.info("Successfully forwarded post to subchannel by tags: " + str(hashtags))
+	except ApiTelegramException as E:
+		if E.error_code == 429:
+			raise E
+		logging.warning("Exception during forwarding post to subchannel {0} - {1}".format(hashtags, E))
+		return
+	return [subchannel_id, copied_message.message_id]
 
 
 def get_subchannel_id_from_hashtags(main_channel_id, subchannel_data, hashtags):
@@ -297,6 +302,7 @@ def rearrange_hashtags(bot, post_data, hashtags, main_channel_id):
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
+		logging.info("Exception during rearranging hashtags - " + str(E))
 		return
 
 
