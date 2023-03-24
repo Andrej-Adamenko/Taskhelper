@@ -7,6 +7,8 @@ from telebot.types import MessageEntity, InlineKeyboardMarkup, InlineKeyboardBut
 import utils
 import forwarding_utils
 
+from utils import DUMP_CHAT_ID
+
 LINK_ENDING = ". "
 
 CALLBACK_PREFIX = "LNK"
@@ -80,14 +82,14 @@ def remove_previous_link(post_data, previous_link):
 	return entity_offset
 
 
-def start_updating_older_messages(bot, channel_id, dump_chat_id, subchannel_data):
+def start_updating_older_messages(bot, channel_id):
 	last_message = bot.send_message(chat_id=channel_id,
 									text="Started updating older posts. When update is complete this message will be deleted.")
 	current_msg_id = last_message.id - 1
 	while current_msg_id > 0:
 		time.sleep(3)
 		try:
-			update_older_message(bot, channel_id, current_msg_id, dump_chat_id, subchannel_data)
+			update_older_message(bot, channel_id, current_msg_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				logging.warning("Too many requests - " + str(E))
@@ -100,11 +102,11 @@ def start_updating_older_messages(bot, channel_id, dump_chat_id, subchannel_data
 	bot.delete_message(chat_id=last_message.chat.id, message_id=last_message.id)
 
 
-def update_older_message(bot, channel_id, current_msg_id, dump_chat_id, subchannel_data):
+def update_older_message(bot, channel_id, current_msg_id):
 	try:
-		forwarded_message = bot.forward_message(chat_id=dump_chat_id, from_chat_id=channel_id,
+		forwarded_message = bot.forward_message(chat_id=DUMP_CHAT_ID, from_chat_id=channel_id,
 												message_id=current_msg_id)
-		bot.delete_message(chat_id=dump_chat_id, message_id=forwarded_message.message_id)
+		bot.delete_message(chat_id=DUMP_CHAT_ID, message_id=forwarded_message.message_id)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
@@ -121,7 +123,7 @@ def update_older_message(bot, channel_id, current_msg_id, dump_chat_id, subchann
 	if not updated_message:
 		updated_message = forwarded_message
 
-	forwarding_utils.forward_and_add_inline_keyboard(bot, updated_message, subchannel_data)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, updated_message)
 
 
 def get_forwarded_from_id(message_data):
@@ -144,13 +146,13 @@ def update_older_messages_question(bot, chat_id):
 	bot.send_message(chat_id=chat_id, text=question, reply_markup=keyboard_markup)
 
 
-def handle_callback(bot, call, dump_chat_id, subchannel_data):
+def handle_callback(bot, call):
 	callback_data = call.data[len(CALLBACK_PREFIX) + 1:]
 	chat_id = call.message.chat.id
 
 	if callback_data == "UPD_YES":
 		bot.delete_message(chat_id=chat_id, message_id=call.message.id)
-		start_updating_older_messages(bot, chat_id, dump_chat_id, subchannel_data)
+		start_updating_older_messages(bot, chat_id)
 	elif callback_data == "UPD_NO":
 		bot.delete_message(chat_id=chat_id, message_id=call.message.id)
 

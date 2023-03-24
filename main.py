@@ -4,12 +4,13 @@ import telebot
 import forwarding_utils
 import post_link_utils
 import utils
+import db_utils
 
-CONFIG_FILE = "config.json"
+from utils import BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, DISCUSSION_CHAT_DATA
 
-BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, SUBCHANNEL_DATA = utils.load_config(CONFIG_FILE)
+db_utils.initialize_db()
 
-CHAT_IDS_TO_IGNORE = forwarding_utils.get_all_subchannel_ids(SUBCHANNEL_DATA)
+CHAT_IDS_TO_IGNORE = forwarding_utils.get_all_subchannel_ids()
 CHAT_IDS_TO_IGNORE.append(DUMP_CHAT_ID)
 
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
@@ -23,7 +24,32 @@ channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 						  content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
 def handle_post(post_data):
 	edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
-	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, SUBCHANNEL_DATA)
+	main_channel_id_str = str(post_data.chat.id)
+	if main_channel_id_str not in DISCUSSION_CHAT_DATA:
+		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post)
+
+
+@bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward)
+def handle_automatically_forwarded_message(msg_data):
+	forwarded_from_str = str(msg_data.forward_from_chat.id)
+	discussion_chat_id = DISCUSSION_CHAT_DATA[forwarded_from_str]
+	if discussion_chat_id != msg_data.chat.id:
+		return
+
+	main_chat_id = msg_data.forward_from_chat.id
+	main_message_id = msg_data.forward_from_message_id
+	discussion_message_id = msg_data.message_id
+
+	db_utils.insert_discussion_message(main_message_id, discussion_message_id)
+
+	msg_data.chat.id = main_chat_id
+	msg_data.message_id = main_message_id
+	forwarding_utils.forward_and_add_inline_keyboard(bot, msg_data)
+
+
+@bot.edited_message_handler(func=lambda data: True)
+def handle_edited_message(msg_data):
+	print("EDITED MSG: " , msg_data)
 
 
 @bot.edited_channel_post_handler(func=channel_id_filter)
@@ -53,15 +79,15 @@ def handle_changed_permissions(message):
 		CHANNEL_IDS.remove(chat_id)
 		logging.info("Channel {0} was removed from config".format(chat_id))
 
-	utils.update_config({"CHANNEL_IDS": CHANNEL_IDS}, CONFIG_FILE)
+	utils.update_config({"CHANNEL_IDS": CHANNEL_IDS})
 
 
 @bot.callback_query_handler(func=lambda call: channel_id_filter(call.message))
 def handle_keyboard_callback(call: telebot.types.CallbackQuery):
 	if call.data.startswith(forwarding_utils.CALLBACK_PREFIX):
-		forwarding_utils.handle_callback(bot, call, SUBCHANNEL_DATA)
+		forwarding_utils.handle_callback(bot, call)
 	elif call.data.startswith(post_link_utils.CALLBACK_PREFIX):
-		post_link_utils.handle_callback(bot, call, DUMP_CHAT_ID, SUBCHANNEL_DATA)
+		post_link_utils.handle_callback(bot, call)
 
 
 bot.infinity_polling()

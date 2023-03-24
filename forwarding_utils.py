@@ -4,8 +4,11 @@ import copy
 from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEntity
 
+import db_utils
 import post_link_utils
 import utils
+
+from utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA
 
 PRIORITY_TAG = "п"
 OPENED_TAG = "о"
@@ -18,14 +21,14 @@ CHECK_MARK_CHARACTER = "\U00002705"
 MAX_BUTTONS_IN_ROW = 3
 
 
-def forward_to_subchannel(bot, post_data, subchannel_data, hashtags):
+def forward_to_subchannel(bot, post_data, hashtags):
 	if OPENED_TAG not in hashtags:
 		return
 
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
-	subchannel_id = get_subchannel_id_from_hashtags(main_channel_id, subchannel_data, hashtags)
+	subchannel_id = get_subchannel_id_from_hashtags(main_channel_id, hashtags)
 	if not subchannel_id:
 		logging.warning("Subchannel not found in config file")
 		return
@@ -41,15 +44,15 @@ def forward_to_subchannel(bot, post_data, subchannel_data, hashtags):
 	return [subchannel_id, copied_message.message_id]
 
 
-def get_subchannel_id_from_hashtags(main_channel_id, subchannel_data, hashtags):
+def get_subchannel_id_from_hashtags(main_channel_id, hashtags):
 	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str not in subchannel_data:
+	if main_channel_id_str not in SUBCHANNEL_DATA:
 		return
 
 	priority = None
 	user_priority_list = None
 
-	subchannel_users = subchannel_data[main_channel_id_str]
+	subchannel_users = SUBCHANNEL_DATA[main_channel_id_str]
 	for user in subchannel_users:
 		if user in hashtags:
 			user_priority_list = subchannel_users[user]
@@ -67,10 +70,10 @@ def get_subchannel_id_from_hashtags(main_channel_id, subchannel_data, hashtags):
 	return user_priority_list[priority]
 
 
-def get_all_subchannel_ids(subchannel_data):
+def get_all_subchannel_ids():
 	subchannel_ids = []
-	for main_channel_id in subchannel_data:
-		channel_users = subchannel_data[main_channel_id]
+	for main_channel_id in SUBCHANNEL_DATA:
+		channel_users = SUBCHANNEL_DATA[main_channel_id]
 		for user in channel_users:
 			user_priorities = channel_users[user]
 			for priority in user_priorities:
@@ -80,7 +83,7 @@ def get_all_subchannel_ids(subchannel_data):
 	return subchannel_ids
 
 
-def generate_control_buttons(previous_subchannel_id, previous_message_id, hashtags):
+def generate_control_buttons(previous_subchannel_id, previous_message_id, hashtags, main_channel_id, message_id):
 	close_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "X", previous_subchannel_id, previous_message_id)
 	close_ticket_button = InlineKeyboardButton("#x", callback_data=close_ticket_callback_data)
 
@@ -107,14 +110,23 @@ def generate_control_buttons(previous_subchannel_id, previous_message_id, hashta
 		save_button
 	]
 
+	main_channel_id_str = str(main_channel_id)
+	if main_channel_id_str in DISCUSSION_CHAT_DATA:
+		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
+		discussion_message_id = db_utils.get_discussion_message_id(message_id)
+		if discussion_message_id:
+			discussion_chat_id = str(discussion_chat_id)[4:]
+			comments_button = InlineKeyboardButton("Comment", url="https://t.me/c/{0}?thread={1}".format(discussion_chat_id, discussion_message_id))
+			buttons.append(comments_button)
+
 	keyboard_markup = InlineKeyboardMarkup([buttons])
 	return keyboard_markup
 
 
-def generate_subchannel_buttons(main_channel_id, subchannel_data, post_data, previous_subchannel_id, previous_message_id):
-	forwarding_data = get_subchannels_forwarding_data(subchannel_data, main_channel_id)
+def generate_subchannel_buttons(main_channel_id, post_data, previous_subchannel_id, previous_message_id):
+	forwarding_data = get_subchannels_forwarding_data(main_channel_id)
 
-	_, user_hashtag_index, priority_hashtag_index = find_hashtag_indexes(post_data, subchannel_data, main_channel_id)
+	_, user_hashtag_index, priority_hashtag_index = find_hashtag_indexes(post_data, main_channel_id)
 	current_subchannel_name = ""
 
 	if user_hashtag_index is not None:
@@ -149,14 +161,14 @@ def generate_subchannel_buttons(main_channel_id, subchannel_data, post_data, pre
 	return keyboard_markup
 
 
-def get_subchannels_forwarding_data(subchannel_data, main_channel_id):
+def get_subchannels_forwarding_data(main_channel_id):
 	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str not in subchannel_data:
+	if main_channel_id_str not in SUBCHANNEL_DATA:
 		return {}
 
 	forwarding_data = {}
 
-	channel_users = subchannel_data[main_channel_id_str]
+	channel_users = SUBCHANNEL_DATA[main_channel_id_str]
 	for user in channel_users:
 		user_priorities = channel_users[user]
 		for priority in user_priorities:
@@ -168,8 +180,9 @@ def get_subchannels_forwarding_data(subchannel_data, main_channel_id):
 
 def add_control_buttons(bot, post_data, subchannel_id, copied_message_id, hashtags):
 	main_channel_id = post_data.chat.id
+	message_id = post_data.message_id
 
-	keyboard_markup = generate_control_buttons(subchannel_id, copied_message_id, hashtags)
+	keyboard_markup = generate_control_buttons(subchannel_id, copied_message_id, hashtags, main_channel_id, message_id)
 	try:
 		bot.edit_message_text(chat_id=main_channel_id, message_id=post_data.message_id, text=post_data.text, entities=post_data.entities, reply_markup=keyboard_markup)
 	except ApiTelegramException as E:
@@ -178,8 +191,8 @@ def add_control_buttons(bot, post_data, subchannel_id, copied_message_id, hashta
 		logging.info("Exception during adding control buttons - " + str(E))
 
 
-def extract_hashtags(post_data, subchannel_data, main_channel_id):
-	status_tag_index, user_tag_index, priority_tag_index = find_hashtag_indexes(post_data, subchannel_data, main_channel_id)
+def extract_hashtags(post_data, main_channel_id):
+	status_tag_index, user_tag_index, priority_tag_index = find_hashtag_indexes(post_data, main_channel_id)
 
 	if status_tag_index is None or user_tag_index is None or priority_tag_index is None:
 		return [None, None]
@@ -204,7 +217,7 @@ def extract_hashtags(post_data, subchannel_data, main_channel_id):
 	return extracted_hashtags, post_data
 
 
-def find_hashtag_indexes(post_data, subchannel_data, main_channel_id):
+def find_hashtag_indexes(post_data, main_channel_id):
 	status_tag_index = None
 	user_tag_index = None
 	priority_tag_index = None
@@ -217,7 +230,7 @@ def find_hashtag_indexes(post_data, subchannel_data, main_channel_id):
 				status_tag_index = entity_index
 				continue
 
-			main_channel_users = subchannel_data[str(main_channel_id)]
+			main_channel_users = SUBCHANNEL_DATA[str(main_channel_id)]
 			if tag in main_channel_users:
 				user_tag_index = entity_index
 				continue
@@ -228,7 +241,7 @@ def find_hashtag_indexes(post_data, subchannel_data, main_channel_id):
 	return status_tag_index, user_tag_index, priority_tag_index
 
 
-def handle_callback(bot, call, subchannel_data):
+def handle_callback(bot, call):
 	callback_data = call.data[len(CALLBACK_PREFIX) + 1:]
 	callback_data_list = callback_data.split(",")
 	callback_type, subchannel_id, message_id = callback_data_list[:3]
@@ -244,21 +257,21 @@ def handle_callback(bot, call, subchannel_data):
 
 	if callback_type == "SUB":
 		subchannel_name = other_data[0]
-		change_subchannel_button_event(bot, subchannel_data, call.message, subchannel_name)
+		change_subchannel_button_event(bot, call.message, subchannel_name)
 	elif callback_type == "X":
-		change_state_button_event(bot, subchannel_data, call.message, False)
+		change_state_button_event(bot, call.message, False)
 	elif callback_type == "O":
-		change_state_button_event(bot, subchannel_data, call.message, True)
+		change_state_button_event(bot, call.message, True)
 	elif callback_type == "S":
-		update_post_button_event(bot, subchannel_data, call.message)
+		update_post_button_event(bot, call.message)
 	elif callback_type == "R":
-		show_subchannel_buttons(bot, subchannel_data, call.message, subchannel_id, message_id)
+		show_subchannel_buttons(bot, call.message, subchannel_id, message_id)
 
 
-def show_subchannel_buttons(bot, subchannel_data, post_data, subchannel_id, message_id):
+def show_subchannel_buttons(bot, post_data, subchannel_id, message_id):
 	main_channel_id = post_data.chat.id
 
-	keyboard_markup = generate_subchannel_buttons(main_channel_id, subchannel_data, post_data, subchannel_id, message_id)
+	keyboard_markup = generate_subchannel_buttons(main_channel_id, post_data, subchannel_id, message_id)
 	try:
 		bot.edit_message_text(chat_id=main_channel_id, message_id=post_data.message_id, text=post_data.text, entities=post_data.entities, reply_markup=keyboard_markup)
 	except ApiTelegramException as E:
@@ -267,39 +280,39 @@ def show_subchannel_buttons(bot, subchannel_data, post_data, subchannel_id, mess
 		logging.info("Exception during adding subchannel buttons - " + str(E))
 
 
-def change_state_button_event(bot, subchannel_data, post_data, new_state):
+def change_state_button_event(bot, post_data, new_state):
 	main_channel_id = post_data.chat.id
 
-	hashtags, post_data = extract_hashtags(post_data, subchannel_data, main_channel_id)
+	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
 	if hashtags:
 		hashtags[0] = OPENED_TAG if new_state else CLOSED_TAG
 
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id)
-		forwarded_data = forward_to_subchannel(bot, post_data, subchannel_data, hashtags)
+		forwarded_data = forward_to_subchannel(bot, post_data, hashtags)
 		forwarded_to, copied_message_id = forwarded_data if forwarded_data else [None, None]
 		add_control_buttons(bot, post_data, forwarded_to, copied_message_id, hashtags)
 
 
-def change_subchannel_button_event(bot, subchannel_data, post_data, new_subchannel_name):
+def change_subchannel_button_event(bot, post_data, new_subchannel_name):
 	main_channel_id = post_data.chat.id
 
 	subchannel_user, subchannel_priority = new_subchannel_name.split(" ")
 
 	original_post_data = copy.deepcopy(post_data)
-	hashtags, post_data = extract_hashtags(post_data, subchannel_data, main_channel_id)
+	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
 
 	if hashtags:
 		hashtags[1] = subchannel_user
 		hashtags[2] = PRIORITY_TAG + subchannel_priority
 
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
-		forwarded_data = forward_to_subchannel(bot, post_data, subchannel_data, hashtags)
+		forwarded_data = forward_to_subchannel(bot, post_data, hashtags)
 		forwarded_to, copied_message_id = forwarded_data if forwarded_data else [None, None]
 		add_control_buttons(bot, post_data, forwarded_to, copied_message_id, hashtags)
 
 
-def update_post_button_event(bot, subchannel_data, post_data):
-	forward_and_add_inline_keyboard(bot, post_data, subchannel_data)
+def update_post_button_event(bot, post_data):
+	forward_and_add_inline_keyboard(bot, post_data)
 
 
 def insert_hashtag_in_post(post_data, hashtag, position):
@@ -334,15 +347,15 @@ def cut_entity_from_post(post_data, entity_index):
 	return post_data
 
 
-def forward_and_add_inline_keyboard(bot, post_data, subchannel_data):
+def forward_and_add_inline_keyboard(bot, post_data):
 	main_channel_id = post_data.chat.id
 
 	original_post_data = copy.deepcopy(post_data)
 
-	hashtags, post_data = extract_hashtags(post_data, subchannel_data, main_channel_id)
+	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
 	if hashtags:
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
-		forwarded_data = forward_to_subchannel(bot, post_data, subchannel_data, hashtags)
+		forwarded_data = forward_to_subchannel(bot, post_data, hashtags)
 		forwarded_to, copied_message_id = forwarded_data if forwarded_data else [None, None]
 		add_control_buttons(bot, post_data, forwarded_to, copied_message_id, hashtags)
 

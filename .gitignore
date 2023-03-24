@@ -1,4 +1,5 @@
 config.json
+taskhelper_data.db
 
 __pycache__
 .idea
