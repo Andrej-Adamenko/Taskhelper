@@ -12,6 +12,7 @@ db_utils.initialize_db()
 
 CHAT_IDS_TO_IGNORE = forwarding_utils.get_all_subchannel_ids()
 CHAT_IDS_TO_IGNORE.append(DUMP_CHAT_ID)
+CHAT_IDS_TO_IGNORE += forwarding_utils.get_all_discussion_chat_ids()
 
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
 
@@ -32,24 +33,22 @@ def handle_post(post_data):
 @bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward)
 def handle_automatically_forwarded_message(msg_data):
 	forwarded_from_str = str(msg_data.forward_from_chat.id)
+	if forwarded_from_str not in DISCUSSION_CHAT_DATA:
+		return
+
 	discussion_chat_id = DISCUSSION_CHAT_DATA[forwarded_from_str]
 	if discussion_chat_id != msg_data.chat.id:
 		return
 
-	main_chat_id = msg_data.forward_from_chat.id
+	main_channel_id = msg_data.forward_from_chat.id
 	main_message_id = msg_data.forward_from_message_id
 	discussion_message_id = msg_data.message_id
 
-	db_utils.insert_discussion_message(main_message_id, discussion_message_id)
+	db_utils.insert_discussion_message(main_message_id, main_channel_id, discussion_message_id)
 
-	msg_data.chat.id = main_chat_id
+	msg_data.chat.id = main_channel_id
 	msg_data.message_id = main_message_id
 	forwarding_utils.forward_and_add_inline_keyboard(bot, msg_data)
-
-
-@bot.edited_message_handler(func=lambda data: True)
-def handle_edited_message(msg_data):
-	print("EDITED MSG: " , msg_data)
 
 
 @bot.edited_channel_post_handler(func=channel_id_filter)

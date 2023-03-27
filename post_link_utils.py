@@ -4,10 +4,11 @@ import time
 from telebot.apihelper import ApiTelegramException
 from telebot.types import MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
 
+import db_utils
 import utils
 import forwarding_utils
 
-from utils import DUMP_CHAT_ID
+from utils import DUMP_CHAT_ID, DISCUSSION_CHAT_DATA
 
 LINK_ENDING = ". "
 
@@ -82,14 +83,24 @@ def remove_previous_link(post_data, previous_link):
 	return entity_offset
 
 
-def start_updating_older_messages(bot, channel_id):
-	last_message = bot.send_message(chat_id=channel_id,
+def start_updating_older_messages(bot, main_channel_id, discussion_chat_id=None):
+	last_message = bot.send_message(chat_id=main_channel_id,
 									text="Started updating older posts. When update is complete this message will be deleted.")
-	current_msg_id = last_message.id - 1
+
+	if discussion_chat_id:
+		discussion_chat = bot.get_chat(discussion_chat_id)
+		current_msg_id = discussion_chat.pinned_message.message_id
+	else:
+		current_msg_id = last_message.id - 1
+
+	last_updated_message_id = current_msg_id
+
 	while current_msg_id > 0:
 		time.sleep(3)
 		try:
-			update_older_message(bot, channel_id, current_msg_id)
+			updated_message_id = update_older_message(bot, main_channel_id, current_msg_id, discussion_chat_id)
+			if updated_message_id:
+				last_updated_message_id = updated_message_id
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				logging.warning("Too many requests - " + str(E))
@@ -98,13 +109,19 @@ def start_updating_older_messages(bot, channel_id):
 			logging.error("Error during updating older messages - " + str(E))
 
 		current_msg_id -= 1
+		if discussion_chat_id and current_msg_id <= 0:
+			current_msg_id = last_updated_message_id
+			discussion_chat_id = None
+			logging.info("Checked all messages in discussion chat, last updated message id: " + str(last_updated_message_id))
 
+	logging.info("Checked all messages in main chat")
 	bot.delete_message(chat_id=last_message.chat.id, message_id=last_message.id)
 
 
-def update_older_message(bot, channel_id, current_msg_id):
+def update_older_message(bot, main_channel_id, current_msg_id, discussion_chat_id=None):
+	forward_from_chat_id = discussion_chat_id if discussion_chat_id else main_channel_id
 	try:
-		forwarded_message = bot.forward_message(chat_id=DUMP_CHAT_ID, from_chat_id=channel_id,
+		forwarded_message = bot.forward_message(chat_id=DUMP_CHAT_ID, from_chat_id=forward_from_chat_id,
 												message_id=current_msg_id)
 		bot.delete_message(chat_id=DUMP_CHAT_ID, message_id=forwarded_message.message_id)
 	except ApiTelegramException as E:
@@ -112,10 +129,14 @@ def update_older_message(bot, channel_id, current_msg_id):
 			raise E
 		return
 
-	if get_forwarded_from_id(forwarded_message) != channel_id or forwarded_message.text is None:
+	if get_forwarded_from_id(forwarded_message) != main_channel_id or forwarded_message.text is None:
 		return
 
-	forwarded_message.message_id = forwarded_message.forward_from_message_id
+	main_channel_message_id = forwarded_message.forward_from_message_id
+	if discussion_chat_id:
+		db_utils.insert_discussion_message(main_channel_message_id, main_channel_id, current_msg_id)
+
+	forwarded_message.message_id = main_channel_message_id
 	forwarded_message.chat = forwarded_message.forward_from_chat
 
 	updated_message = update_post_link(bot, forwarded_message)
@@ -123,7 +144,20 @@ def update_older_message(bot, channel_id, current_msg_id):
 	if not updated_message:
 		updated_message = forwarded_message
 
+	previous_copied_message_data = db_utils.get_copied_message_data(main_channel_message_id, main_channel_id)
+	if previous_copied_message_data:
+		message_id, subchannel_id = previous_copied_message_data
+		try:
+			bot.delete_message(chat_id=subchannel_id, message_id=message_id)
+			db_utils.delete_copied_message(main_channel_message_id, main_channel_id)
+		except ApiTelegramException as E:
+			if E.error_code == 429:
+				raise E
+			logging.info("Exception during delete_message - " + str(E))
+
 	forwarding_utils.forward_and_add_inline_keyboard(bot, updated_message)
+
+	return main_channel_message_id
 
 
 def get_forwarded_from_id(message_data):
@@ -142,7 +176,7 @@ def update_older_messages_question(bot, chat_id):
 	]
 	keyboard_markup = InlineKeyboardMarkup([buttons])
 
-	question = "Do you want to start adding links to older posts? (This can take some time, bot will not respond until updating is complete)"
+	question = "Do you want to start updating older posts? (This can take some time, bot can respond with delay until updating is complete)"
 	bot.send_message(chat_id=chat_id, text=question, reply_markup=keyboard_markup)
 
 
@@ -152,7 +186,12 @@ def handle_callback(bot, call):
 
 	if callback_data == "UPD_YES":
 		bot.delete_message(chat_id=chat_id, message_id=call.message.id)
-		start_updating_older_messages(bot, chat_id)
+		main_channel_id_str = str(chat_id)
+		if main_channel_id_str in DISCUSSION_CHAT_DATA:
+			discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
+			start_updating_older_messages(bot, chat_id, discussion_chat_id)
+		else:
+			start_updating_older_messages(bot, chat_id)
 	elif callback_data == "UPD_NO":
 		bot.delete_message(chat_id=chat_id, message_id=call.message.id)
 

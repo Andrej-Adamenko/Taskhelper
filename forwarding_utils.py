@@ -17,6 +17,7 @@ CLOSED_TAG = "х"
 CALLBACK_PREFIX = "FWRD"
 
 CHECK_MARK_CHARACTER = "\U00002705"
+COMMENTS_CHARACTER = "\U0001F4AC"
 
 MAX_BUTTONS_IN_ROW = 3
 
@@ -41,7 +42,9 @@ def forward_to_subchannel(bot, post_data, hashtags):
 			raise E
 		logging.warning("Exception during forwarding post to subchannel {0} - {1}".format(hashtags, E))
 		return
-	return [subchannel_id, copied_message.message_id]
+
+	db_utils.insert_or_update_copied_message(message_id, main_channel_id, copied_message.message_id, subchannel_id)
+	return subchannel_id, copied_message.message_id
 
 
 def get_subchannel_id_from_hashtags(main_channel_id, hashtags):
@@ -83,11 +86,17 @@ def get_all_subchannel_ids():
 	return subchannel_ids
 
 
-def generate_control_buttons(previous_subchannel_id, previous_message_id, hashtags, main_channel_id, message_id):
-	close_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "X", previous_subchannel_id, previous_message_id)
+def get_all_discussion_chat_ids():
+	discussion_chat_ids = []
+	for discussion_chat_id in DISCUSSION_CHAT_DATA.values():
+		discussion_chat_ids.append(discussion_chat_id)
+	return discussion_chat_ids
+
+def generate_control_buttons(hashtags, main_channel_id, message_id):
+	close_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "X")
 	close_ticket_button = InlineKeyboardButton("#x", callback_data=close_ticket_callback_data)
 
-	open_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "O", previous_subchannel_id, previous_message_id)
+	open_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "O")
 	open_ticket_button = InlineKeyboardButton("#o", callback_data=open_ticket_callback_data)
 
 	if OPENED_TAG not in hashtags:
@@ -97,10 +106,10 @@ def generate_control_buttons(previous_subchannel_id, previous_message_id, hashta
 		open_ticket_button.text += CHECK_MARK_CHARACTER
 		open_ticket_button.callback_data = "_"
 
-	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "R", previous_subchannel_id, previous_message_id)
+	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "R")
 	reassign_button = InlineKeyboardButton("Reassign", callback_data=reassign_callback_data)
 
-	save_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S", previous_subchannel_id, previous_message_id)
+	save_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
 	save_button = InlineKeyboardButton("Save", callback_data=save_callback_data)
 
 	buttons = [
@@ -113,17 +122,17 @@ def generate_control_buttons(previous_subchannel_id, previous_message_id, hashta
 	main_channel_id_str = str(main_channel_id)
 	if main_channel_id_str in DISCUSSION_CHAT_DATA:
 		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
-		discussion_message_id = db_utils.get_discussion_message_id(message_id)
+		discussion_message_id = db_utils.get_discussion_message_id(message_id, main_channel_id)
 		if discussion_message_id:
 			discussion_chat_id = str(discussion_chat_id)[4:]
-			comments_button = InlineKeyboardButton("Comment", url="https://t.me/c/{0}?thread={1}".format(discussion_chat_id, discussion_message_id))
+			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER, url="https://t.me/c/{0}?thread={1}".format(discussion_chat_id, discussion_message_id))
 			buttons.append(comments_button)
 
 	keyboard_markup = InlineKeyboardMarkup([buttons])
 	return keyboard_markup
 
 
-def generate_subchannel_buttons(main_channel_id, post_data, previous_subchannel_id, previous_message_id):
+def generate_subchannel_buttons(main_channel_id, post_data):
 	forwarding_data = get_subchannels_forwarding_data(main_channel_id)
 
 	_, user_hashtag_index, priority_hashtag_index = find_hashtag_indexes(post_data, main_channel_id)
@@ -139,11 +148,11 @@ def generate_subchannel_buttons(main_channel_id, post_data, previous_subchannel_
 
 	subchannel_buttons = []
 	for subchannel_name in forwarding_data:
-		callback_str = utils.create_callback_str(CALLBACK_PREFIX, "SUB", previous_subchannel_id, previous_message_id, subchannel_name)
+		callback_str = utils.create_callback_str(CALLBACK_PREFIX, "SUB", subchannel_name)
 		btn = InlineKeyboardButton("#" + subchannel_name, callback_data=callback_str)
 		if subchannel_name == current_subchannel_name:
 			btn.text += CHECK_MARK_CHARACTER
-			btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S", previous_subchannel_id, previous_message_id)
+			btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
 		subchannel_buttons.append(btn)
 
 	rows = [[]]
@@ -178,11 +187,11 @@ def get_subchannels_forwarding_data(main_channel_id):
 	return forwarding_data
 
 
-def add_control_buttons(bot, post_data, subchannel_id, copied_message_id, hashtags):
+def add_control_buttons(bot, post_data, hashtags):
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
-	keyboard_markup = generate_control_buttons(subchannel_id, copied_message_id, hashtags, main_channel_id, message_id)
+	keyboard_markup = generate_control_buttons(hashtags, main_channel_id, message_id)
 	try:
 		bot.edit_message_text(chat_id=main_channel_id, message_id=post_data.message_id, text=post_data.text, entities=post_data.entities, reply_markup=keyboard_markup)
 	except ApiTelegramException as E:
@@ -192,6 +201,9 @@ def add_control_buttons(bot, post_data, subchannel_id, copied_message_id, hashta
 
 
 def extract_hashtags(post_data, main_channel_id):
+	if not post_data.entities:
+		return [None, None]
+
 	status_tag_index, user_tag_index, priority_tag_index = find_hashtag_indexes(post_data, main_channel_id)
 
 	if status_tag_index is None or user_tag_index is None or priority_tag_index is None:
@@ -244,12 +256,18 @@ def find_hashtag_indexes(post_data, main_channel_id):
 def handle_callback(bot, call):
 	callback_data = call.data[len(CALLBACK_PREFIX) + 1:]
 	callback_data_list = callback_data.split(",")
-	callback_type, subchannel_id, message_id = callback_data_list[:3]
-	other_data = callback_data_list[3:]
+	callback_type = callback_data_list[0]
+	other_data = callback_data_list[1:]
 
-	if callback_type != "R" and subchannel_id != "None" and message_id != "None":
+	main_message_id = call.message.message_id
+	main_channel_id = call.message.chat.id
+	previous_message_data = db_utils.get_copied_message_data(main_message_id, main_channel_id)
+
+	if callback_type != "R" and previous_message_data:
+		message_id, subchannel_id = previous_message_data
 		try:
 			bot.delete_message(chat_id=subchannel_id, message_id=message_id)
+			db_utils.delete_copied_message(main_message_id, main_channel_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				raise E
@@ -265,13 +283,13 @@ def handle_callback(bot, call):
 	elif callback_type == "S":
 		update_post_button_event(bot, call.message)
 	elif callback_type == "R":
-		show_subchannel_buttons(bot, call.message, subchannel_id, message_id)
+		show_subchannel_buttons(bot, call.message)
 
 
-def show_subchannel_buttons(bot, post_data, subchannel_id, message_id):
+def show_subchannel_buttons(bot, post_data):
 	main_channel_id = post_data.chat.id
 
-	keyboard_markup = generate_subchannel_buttons(main_channel_id, post_data, subchannel_id, message_id)
+	keyboard_markup = generate_subchannel_buttons(main_channel_id, post_data)
 	try:
 		bot.edit_message_text(chat_id=main_channel_id, message_id=post_data.message_id, text=post_data.text, entities=post_data.entities, reply_markup=keyboard_markup)
 	except ApiTelegramException as E:
@@ -288,9 +306,8 @@ def change_state_button_event(bot, post_data, new_state):
 		hashtags[0] = OPENED_TAG if new_state else CLOSED_TAG
 
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id)
-		forwarded_data = forward_to_subchannel(bot, post_data, hashtags)
-		forwarded_to, copied_message_id = forwarded_data if forwarded_data else [None, None]
-		add_control_buttons(bot, post_data, forwarded_to, copied_message_id, hashtags)
+		forward_to_subchannel(bot, post_data, hashtags)
+		add_control_buttons(bot, post_data, hashtags)
 
 
 def change_subchannel_button_event(bot, post_data, new_subchannel_name):
@@ -306,9 +323,8 @@ def change_subchannel_button_event(bot, post_data, new_subchannel_name):
 		hashtags[2] = PRIORITY_TAG + subchannel_priority
 
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
-		forwarded_data = forward_to_subchannel(bot, post_data, hashtags)
-		forwarded_to, copied_message_id = forwarded_data if forwarded_data else [None, None]
-		add_control_buttons(bot, post_data, forwarded_to, copied_message_id, hashtags)
+		forward_to_subchannel(bot, post_data, hashtags)
+		add_control_buttons(bot, post_data, hashtags)
 
 
 def update_post_button_event(bot, post_data):
@@ -355,9 +371,8 @@ def forward_and_add_inline_keyboard(bot, post_data):
 	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
 	if hashtags:
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
-		forwarded_data = forward_to_subchannel(bot, post_data, hashtags)
-		forwarded_to, copied_message_id = forwarded_data if forwarded_data else [None, None]
-		add_control_buttons(bot, post_data, forwarded_to, copied_message_id, hashtags)
+		forward_to_subchannel(bot, post_data, hashtags)
+		add_control_buttons(bot, post_data, hashtags)
 
 
 def rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data=None):
