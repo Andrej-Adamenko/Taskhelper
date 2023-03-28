@@ -27,11 +27,14 @@ def handle_post(post_data):
 	edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
 	main_channel_id_str = str(post_data.chat.id)
 	if main_channel_id_str not in DISCUSSION_CHAT_DATA:
-		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post)
+		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, True)
 
 
 @bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward)
 def handle_automatically_forwarded_message(msg_data):
+	if msg_data.text == post_link_utils.UPDATE_STARTED_MSG_TEXT or msg_data.text == post_link_utils.START_UPDATE_QUESTION:
+		return
+
 	forwarded_from_str = str(msg_data.forward_from_chat.id)
 	if forwarded_from_str not in DISCUSSION_CHAT_DATA:
 		return
@@ -48,7 +51,7 @@ def handle_automatically_forwarded_message(msg_data):
 
 	msg_data.chat.id = main_channel_id
 	msg_data.message_id = main_message_id
-	forwarding_utils.forward_and_add_inline_keyboard(bot, msg_data)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, msg_data, True)
 
 
 @bot.edited_channel_post_handler(func=channel_id_filter)

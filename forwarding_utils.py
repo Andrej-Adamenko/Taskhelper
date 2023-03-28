@@ -8,7 +8,7 @@ import db_utils
 import post_link_utils
 import utils
 
-from utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA
+from utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA
 
 PRIORITY_TAG = "п"
 OPENED_TAG = "о"
@@ -54,20 +54,27 @@ def get_subchannel_id_from_hashtags(main_channel_id, hashtags):
 
 	priority = None
 	user_priority_list = None
+	found_user = None
 
 	subchannel_users = SUBCHANNEL_DATA[main_channel_id_str]
 	for user in subchannel_users:
 		if user in hashtags:
 			user_priority_list = subchannel_users[user]
+			found_user = user
 
 	if not user_priority_list:
 		return
 
 	for hashtag in hashtags:
-		if hashtag.startswith(PRIORITY_TAG):
+		if hashtag and hashtag.startswith(PRIORITY_TAG):
 			priority = hashtag[len(PRIORITY_TAG):]
 
-	if priority not in user_priority_list:
+	if priority == "" and main_channel_id_str in DEFAULT_USER_DATA:
+		default_user, default_priority = DEFAULT_USER_DATA[main_channel_id_str].split()
+		if default_user == found_user:
+			return user_priority_list[default_priority]
+
+	if priority not in user_priority_list or priority is None:
 		return
 
 	return user_priority_list[priority]
@@ -92,6 +99,7 @@ def get_all_discussion_chat_ids():
 		discussion_chat_ids.append(discussion_chat_id)
 	return discussion_chat_ids
 
+
 def generate_control_buttons(hashtags, main_channel_id, message_id):
 	close_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "X")
 	close_ticket_button = InlineKeyboardButton("#x", callback_data=close_ticket_callback_data)
@@ -99,24 +107,20 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 	open_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "O")
 	open_ticket_button = InlineKeyboardButton("#o", callback_data=open_ticket_callback_data)
 
-	if OPENED_TAG not in hashtags:
+	if hashtags[0] == CLOSED_TAG:
 		close_ticket_button.text += CHECK_MARK_CHARACTER
 		close_ticket_button.callback_data = "_"
-	else:
+	elif hashtags[0] == OPENED_TAG:
 		open_ticket_button.text += CHECK_MARK_CHARACTER
 		open_ticket_button.callback_data = "_"
 
 	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "R")
 	reassign_button = InlineKeyboardButton("Reassign", callback_data=reassign_callback_data)
 
-	save_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
-	save_button = InlineKeyboardButton("Save", callback_data=save_callback_data)
-
 	buttons = [
 		reassign_button,
 		close_ticket_button,
-		open_ticket_button,
-		save_button
+		open_ticket_button
 	]
 
 	main_channel_id_str = str(main_channel_id)
@@ -202,26 +206,34 @@ def add_control_buttons(bot, post_data, hashtags):
 
 
 def extract_hashtags(post_data, main_channel_id):
-	if not post_data.entities:
-		return [None, None]
-
 	status_tag_index, user_tag_index, priority_tag_index = find_hashtag_indexes(post_data, main_channel_id)
 
-	if status_tag_index is None or user_tag_index is None or priority_tag_index is None:
-		return [None, None]
+	extracted_hashtags = []
+	if status_tag_index is None:
+		extracted_hashtags.append(None)
+	else:
+		extracted_hashtags.append(post_data.entities[status_tag_index])
 
-	extracted_hashtags = [
-		post_data.entities[status_tag_index],
-		post_data.entities[user_tag_index],
-		post_data.entities[priority_tag_index]
-	]
+	if user_tag_index is None:
+		extracted_hashtags.append(None)
+	else:
+		extracted_hashtags.append(post_data.entities[user_tag_index])
+
+	if priority_tag_index is None:
+		extracted_hashtags.append(None)
+	else:
+		extracted_hashtags.append(post_data.entities[priority_tag_index])
 
 	for i in range(len(extracted_hashtags)):
+		if extracted_hashtags[i] is None:
+			continue
+
 		entity_offset = extracted_hashtags[i].offset
 		entity_length = extracted_hashtags[i].length
 		extracted_hashtags[i] = post_data.text[entity_offset + 1:entity_offset + entity_length]
 
 	entities_to_remove = [status_tag_index, user_tag_index, priority_tag_index]
+	entities_to_remove = list(filter(lambda elem: elem is not None, entities_to_remove))
 	entities_to_remove.sort(reverse=True)
 
 	for entity_index in entities_to_remove:
@@ -234,6 +246,9 @@ def find_hashtag_indexes(post_data, main_channel_id):
 	status_tag_index = None
 	user_tag_index = None
 	priority_tag_index = None
+
+	if not post_data.entities:
+		return None, None, None
 
 	for entity_index in reversed(range(len(post_data.entities))):
 		entity = post_data.entities[entity_index]
@@ -364,13 +379,27 @@ def cut_entity_from_post(post_data, entity_index):
 	return post_data
 
 
-def forward_and_add_inline_keyboard(bot, post_data):
+def insert_default_user_hashtags(main_channel_id, hashtags):
+	main_channel_id_str = str(main_channel_id)
+	if main_channel_id_str in DEFAULT_USER_DATA:
+		hashtags[0] = OPENED_TAG if hashtags[0] is None else hashtags[0]
+		user, priority = DEFAULT_USER_DATA[main_channel_id_str].split(" ")
+		hashtags[1] = user
+		hashtags[2] = PRIORITY_TAG
+
+	return hashtags
+
+
+def forward_and_add_inline_keyboard(bot, post_data, use_default_user=False):
 	main_channel_id = post_data.chat.id
 
 	original_post_data = copy.deepcopy(post_data)
 
 	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
 	if hashtags:
+		if hashtags[1] is None and hashtags[2] is None and use_default_user:
+			hashtags = insert_default_user_hashtags(main_channel_id, hashtags)
+
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
 		forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
@@ -398,6 +427,8 @@ def insert_hashtags(post_data, hashtags):
 		hashtags_start_position += post_data.entities[0].length + len(post_link_utils.LINK_ENDING)
 
 	for hashtag in hashtags[::-1]:
+		if hashtag is None:
+			continue
 		post_data = insert_hashtag_in_post(post_data, "#" + hashtag, hashtags_start_position)
 
 	return post_data

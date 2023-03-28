@@ -14,6 +14,9 @@ LINK_ENDING = ". "
 
 CALLBACK_PREFIX = "LNK"
 
+UPDATE_STARTED_MSG_TEXT = "Started updating older posts. When update is complete this message will be deleted."
+START_UPDATE_QUESTION = "Do you want to start updating older posts? (This can take some time, bot can respond with delay until updating is complete)"
+
 
 def get_post_url(post_data):
 	channel_url = str(post_data.chat.id)[4:]
@@ -85,7 +88,7 @@ def remove_previous_link(post_data, previous_link):
 
 def start_updating_older_messages(bot, main_channel_id, discussion_chat_id=None):
 	last_message = bot.send_message(chat_id=main_channel_id,
-									text="Started updating older posts. When update is complete this message will be deleted.")
+									text=UPDATE_STARTED_MSG_TEXT)
 
 	if discussion_chat_id:
 		discussion_chat = bot.get_chat(discussion_chat_id)
@@ -176,8 +179,7 @@ def update_older_messages_question(bot, chat_id):
 	]
 	keyboard_markup = InlineKeyboardMarkup([buttons])
 
-	question = "Do you want to start updating older posts? (This can take some time, bot can respond with delay until updating is complete)"
-	bot.send_message(chat_id=chat_id, text=question, reply_markup=keyboard_markup)
+	bot.send_message(chat_id=chat_id, text=START_UPDATE_QUESTION, reply_markup=keyboard_markup)
 
 
 def handle_callback(bot, call):

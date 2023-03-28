@@ -26,17 +26,21 @@ def load_config():
 		config_json["CHANNEL_IDS"] = []
 
 	if "SUBCHANNEL_DATA" not in config_json:
-		config_json["SUBCHANNEL_DATA"] = []	
+		config_json["SUBCHANNEL_DATA"] = {}
 
 	if "DISCUSSION_CHAT_DATA" not in config_json:
 		config_json["DISCUSSION_CHAT_DATA"] = {}
 
-	config_data_list = []
-	config_data_list.append(config_json["BOT_TOKEN"])
-	config_data_list.append(config_json["CHANNEL_IDS"])
-	config_data_list.append(config_json["DUMP_CHAT_ID"])
-	config_data_list.append(config_json["SUBCHANNEL_DATA"])
-	config_data_list.append(config_json["DISCUSSION_CHAT_DATA"])
+	if "DEFAULT_USER_DATA" not in config_json:
+		config_json["DEFAULT_USER_DATA"] = {}
+
+	config_data_list = [
+		config_json["BOT_TOKEN"],
+		config_json["CHANNEL_IDS"], config_json["DUMP_CHAT_ID"],
+		config_json["SUBCHANNEL_DATA"],
+		config_json["DISCUSSION_CHAT_DATA"],
+		config_json["DEFAULT_USER_DATA"]
+	]
 
 	return config_data_list
 
@@ -77,5 +81,5 @@ def offset_entities(entities, offset):
 	return entities
 
 
-BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA = load_config()
+BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA = load_config()
 
