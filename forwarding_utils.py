@@ -125,7 +125,8 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 		discussion_message_id = db_utils.get_discussion_message_id(message_id, main_channel_id)
 		if discussion_message_id:
 			discussion_chat_id = str(discussion_chat_id)[4:]
-			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER, url="https://t.me/c/{0}?thread={1}".format(discussion_chat_id, discussion_message_id))
+			comments_url = "tg://privatepost?channel={0}&post={1}&thread={1}".format(discussion_chat_id, discussion_message_id)
+			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER, url=comments_url)
 			buttons.append(comments_button)
 
 	keyboard_markup = InlineKeyboardMarkup([buttons])
