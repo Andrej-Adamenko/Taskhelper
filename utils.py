@@ -34,12 +34,16 @@ def load_config():
 	if "DEFAULT_USER_DATA" not in config_json:
 		config_json["DEFAULT_USER_DATA"] = {}
 
+	if "UPDATE_INTERVAL" not in config_json:
+		config_json["UPDATE_INTERVAL"] = 60
+
 	config_data_list = [
 		config_json["BOT_TOKEN"],
 		config_json["CHANNEL_IDS"], config_json["DUMP_CHAT_ID"],
 		config_json["SUBCHANNEL_DATA"],
 		config_json["DISCUSSION_CHAT_DATA"],
-		config_json["DEFAULT_USER_DATA"]
+		config_json["DEFAULT_USER_DATA"],
+		config_json["UPDATE_INTERVAL"]
 	]
 
 	return config_data_list
@@ -81,5 +85,14 @@ def offset_entities(entities, offset):
 	return entities
 
 
-BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA = load_config()
+def get_forwarded_from_id(message_data):
+	if message_data.forward_from_chat:
+		return message_data.forward_from_chat.id
+	if message_data.forward_from:
+		return message_data.forward_from.id
+
+	return None
+
+
+BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, UPDATE_INTERVAL = load_config()
 

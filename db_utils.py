@@ -10,7 +10,7 @@ CURSOR = DB_CONNECTION.cursor()
 DB_LOCK = threading.Lock()
 
 
-def db_write_lock(func):
+def db_thread_lock(func):
 	def inner_function(*args, **kwargs):
 		try:
 			DB_LOCK.acquire(True)
@@ -57,10 +57,20 @@ def create_tables():
 
 		CURSOR.execute(copied_messages_table_sql)
 
+	if not is_table_exists("last_message_ids"):
+		last_message_ids_table_sql = '''
+			CREATE TABLE "last_message_ids" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"chat_id"	INT NOT NULL,
+				"last_message_id"	INT NOT NULL
+			); '''
+
+		CURSOR.execute(last_message_ids_table_sql)
+
 	DB_CONNECTION.commit()
 
 
-@db_write_lock
+@db_thread_lock
 def insert_discussion_message(main_message_id, main_channel_id, discussion_message_id):
 	if get_discussion_message_id(main_message_id, main_channel_id):
 		sql = "UPDATE discussion_messages SET discussion_message_id=(?) WHERE main_message_id=(?) and main_channel_id=(?)"
@@ -79,7 +89,7 @@ def get_discussion_message_id(main_message_id, main_channel_id):
 		return result[0]
 
 
-@db_write_lock
+@db_thread_lock
 def insert_or_update_copied_message(main_message_id, main_channel_id, copied_message_id, copied_channel_id):
 	if get_copied_message_data(main_message_id, main_channel_id):
 		sql = "UPDATE copied_messages SET copied_message_id=(?), copied_channel_id=(?) WHERE main_message_id=(?) and main_channel_id=(?)"
@@ -90,7 +100,7 @@ def insert_or_update_copied_message(main_message_id, main_channel_id, copied_mes
 	DB_CONNECTION.commit()
 
 
-@db_write_lock
+@db_thread_lock
 def delete_copied_message(main_message_id, main_channel_id):
 	sql = "DELETE FROM copied_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
@@ -102,4 +112,23 @@ def get_copied_message_data(main_message_id, main_channel_id):
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
 	result = CURSOR.fetchone()
 	return result
+
+
+@db_thread_lock
+def insert_or_update_last_msg_id(last_message_id, chat_id):
+	if get_last_message_id(chat_id):
+		sql = "UPDATE last_message_ids SET last_message_id=(?) WHERE chat_id=(?)"
+	else:
+		sql = "INSERT INTO last_message_ids (last_message_id, chat_id) VALUES (?, ?)"
+
+	CURSOR.execute(sql, (last_message_id, chat_id,))
+	DB_CONNECTION.commit()
+
+
+def get_last_message_id(chat_id):
+	sql = "SELECT last_message_id FROM last_message_ids WHERE chat_id=(?)"
+	CURSOR.execute(sql, (chat_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
 

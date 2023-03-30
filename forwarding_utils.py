@@ -8,7 +8,7 @@ import db_utils
 import post_link_utils
 import utils
 
-from utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA
+from utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID
 
 PRIORITY_TAG = "п"
 OPENED_TAG = "о"
@@ -21,17 +21,46 @@ COMMENTS_CHARACTER = "\U0001F4AC"
 
 MAX_BUTTONS_IN_ROW = 3
 
+SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 
-def forward_to_subchannel(bot, post_data, hashtags):
-	if OPENED_TAG not in hashtags:
+
+def get_message_content_by_id(bot, chat_id, message_id):
+	try:
+		forwarded_message = bot.forward_message(chat_id=DUMP_CHAT_ID, from_chat_id=chat_id,
+												message_id=message_id)
+		bot.delete_message(chat_id=DUMP_CHAT_ID, message_id=forwarded_message.message_id)
+	except ApiTelegramException as E:
+		if E.error_code == 429:
+			raise E
 		return
 
+	return forwarded_message
+
+
+def forward_to_subchannel(bot, post_data, hashtags):
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
+	forwarded_message_data = db_utils.get_copied_message_data(message_id, main_channel_id)
+	if forwarded_message_data:
+		forwarded_msg_id, forwarded_channel_id = forwarded_message_data
+		forwarded_msg_data = get_message_content_by_id(bot, forwarded_channel_id, forwarded_msg_id)
+		if forwarded_msg_data and is_post_data_equal(forwarded_msg_data, post_data):
+			return
+
+		try:
+			bot.delete_message(chat_id=forwarded_channel_id, message_id=forwarded_msg_id)
+		except ApiTelegramException as E:
+			if E.error_code == 429:
+				raise E
+			logging.info("Exception during delete_message - " + str(E))
+
+	if OPENED_TAG not in hashtags:
+		return
+
 	subchannel_id = get_subchannel_id_from_hashtags(main_channel_id, hashtags)
 	if not subchannel_id:
-		logging.warning("Subchannel not found in config file")
+		logging.warning("Subchannel not found in config file {0}, {1}".format(hashtags, main_channel_id))
 		return
 
 	try:
@@ -202,6 +231,8 @@ def add_control_buttons(bot, post_data, hashtags):
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
+		if E.description == SAME_MSG_CONTENT_ERROR:
+			return
 		logging.info("Exception during adding control buttons - " + str(E))
 
 
@@ -250,6 +281,8 @@ def find_hashtag_indexes(post_data, main_channel_id):
 	if not post_data.entities:
 		return None, None, None
 
+	main_channel_id_str = str(main_channel_id)
+
 	for entity_index in reversed(range(len(post_data.entities))):
 		entity = post_data.entities[entity_index]
 		if entity.type == "hashtag":
@@ -258,10 +291,11 @@ def find_hashtag_indexes(post_data, main_channel_id):
 				status_tag_index = entity_index
 				continue
 
-			main_channel_users = SUBCHANNEL_DATA[str(main_channel_id)]
-			if tag in main_channel_users:
-				user_tag_index = entity_index
-				continue
+			if main_channel_id_str in SUBCHANNEL_DATA:
+				main_channel_users = SUBCHANNEL_DATA[main_channel_id_str]
+				if tag in main_channel_users:
+					user_tag_index = entity_index
+					continue
 
 			if tag.startswith(PRIORITY_TAG):
 				priority_tag_index = entity_index
@@ -274,20 +308,6 @@ def handle_callback(bot, call):
 	callback_data_list = callback_data.split(",")
 	callback_type = callback_data_list[0]
 	other_data = callback_data_list[1:]
-
-	main_message_id = call.message.message_id
-	main_channel_id = call.message.chat.id
-	previous_message_data = db_utils.get_copied_message_data(main_message_id, main_channel_id)
-
-	if callback_type != "R" and previous_message_data:
-		message_id, subchannel_id = previous_message_data
-		try:
-			bot.delete_message(chat_id=subchannel_id, message_id=message_id)
-			db_utils.delete_copied_message(main_message_id, main_channel_id)
-		except ApiTelegramException as E:
-			if E.error_code == 429:
-				raise E
-			logging.info("Exception during delete_message - " + str(E))
 
 	if callback_type == "SUB":
 		subchannel_name = other_data[0]
@@ -348,11 +368,15 @@ def update_post_button_event(bot, post_data):
 
 
 def insert_hashtag_in_post(post_data, hashtag, position):
-	post_data.text = post_data.text[:position] + hashtag + " " + post_data.text[position:]
+	hashtag_text = hashtag
+	if len(post_data.text) > position:
+		hashtag_text += " "
+
+	post_data.text = post_data.text[:position] + hashtag_text + post_data.text[position:]
 
 	for entity in post_data.entities:
 		if entity.offset >= position:
-			entity.offset += len(hashtag) + 1  # +1 because of space
+			entity.offset += len(hashtag_text)
 
 	hashtag_entity = MessageEntity(type="hashtag", offset=position, length=len(hashtag))
 	post_data.entities.append(hashtag_entity)

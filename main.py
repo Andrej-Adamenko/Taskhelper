@@ -2,6 +2,7 @@ import logging
 import telebot
 
 import forwarding_utils
+import interval_updating_utils
 import post_link_utils
 import utils
 import db_utils
@@ -16,7 +17,9 @@ CHAT_IDS_TO_IGNORE += forwarding_utils.get_all_discussion_chat_ids()
 
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
 
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
+
+interval_updating_utils.start_interval_updating(bot)
 
 channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
@@ -24,6 +27,8 @@ channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 @bot.channel_post_handler(func=channel_id_filter,
 						  content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
 def handle_post(post_data):
+	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
+
 	edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
 	main_channel_id_str = str(post_data.chat.id)
 	if main_channel_id_str not in DISCUSSION_CHAT_DATA:
@@ -32,7 +37,9 @@ def handle_post(post_data):
 
 @bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward)
 def handle_automatically_forwarded_message(msg_data):
-	if msg_data.text == post_link_utils.UPDATE_STARTED_MSG_TEXT or msg_data.text == post_link_utils.START_UPDATE_QUESTION:
+	db_utils.insert_or_update_last_msg_id(msg_data.message_id, msg_data.chat.id)
+
+	if msg_data.text == interval_updating_utils.UPDATE_STARTED_MSG_TEXT or msg_data.text == post_link_utils.START_UPDATE_QUESTION:
 		return
 
 	forwarded_from_str = str(msg_data.forward_from_chat.id)
