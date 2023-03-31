@@ -9,15 +9,13 @@ import forwarding_utils
 import post_link_utils
 import threading
 
-from utils import DISCUSSION_CHAT_DATA, CHANNEL_IDS, UPDATE_INTERVAL
+from utils import DISCUSSION_CHAT_DATA, CHANNEL_IDS, UPDATE_INTERVAL, INTERVAL_UPDATE_START_DELAY
 
 UPDATE_STARTED_MSG_TEXT = "Started updating older posts. When update is complete this message will be deleted."
 
 
-def update_older_message(bot, main_channel_id, current_msg_id, discussion_chat_id=None):
-	forward_from_chat_id = discussion_chat_id if discussion_chat_id else main_channel_id
-
-	forwarded_message = forwarding_utils.get_message_content_by_id(bot, forward_from_chat_id, current_msg_id)
+def update_older_message(bot, main_channel_id, current_msg_id):
+	forwarded_message = forwarding_utils.get_message_content_by_id(bot, main_channel_id, current_msg_id)
 	if forwarded_message is None:
 		return
 
@@ -25,8 +23,6 @@ def update_older_message(bot, main_channel_id, current_msg_id, discussion_chat_i
 		return
 
 	main_channel_message_id = forwarded_message.forward_from_message_id
-	if discussion_chat_id:
-		db_utils.insert_discussion_message(main_channel_message_id, main_channel_id, current_msg_id)
 
 	forwarded_message.message_id = main_channel_message_id
 	forwarded_message.chat = forwarded_message.forward_from_chat
@@ -37,6 +33,21 @@ def update_older_message(bot, main_channel_id, current_msg_id, discussion_chat_i
 		updated_message = forwarded_message
 
 	forwarding_utils.forward_and_add_inline_keyboard(bot, updated_message)
+
+	return main_channel_message_id
+
+
+def store_discussion_message(bot, main_channel_id, current_msg_id, discussion_chat_id):
+	forwarded_message = forwarding_utils.get_message_content_by_id(bot, discussion_chat_id, current_msg_id)
+	if forwarded_message is None:
+		return
+
+	if utils.get_forwarded_from_id(forwarded_message) != main_channel_id or forwarded_message.text is None:
+		return
+
+	main_channel_message_id = forwarded_message.forward_from_message_id
+	if discussion_chat_id:
+		db_utils.insert_discussion_message(main_channel_message_id, main_channel_id, current_msg_id)
 
 	return main_channel_message_id
 
@@ -59,7 +70,7 @@ def start_interval_updating(bot):
 
 
 def interval_update_thread(bot):
-	time.sleep(10)
+	time.sleep(INTERVAL_UPDATE_START_DELAY)
 	while 1:
 		for main_channel_id in CHANNEL_IDS:
 			main_channel_id_str = str(main_channel_id)
@@ -98,9 +109,13 @@ def check_all_messages(bot, main_channel_id, discussion_chat_id=None):
 	while current_msg_id > 0:
 		time.sleep(4)
 		try:
-			updated_message_id = update_older_message(bot, main_channel_id, current_msg_id, discussion_chat_id)
-			if updated_message_id:
-				last_updated_message_id = updated_message_id
+			if discussion_chat_id:
+				main_channel_message_id = store_discussion_message(bot, main_channel_id, current_msg_id, discussion_chat_id)
+				if main_channel_message_id:
+					update_older_message(bot, main_channel_id, main_channel_message_id)
+					last_updated_message_id = main_channel_message_id
+			else:
+				update_older_message(bot, main_channel_id, current_msg_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				logging.warning("Too many requests - " + str(E))

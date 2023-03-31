@@ -37,13 +37,17 @@ def load_config():
 	if "UPDATE_INTERVAL" not in config_json:
 		config_json["UPDATE_INTERVAL"] = 60
 
+	if "INTERVAL_UPDATE_START_DELAY" not in config_json:
+		config_json["INTERVAL_UPDATE_START_DELAY"] = 10
+
 	config_data_list = [
 		config_json["BOT_TOKEN"],
 		config_json["CHANNEL_IDS"], config_json["DUMP_CHAT_ID"],
 		config_json["SUBCHANNEL_DATA"],
 		config_json["DISCUSSION_CHAT_DATA"],
 		config_json["DEFAULT_USER_DATA"],
-		config_json["UPDATE_INTERVAL"]
+		config_json["UPDATE_INTERVAL"],
+		config_json["INTERVAL_UPDATE_START_DELAY"]
 	]
 
 	return config_data_list
@@ -94,5 +98,5 @@ def get_forwarded_from_id(message_data):
 	return None
 
 
-BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, UPDATE_INTERVAL = load_config()
+BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, UPDATE_INTERVAL, INTERVAL_UPDATE_START_DELAY = load_config()
 

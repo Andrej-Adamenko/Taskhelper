@@ -1,14 +1,7 @@
-import logging
-import time
-
-from telebot.apihelper import ApiTelegramException
 from telebot.types import MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
 
-import db_utils
 import utils
 import interval_updating_utils
-
-from utils import DISCUSSION_CHAT_DATA
 
 LINK_ENDING = ". "
 

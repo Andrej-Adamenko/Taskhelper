@@ -65,7 +65,7 @@ def forward_to_subchannel(bot, post_data, hashtags):
 
 	try:
 		copied_message = bot.copy_message(chat_id=subchannel_id, message_id=message_id, from_chat_id=main_channel_id)
-		logging.info("Successfully forwarded post to subchannel by tags: " + str(hashtags))
+		logging.info("Successfully forwarded post [{0}, {1}] to {2} subchannel by tags: {3}".format(message_id, main_channel_id, subchannel_id, hashtags))
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
