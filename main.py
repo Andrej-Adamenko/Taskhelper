@@ -4,10 +4,10 @@ import telebot
 import forwarding_utils
 import interval_updating_utils
 import post_link_utils
-import utils
+import config_utils
 import db_utils
 
-from utils import BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, DISCUSSION_CHAT_DATA
+from config_utils import BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, DISCUSSION_CHAT_DATA
 
 db_utils.initialize_db()
 
@@ -18,6 +18,8 @@ CHAT_IDS_TO_IGNORE += forwarding_utils.get_all_discussion_chat_ids()
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
 
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
+
+config_utils.load_discussion_chat_ids(bot)
 
 interval_updating_utils.start_interval_updating(bot)
 
@@ -88,7 +90,7 @@ def handle_changed_permissions(message):
 		CHANNEL_IDS.remove(chat_id)
 		logging.info(f"Channel {chat_id} was removed from config")
 
-	utils.update_config({"CHANNEL_IDS": CHANNEL_IDS})
+	config_utils.update_config({"CHANNEL_IDS": CHANNEL_IDS})
 
 
 @bot.callback_query_handler(func=lambda call: channel_id_filter(call.message))

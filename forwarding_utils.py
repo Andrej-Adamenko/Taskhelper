@@ -8,7 +8,7 @@ import db_utils
 import post_link_utils
 import utils
 
-from utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID
+from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID
 
 PRIORITY_TAG = "п"
 OPENED_TAG = "о"

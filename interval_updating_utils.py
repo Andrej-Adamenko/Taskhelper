@@ -9,7 +9,7 @@ import forwarding_utils
 import post_link_utils
 import threading
 
-from utils import DISCUSSION_CHAT_DATA, CHANNEL_IDS, UPDATE_INTERVAL, INTERVAL_UPDATE_START_DELAY
+from config_utils import DISCUSSION_CHAT_DATA, CHANNEL_IDS, UPDATE_INTERVAL, INTERVAL_UPDATE_START_DELAY
 
 UPDATE_STARTED_MSG_TEXT = "Started updating older posts. When update is complete this message will be deleted."
 
