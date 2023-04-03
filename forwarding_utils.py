@@ -53,23 +53,23 @@ def forward_to_subchannel(bot, post_data, hashtags):
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				raise E
-			logging.info("Exception during delete_message - " + str(E))
+			logging.info(f"Exception during delete_message [{forwarded_msg_id}, {forwarded_channel_id}] - {E}")
 
 	if OPENED_TAG not in hashtags:
 		return
 
 	subchannel_id = get_subchannel_id_from_hashtags(main_channel_id, hashtags)
 	if not subchannel_id:
-		logging.warning("Subchannel not found in config file {0}, {1}".format(hashtags, main_channel_id))
+		logging.warning(f"Subchannel not found in config file {hashtags}, {main_channel_id}")
 		return
 
 	try:
 		copied_message = bot.copy_message(chat_id=subchannel_id, message_id=message_id, from_chat_id=main_channel_id)
-		logging.info("Successfully forwarded post [{0}, {1}] to {2} subchannel by tags: {3}".format(message_id, main_channel_id, subchannel_id, hashtags))
+		logging.info(f"Successfully forwarded post [{message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtags}")
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
-		logging.warning("Exception during forwarding post to subchannel {0} - {1}".format(hashtags, E))
+		logging.warning(f"Exception during forwarding post to subchannel {hashtags} - {E}")
 		return
 
 	db_utils.insert_or_update_copied_message(message_id, main_channel_id, copied_message.message_id, subchannel_id)
@@ -158,7 +158,7 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 		discussion_message_id = db_utils.get_discussion_message_id(message_id, main_channel_id)
 		if discussion_message_id:
 			discussion_chat_id = str(discussion_chat_id)[4:]
-			comments_url = "tg://privatepost?channel={0}&post={1}&thread={1}".format(discussion_chat_id, discussion_message_id)
+			comments_url = f"tg://privatepost?channel={discussion_chat_id}&post={discussion_message_id}&thread={discussion_message_id}"
 			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER, url=comments_url)
 			buttons.append(comments_button)
 
@@ -233,7 +233,7 @@ def add_control_buttons(bot, post_data, hashtags):
 			raise E
 		if E.description == SAME_MSG_CONTENT_ERROR:
 			return
-		logging.info("Exception during adding control buttons - " + str(E))
+		logging.info(f"Exception during adding control buttons - {E}")
 
 
 def extract_hashtags(post_data, main_channel_id):
@@ -331,7 +331,7 @@ def show_subchannel_buttons(bot, post_data):
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
-		logging.info("Exception during adding subchannel buttons - " + str(E))
+		logging.info(f"Exception during adding subchannel buttons - {E}")
 
 
 def change_state_button_event(bot, post_data, new_state):
@@ -444,7 +444,7 @@ def rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
-		logging.info("Exception during rearranging hashtags - " + str(E))
+		logging.info(f"Exception during rearranging hashtags - {E}")
 		return
 
 

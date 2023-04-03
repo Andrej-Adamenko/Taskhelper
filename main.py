@@ -83,10 +83,10 @@ def handle_changed_permissions(message):
 	if has_permissions:
 		CHANNEL_IDS.append(chat_id)
 		post_link_utils.update_older_messages_question(bot, chat_id)
-		logging.info("Channel {0} was added to config".format(chat_id))
+		logging.info(f"Channel {chat_id} was added to config")
 	else:
 		CHANNEL_IDS.remove(chat_id)
-		logging.info("Channel {0} was removed from config".format(chat_id))
+		logging.info(f"Channel {chat_id} was removed from config")
 
 	utils.update_config({"CHANNEL_IDS": CHANNEL_IDS})
 

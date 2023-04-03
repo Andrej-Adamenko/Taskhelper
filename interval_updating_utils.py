@@ -118,16 +118,16 @@ def check_all_messages(bot, main_channel_id, discussion_chat_id=None):
 				update_older_message(bot, main_channel_id, current_msg_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
-				logging.warning("Too many requests - " + str(E))
+				logging.warning(f"Too many requests - {E}")
 				time.sleep(20)
 				continue
-			logging.error("Error during updating older messages - " + str(E))
+			logging.error(f"Error during updating older messages - {E}")
 
 		current_msg_id -= 1
 		if discussion_chat_id and current_msg_id <= 0:
 			current_msg_id = last_updated_message_id
 			discussion_chat_id = None
-			logging.info("Checked all messages in discussion chat, last updated message id: " + str(last_updated_message_id))
+			logging.info(f"Checked all messages in discussion chat, last updated message id: {last_updated_message_id}")
 
-	logging.info("Checked all messages in main channel - id: " + str(main_channel_id))
+	logging.info(f"Checked all messages in main channel - id: {main_channel_id}")
 

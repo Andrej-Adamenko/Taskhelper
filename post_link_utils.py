@@ -12,7 +12,7 @@ START_UPDATE_QUESTION = "Do you want to start updating older posts? (This can ta
 
 def get_post_url(post_data):
 	channel_url = str(post_data.chat.id)[4:]
-	return "https://t.me/c/{0}/{1}".format(channel_url, post_data.message_id)
+	return f"https://t.me/c/{channel_url}/{post_data.message_id}"
 
 
 def get_previous_link(post_data, post_url):
