@@ -374,6 +374,9 @@ def insert_hashtag_in_post(post_data, hashtag, position):
 
 	post_data.text = post_data.text[:position] + hashtag_text + post_data.text[position:]
 
+	if post_data.entities is None:
+		post_data.entities = []
+
 	for entity in post_data.entities:
 		if entity.offset >= position:
 			entity.offset += len(hashtag_text)
@@ -447,7 +450,7 @@ def rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_
 
 def insert_hashtags(post_data, hashtags):
 	hashtags_start_position = 0
-	if post_data.entities[0].type == "text_link" and post_data.entities[0].offset == 0:
+	if post_data.entities and post_data.entities[0].type == "text_link" and post_data.entities[0].offset == 0:
 		hashtags_start_position += post_data.entities[0].length + len(post_link_utils.LINK_ENDING)
 
 	for hashtag in hashtags[::-1]:
@@ -461,6 +464,9 @@ def insert_hashtags(post_data, hashtags):
 def is_post_data_equal(post_data1, post_data2):
 	if post_data1.text != post_data2.text:
 		return False
+
+	if post_data1.entities is None and post_data2.entities is None:
+		return True
 
 	if len(post_data1.entities) != len(post_data1.entities):
 		return False

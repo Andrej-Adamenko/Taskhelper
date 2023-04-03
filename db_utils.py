@@ -7,16 +7,16 @@ DB_FILENAME = "taskhelper_data.db"
 DB_CONNECTION = sqlite3.connect(DB_FILENAME, check_same_thread=False)
 CURSOR = DB_CONNECTION.cursor()
 
-DB_LOCK = threading.Lock()
+DB_LOCK = threading.RLock()
 
 
 def db_thread_lock(func):
 	def inner_function(*args, **kwargs):
 		try:
 			DB_LOCK.acquire(True)
-			func(*args, **kwargs)
-		except sqlite3.Error:
-			logging.error("SQLite error in {0} function".format(func.__name__))
+			return func(*args, **kwargs)
+		except sqlite3.Error as E:
+			logging.error(f"SQLite error in {func.__name__} function, error: {E.args}")
 		finally:
 			DB_LOCK.release()
 	return inner_function
@@ -81,6 +81,7 @@ def insert_discussion_message(main_message_id, main_channel_id, discussion_messa
 	DB_CONNECTION.commit()
 
 
+@db_thread_lock
 def get_discussion_message_id(main_message_id, main_channel_id):
 	sql = "SELECT discussion_message_id FROM discussion_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
@@ -107,6 +108,7 @@ def delete_copied_message(main_message_id, main_channel_id):
 	DB_CONNECTION.commit()
 
 
+@db_thread_lock
 def get_copied_message_data(main_message_id, main_channel_id):
 	sql = "SELECT copied_message_id, copied_channel_id FROM copied_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
@@ -125,6 +127,7 @@ def insert_or_update_last_msg_id(last_message_id, chat_id):
 	DB_CONNECTION.commit()
 
 
+@db_thread_lock
 def get_last_message_id(chat_id):
 	sql = "SELECT last_message_id FROM last_message_ids WHERE chat_id=(?)"
 	CURSOR.execute(sql, (chat_id,))
