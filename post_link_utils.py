@@ -1,4 +1,6 @@
+import telebot.types
 from telebot.types import MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
+from typing import List
 
 import utils
 import interval_updating_utils
@@ -15,30 +17,35 @@ def get_post_url(post_data):
 	return f"https://t.me/c/{channel_url}/{post_data.message_id}"
 
 
-def get_previous_link(post_data, post_url):
-	if post_data.entities:
-		for entity in post_data.entities:
+def get_previous_link(entities, post_url):
+	if entities:
+		for entity in entities:
 			if entity.offset == 0 and entity.type == "text_link" and entity.url == post_url:
 				return entity
 	return None
 
 
 def insert_link_into_post(bot, post_data, link_text, post_url, additional_offset=0):
-	updated_entities = utils.offset_entities(post_data.entities, len(link_text) + len(LINK_ENDING) + additional_offset)
+	text, entities = utils.get_post_content(post_data)
+
+	updated_entities = utils.offset_entities(entities, len(link_text) + len(LINK_ENDING) + additional_offset)
 	updated_entities.append(MessageEntity(type="text_link", offset=0, length=len(link_text), url=post_url))
 	updated_entities.sort(key=lambda e: e.offset)
 
-	post_data.text = link_text + LINK_ENDING + post_data.text
-	post_data.entities = updated_entities
-	bot.edit_message_text(text=post_data.text, chat_id=post_data.chat.id, message_id=post_data.message_id,
-								 entities=post_data.entities, reply_markup=post_data.reply_markup)
+	text = link_text + LINK_ENDING + text
+	entities = updated_entities
+
+	utils.set_post_content(post_data, text, entities)
+
+	utils.edit_message_content(bot, post_data, text=text, entities=entities, reply_markup=post_data.reply_markup)
+
 	return post_data
 
 
 def add_link_to_new_post(bot, post_data):
-	# skip forwarded messages and messages without text
-	if utils.get_forwarded_from_id(post_data) or post_data.text is None:
-		return
+	# skip forwarded messages
+#	if utils.get_forwarded_from_id(post_data):
+#		return
 
 	post_url = get_post_url(post_data)
 	link_text = str(post_data.message_id)
@@ -46,39 +53,39 @@ def add_link_to_new_post(bot, post_data):
 	return insert_link_into_post(bot, post_data, link_text, post_url)
 
 
-def update_post_link(bot, post_data):
-	if post_data.text is None:
-		return
+def update_post_link(bot: telebot.TeleBot, post_data: telebot.types.Message):
+	text, entities = utils.get_post_content(post_data)
 
 	post_url = get_post_url(post_data)
 	link_text = str(post_data.message_id)
 
-	entity_offset = 0
-
-	previous_link = get_previous_link(post_data, post_url)
+	previous_link = get_previous_link(entities, post_url)
 	if previous_link:
-		if len(link_text) == previous_link.length and post_data.text.startswith(link_text + LINK_ENDING):
+		if len(link_text) == previous_link.length and text.startswith(link_text + LINK_ENDING):
 			return  # return if link is correct
-		entity_offset = remove_previous_link(post_data, previous_link)
+		text, entities = remove_previous_link(text, entities, previous_link)
 
-	return insert_link_into_post(bot, post_data, link_text, post_url, entity_offset)
+	utils.set_post_content(post_data, text, entities)
+
+	return insert_link_into_post(bot, post_data, link_text, post_url)
 
 
-def remove_previous_link(post_data, previous_link):
+def remove_previous_link(text: str, entities: List[MessageEntity], previous_link: MessageEntity):
 	entity_offset = 0
 
-	post_data.text = post_data.text[previous_link.length:]
+	text = text[previous_link.length:]
 	entity_offset -= previous_link.length
-	if post_data.text.startswith(LINK_ENDING):
-		post_data.text = post_data.text[len(LINK_ENDING):]
+	if text == LINK_ENDING[:len(text)]:
+		text = text[len(LINK_ENDING):]
 		entity_offset -= len(LINK_ENDING)
 
-	post_data.entities.remove(previous_link)
+	entities.remove(previous_link)
+	entities = utils.offset_entities(entities, entity_offset)
 
-	return entity_offset
+	return text, entities
 
 
-def update_older_messages_question(bot, chat_id):
+def update_older_messages_question(bot: telebot.TeleBot, chat_id: int):
 	buttons = [
 		InlineKeyboardButton("Yes", callback_data=utils.create_callback_str(CALLBACK_PREFIX, "UPD_YES")),
 		InlineKeyboardButton("No", callback_data=utils.create_callback_str(CALLBACK_PREFIX, "UPD_NO"))

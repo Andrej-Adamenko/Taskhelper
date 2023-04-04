@@ -71,7 +71,7 @@ def create_tables():
 
 
 @db_thread_lock
-def insert_discussion_message(main_message_id, main_channel_id, discussion_message_id):
+def insert_or_update_discussion_message(main_message_id, main_channel_id, discussion_message_id):
 	if get_discussion_message_id(main_message_id, main_channel_id):
 		sql = "UPDATE discussion_messages SET discussion_message_id=(?) WHERE main_message_id=(?) and main_channel_id=(?)"
 	else:

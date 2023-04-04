@@ -1,6 +1,8 @@
 import logging
 import copy
+from typing import List
 
+import telebot
 from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEntity
 
@@ -24,7 +26,7 @@ MAX_BUTTONS_IN_ROW = 3
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 
 
-def get_message_content_by_id(bot, chat_id, message_id):
+def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	try:
 		forwarded_message = bot.forward_message(chat_id=DUMP_CHAT_ID, from_chat_id=chat_id,
 												message_id=message_id)
@@ -37,7 +39,7 @@ def get_message_content_by_id(bot, chat_id, message_id):
 	return forwarded_message
 
 
-def forward_to_subchannel(bot, post_data, hashtags):
+def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str]):
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
@@ -76,7 +78,7 @@ def forward_to_subchannel(bot, post_data, hashtags):
 	return subchannel_id, copied_message.message_id
 
 
-def get_subchannel_id_from_hashtags(main_channel_id, hashtags):
+def get_subchannel_id_from_hashtags(main_channel_id: int, hashtags: List[str]):
 	main_channel_id_str = str(main_channel_id)
 	if main_channel_id_str not in SUBCHANNEL_DATA:
 		return
@@ -169,15 +171,17 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 def generate_subchannel_buttons(main_channel_id, post_data):
 	forwarding_data = get_subchannels_forwarding_data(main_channel_id)
 
-	_, user_hashtag_index, priority_hashtag_index = find_hashtag_indexes(post_data, main_channel_id)
+	text, entities = utils.get_post_content(post_data)
+
+	_, user_hashtag_index, priority_hashtag_index = find_hashtag_indexes(text, entities, main_channel_id)
 	current_subchannel_name = ""
 
 	if user_hashtag_index is not None:
-		entity = post_data.entities[user_hashtag_index]
-		current_subchannel_name += post_data.text[entity.offset + 1:entity.offset + entity.length]
+		entity = entities[user_hashtag_index]
+		current_subchannel_name += text[entity.offset + 1:entity.offset + entity.length]
 		if priority_hashtag_index is not None:
-			entity = post_data.entities[priority_hashtag_index]
-			priority = post_data.text[entity.offset + 1 + len(PRIORITY_TAG):entity.offset + entity.length]
+			entity = entities[priority_hashtag_index]
+			priority = text[entity.offset + 1 + len(PRIORITY_TAG):entity.offset + entity.length]
 			current_subchannel_name += " " + priority
 
 	subchannel_buttons = []
@@ -221,13 +225,15 @@ def get_subchannels_forwarding_data(main_channel_id):
 	return forwarding_data
 
 
-def add_control_buttons(bot, post_data, hashtags):
+def add_control_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str]):
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
+	text, entities = utils.get_post_content(post_data)
+
 	keyboard_markup = generate_control_buttons(hashtags, main_channel_id, message_id)
 	try:
-		bot.edit_message_text(chat_id=main_channel_id, message_id=post_data.message_id, text=post_data.text, entities=post_data.entities, reply_markup=keyboard_markup)
+		utils.edit_message_content(bot, post_data, text=text, entities=entities, reply_markup=keyboard_markup)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
@@ -237,23 +243,25 @@ def add_control_buttons(bot, post_data, hashtags):
 
 
 def extract_hashtags(post_data, main_channel_id):
-	status_tag_index, user_tag_index, priority_tag_index = find_hashtag_indexes(post_data, main_channel_id)
+	text, entities = utils.get_post_content(post_data)
+
+	status_tag_index, user_tag_index, priority_tag_index = find_hashtag_indexes(text, entities, main_channel_id)
 
 	extracted_hashtags = []
 	if status_tag_index is None:
 		extracted_hashtags.append(None)
 	else:
-		extracted_hashtags.append(post_data.entities[status_tag_index])
+		extracted_hashtags.append(entities[status_tag_index])
 
 	if user_tag_index is None:
 		extracted_hashtags.append(None)
 	else:
-		extracted_hashtags.append(post_data.entities[user_tag_index])
+		extracted_hashtags.append(entities[user_tag_index])
 
 	if priority_tag_index is None:
 		extracted_hashtags.append(None)
 	else:
-		extracted_hashtags.append(post_data.entities[priority_tag_index])
+		extracted_hashtags.append(entities[priority_tag_index])
 
 	for i in range(len(extracted_hashtags)):
 		if extracted_hashtags[i] is None:
@@ -261,32 +269,34 @@ def extract_hashtags(post_data, main_channel_id):
 
 		entity_offset = extracted_hashtags[i].offset
 		entity_length = extracted_hashtags[i].length
-		extracted_hashtags[i] = post_data.text[entity_offset + 1:entity_offset + entity_length]
+		extracted_hashtags[i] = text[entity_offset + 1:entity_offset + entity_length]
 
 	entities_to_remove = [status_tag_index, user_tag_index, priority_tag_index]
 	entities_to_remove = list(filter(lambda elem: elem is not None, entities_to_remove))
 	entities_to_remove.sort(reverse=True)
 
 	for entity_index in entities_to_remove:
-		post_data = cut_entity_from_post(post_data, entity_index)
+		text, entities = cut_entity_from_post(text, entities, entity_index)
+
+	utils.set_post_content(post_data, text, entities)
 
 	return extracted_hashtags, post_data
 
 
-def find_hashtag_indexes(post_data, main_channel_id):
+def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
 	status_tag_index = None
 	user_tag_index = None
 	priority_tag_index = None
 
-	if not post_data.entities:
+	if entities is None:
 		return None, None, None
 
 	main_channel_id_str = str(main_channel_id)
 
-	for entity_index in reversed(range(len(post_data.entities))):
-		entity = post_data.entities[entity_index]
+	for entity_index in reversed(range(len(entities))):
+		entity = entities[entity_index]
 		if entity.type == "hashtag":
-			tag = post_data.text[entity.offset + 1:entity.offset + entity.length]
+			tag = text[entity.offset + 1:entity.offset + entity.length]
 			if tag == OPENED_TAG or tag == CLOSED_TAG:
 				status_tag_index = entity_index
 				continue
@@ -303,7 +313,7 @@ def find_hashtag_indexes(post_data, main_channel_id):
 	return status_tag_index, user_tag_index, priority_tag_index
 
 
-def handle_callback(bot, call):
+def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 	callback_data = call.data[len(CALLBACK_PREFIX) + 1:]
 	callback_data_list = callback_data.split(",")
 	callback_type = callback_data_list[0]
@@ -322,19 +332,20 @@ def handle_callback(bot, call):
 		show_subchannel_buttons(bot, call.message)
 
 
-def show_subchannel_buttons(bot, post_data):
+def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
 
 	keyboard_markup = generate_subchannel_buttons(main_channel_id, post_data)
 	try:
-		bot.edit_message_text(chat_id=main_channel_id, message_id=post_data.message_id, text=post_data.text, entities=post_data.entities, reply_markup=keyboard_markup)
+		text, entities = utils.get_post_content(post_data)
+		utils.edit_message_content(bot, post_data, text=text, entities=entities, reply_markup=keyboard_markup)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
 		logging.info(f"Exception during adding subchannel buttons - {E}")
 
 
-def change_state_button_event(bot, post_data, new_state):
+def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_state: bool):
 	main_channel_id = post_data.chat.id
 
 	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
@@ -346,7 +357,7 @@ def change_state_button_event(bot, post_data, new_state):
 		add_control_buttons(bot, post_data, hashtags)
 
 
-def change_subchannel_button_event(bot, post_data, new_subchannel_name):
+def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_subchannel_name: str):
 	main_channel_id = post_data.chat.id
 
 	subchannel_user, subchannel_priority = new_subchannel_name.split(" ")
@@ -363,50 +374,50 @@ def change_subchannel_button_event(bot, post_data, new_subchannel_name):
 		add_control_buttons(bot, post_data, hashtags)
 
 
-def update_post_button_event(bot, post_data):
+def update_post_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message):
 	forward_and_add_inline_keyboard(bot, post_data)
 
 
-def insert_hashtag_in_post(post_data, hashtag, position):
+def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity], hashtag: str, position: int):
 	hashtag_text = hashtag
-	if len(post_data.text) > position:
+	if len(text) > position:
 		hashtag_text += " "
 
-	post_data.text = post_data.text[:position] + hashtag_text + post_data.text[position:]
+	text = text[:position] + hashtag_text + text[position:]
 
-	if post_data.entities is None:
-		post_data.entities = []
+	if entities is None:
+		entities = []
 
-	for entity in post_data.entities:
+	for entity in entities:
 		if entity.offset >= position:
 			entity.offset += len(hashtag_text)
 
 	hashtag_entity = MessageEntity(type="hashtag", offset=position, length=len(hashtag))
-	post_data.entities.append(hashtag_entity)
-	post_data.entities.sort(key=lambda e: e.offset)
+	entities.append(hashtag_entity)
+	entities.sort(key=lambda e: e.offset)
 
-	return post_data
+	return text, entities
 
 
-def cut_entity_from_post(post_data, entity_index):
-	entity_to_cut = post_data.entities[entity_index]
-	if entity_to_cut.offset != 0 and post_data.text[entity_to_cut.offset - 1] == " ":
+def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+
+	entity_to_cut = entities[entity_index]
+	if entity_to_cut.offset != 0 and text[entity_to_cut.offset - 1] == " ":
 		entity_to_cut.offset -= 1
 		entity_to_cut.length += 1
-	if len(post_data.text) > entity_to_cut.offset + entity_to_cut.length:
-		character_after_entity = post_data.text[entity_to_cut.offset + entity_to_cut.length]
+	if len(text) > entity_to_cut.offset + entity_to_cut.length:
+		character_after_entity = text[entity_to_cut.offset + entity_to_cut.length]
 		if character_after_entity == " ":
 			entity_to_cut.length += 1
 
-	text = post_data.text
-	post_data.text = text[:entity_to_cut.offset] + " " + text[entity_to_cut.offset + entity_to_cut.length:]
-	offsetted_entities = utils.offset_entities(post_data.entities[entity_index + 1:], -entity_to_cut.length + 1)
-	post_data.entities[entity_index:] = offsetted_entities
+	text = text[:entity_to_cut.offset] + " " + text[entity_to_cut.offset + entity_to_cut.length:]
+	offsetted_entities = utils.offset_entities(entities[entity_index + 1:], -entity_to_cut.length + 1)
+	entities[entity_index:] = offsetted_entities
 
-	return post_data
+	return text, entities
 
 
-def insert_default_user_hashtags(main_channel_id, hashtags):
+def insert_default_user_hashtags(main_channel_id: int, hashtags: List[str]):
 	main_channel_id_str = str(main_channel_id)
 	if main_channel_id_str in DEFAULT_USER_DATA:
 		hashtags[0] = OPENED_TAG if hashtags[0] is None else hashtags[0]
@@ -417,7 +428,7 @@ def insert_default_user_hashtags(main_channel_id, hashtags):
 	return hashtags
 
 
-def forward_and_add_inline_keyboard(bot, post_data, use_default_user=False):
+def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, use_default_user: bool = False):
 	main_channel_id = post_data.chat.id
 
 	original_post_data = copy.deepcopy(post_data)
@@ -432,15 +443,16 @@ def forward_and_add_inline_keyboard(bot, post_data, use_default_user=False):
 		add_control_buttons(bot, post_data, hashtags)
 
 
-def rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data=None):
+def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str], main_channel_id: int,
+					   original_post_data: telebot.types.Message = None):
 	post_data = insert_hashtags(post_data, hashtags)
 
 	if original_post_data and is_post_data_equal(post_data, original_post_data):
 		return
 
 	try:
-		bot.edit_message_text(chat_id=main_channel_id, message_id=post_data.message_id, text=post_data.text,
-							  entities=post_data.entities, reply_markup=post_data.reply_markup)
+		text, entities = utils.get_post_content(post_data)
+		utils.edit_message_content(bot, post_data, text=text, entities=entities, reply_markup=post_data.reply_markup)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
@@ -448,32 +460,39 @@ def rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_
 		return
 
 
-def insert_hashtags(post_data, hashtags):
+def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str]):
+	text, entities = utils.get_post_content(post_data)
+
 	hashtags_start_position = 0
-	if post_data.entities and post_data.entities[0].type == "text_link" and post_data.entities[0].offset == 0:
-		hashtags_start_position += post_data.entities[0].length + len(post_link_utils.LINK_ENDING)
+	if entities and entities[0].type == "text_link" and entities[0].offset == 0:
+		hashtags_start_position += entities[0].length + len(post_link_utils.LINK_ENDING)
 
 	for hashtag in hashtags[::-1]:
 		if hashtag is None:
 			continue
-		post_data = insert_hashtag_in_post(post_data, "#" + hashtag, hashtags_start_position)
+		text, entities = insert_hashtag_in_post(text, entities, "#" + hashtag, hashtags_start_position)
+
+	utils.set_post_content(post_data, text, entities)
 
 	return post_data
 
 
-def is_post_data_equal(post_data1, post_data2):
-	if post_data1.text != post_data2.text:
+def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.types.Message):
+	text1, entities1 = utils.get_post_content(post_data1)
+	text2, entities2 = utils.get_post_content(post_data2)
+
+	if text1 != text2:
 		return False
 
-	if post_data1.entities is None and post_data2.entities is None:
+	if entities1 is None and entities2 is None:
 		return True
 
-	if len(post_data1.entities) != len(post_data1.entities):
+	if len(entities1) != len(entities2):
 		return False
 
-	for entity_i in range(len(post_data1.entities)):
-		e1 = post_data1.entities[entity_i]
-		e2 = post_data2.entities[entity_i]
+	for entity_i in range(len(entities1)):
+		e1 = entities1[entity_i]
+		e2 = entities2[entity_i]
 		if e1.type != e2.type or e1.offset != e2.offset or e1.url != e2.url or e1.length != e2.length:
 			return False
 

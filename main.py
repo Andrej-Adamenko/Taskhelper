@@ -6,6 +6,7 @@ import interval_updating_utils
 import post_link_utils
 import config_utils
 import db_utils
+import utils
 
 from config_utils import BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, DISCUSSION_CHAT_DATA
 
@@ -28,17 +29,18 @@ channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
 @bot.channel_post_handler(func=channel_id_filter,
 						  content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
-def handle_post(post_data):
+def handle_post(post_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
 
-	edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
 	main_channel_id_str = str(post_data.chat.id)
 	if main_channel_id_str not in DISCUSSION_CHAT_DATA:
+		edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
 		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, True)
 
 
-@bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward)
-def handle_automatically_forwarded_message(msg_data):
+@bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward,
+					 content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
+def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(msg_data.message_id, msg_data.chat.id)
 
 	if msg_data.text == interval_updating_utils.UPDATE_STARTED_MSG_TEXT or msg_data.text == post_link_utils.START_UPDATE_QUESTION:
@@ -56,20 +58,22 @@ def handle_automatically_forwarded_message(msg_data):
 	main_message_id = msg_data.forward_from_message_id
 	discussion_message_id = msg_data.message_id
 
-	db_utils.insert_discussion_message(main_message_id, main_channel_id, discussion_message_id)
+	db_utils.insert_or_update_discussion_message(main_message_id, main_channel_id, discussion_message_id)
 
 	msg_data.chat.id = main_channel_id
 	msg_data.message_id = main_message_id
-	forwarding_utils.forward_and_add_inline_keyboard(bot, msg_data, True)
+	edited_post = post_link_utils.add_link_to_new_post(bot, msg_data)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, True)
 
 
-@bot.edited_channel_post_handler(func=channel_id_filter)
-def handle_edited_post(post_data):
+@bot.edited_channel_post_handler(func=channel_id_filter,
+					 content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
+def handle_edited_post(post_data: telebot.types.Message):
 	post_link_utils.update_post_link(bot, post_data)
 
 
 @bot.my_chat_member_handler()
-def handle_changed_permissions(message):
+def handle_changed_permissions(message: telebot.types.ChatMemberUpdated):
 	chat_id = message.chat.id
 	if chat_id in CHAT_IDS_TO_IGNORE:
 		return

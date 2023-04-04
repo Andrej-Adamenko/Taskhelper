@@ -19,7 +19,7 @@ def update_older_message(bot, main_channel_id, current_msg_id):
 	if forwarded_message is None:
 		return
 
-	if utils.get_forwarded_from_id(forwarded_message) != main_channel_id or forwarded_message.text is None:
+	if utils.get_forwarded_from_id(forwarded_message) != main_channel_id:
 		return
 
 	main_channel_message_id = forwarded_message.forward_from_message_id
@@ -42,12 +42,12 @@ def store_discussion_message(bot, main_channel_id, current_msg_id, discussion_ch
 	if forwarded_message is None:
 		return
 
-	if utils.get_forwarded_from_id(forwarded_message) != main_channel_id or forwarded_message.text is None:
+	if utils.get_forwarded_from_id(forwarded_message) != main_channel_id:
 		return
 
 	main_channel_message_id = forwarded_message.forward_from_message_id
 	if discussion_chat_id:
-		db_utils.insert_discussion_message(main_channel_message_id, main_channel_id, current_msg_id)
+		db_utils.insert_or_update_discussion_message(main_channel_message_id, main_channel_id, current_msg_id)
 
 	return main_channel_message_id
 
