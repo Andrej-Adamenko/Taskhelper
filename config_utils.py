@@ -21,6 +21,7 @@ DISCUSSION_CHAT_DATA: dict = {}
 DEFAULT_USER_DATA: dict = {}
 UPDATE_INTERVAL: int = 60
 INTERVAL_UPDATE_START_DELAY: int = 10
+AUTO_FORWARDING_ENABLED: bool = False
 
 config_json = {}
 with open(CONFIG_FILE, "r", encoding="utf-8") as f:

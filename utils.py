@@ -1,6 +1,9 @@
 from typing import List
 
 import telebot.types
+from telebot.apihelper import ApiTelegramException
+
+SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 
 
 def create_callback_str(callback_prefix, callback_type, *args):
@@ -50,10 +53,35 @@ def set_post_content(post_data: telebot.types.Message, text: str, entities: tele
 
 
 def edit_message_content(bot: telebot.TeleBot, post_data: telebot.types.Message, **kwargs):
-	if post_data.text is not None:
-		bot.edit_message_text(chat_id=post_data.chat.id, message_id=post_data.message_id, **kwargs)
-	else:
-		kwargs["caption"] = kwargs.pop("text")
-		kwargs["caption_entities"] = kwargs.pop("entities")
-		bot.edit_message_caption(chat_id=post_data.chat.id, message_id=post_data.message_id, **kwargs)
+	try:
+		if post_data.text is not None:
+			bot.edit_message_text(chat_id=post_data.chat.id, message_id=post_data.message_id, **kwargs)
+		else:
+			kwargs["caption"] = kwargs.pop("text")
+			kwargs["caption_entities"] = kwargs.pop("entities")
+			bot.edit_message_caption(chat_id=post_data.chat.id, message_id=post_data.message_id, **kwargs)
+	except ApiTelegramException as E:
+		if E.description == SAME_MSG_CONTENT_ERROR:
+			return
 
+
+def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.types.Message):
+	text1, entities1 = get_post_content(post_data1)
+	text2, entities2 = get_post_content(post_data2)
+
+	if text1 != text2:
+		return False
+
+	if entities1 is None and entities2 is None:
+		return True
+
+	if len(entities1) != len(entities2):
+		return False
+
+	for entity_i in range(len(entities1)):
+		e1 = entities1[entity_i]
+		e2 = entities2[entity_i]
+		if e1.type != e2.type or e1.offset != e2.offset or e1.url != e2.url or e1.length != e2.length:
+			return False
+
+	return True

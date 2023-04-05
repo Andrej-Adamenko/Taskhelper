@@ -6,7 +6,6 @@ import interval_updating_utils
 import post_link_utils
 import config_utils
 import db_utils
-import utils
 
 from config_utils import BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, DISCUSSION_CHAT_DATA
 
@@ -33,9 +32,9 @@ def handle_post(post_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
 
 	main_channel_id_str = str(post_data.chat.id)
-	if main_channel_id_str not in DISCUSSION_CHAT_DATA:
+	if DISCUSSION_CHAT_DATA[main_channel_id_str] is None:
 		edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
-		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, True)
+		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=True)
 
 
 @bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward,
@@ -63,7 +62,7 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	msg_data.chat.id = main_channel_id
 	msg_data.message_id = main_message_id
 	edited_post = post_link_utils.add_link_to_new_post(bot, msg_data)
-	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, True)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=True)
 
 
 @bot.edited_channel_post_handler(func=channel_id_filter,

@@ -10,7 +10,7 @@ import db_utils
 import post_link_utils
 import utils
 
-from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID
+from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID, AUTO_FORWARDING_ENABLED
 
 PRIORITY_TAG = "п"
 OPENED_TAG = "о"
@@ -22,8 +22,6 @@ CHECK_MARK_CHARACTER = "\U00002705"
 COMMENTS_CHARACTER = "\U0001F4AC"
 
 MAX_BUTTONS_IN_ROW = 3
-
-SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 
 
 def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
@@ -47,7 +45,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	if forwarded_message_data:
 		forwarded_msg_id, forwarded_channel_id = forwarded_message_data
 		forwarded_msg_data = get_message_content_by_id(bot, forwarded_channel_id, forwarded_msg_id)
-		if forwarded_msg_data and is_post_data_equal(forwarded_msg_data, post_data):
+		if forwarded_msg_data and utils.is_post_data_equal(forwarded_msg_data, post_data):
 			return
 
 		try:
@@ -140,10 +138,10 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 
 	if hashtags[0] == CLOSED_TAG:
 		close_ticket_button.text += CHECK_MARK_CHARACTER
-		close_ticket_button.callback_data = "_"
+		close_ticket_button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
 	elif hashtags[0] == OPENED_TAG:
 		open_ticket_button.text += CHECK_MARK_CHARACTER
-		open_ticket_button.callback_data = "_"
+		open_ticket_button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
 
 	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "R")
 	reassign_button = InlineKeyboardButton("Reassign", callback_data=reassign_callback_data)
@@ -155,7 +153,7 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 	]
 
 	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str in DISCUSSION_CHAT_DATA:
+	if main_channel_id_str in DISCUSSION_CHAT_DATA and DISCUSSION_CHAT_DATA[main_channel_id_str] is not None:
 		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
 		discussion_message_id = db_utils.get_discussion_message_id(message_id, main_channel_id)
 		if discussion_message_id:
@@ -237,12 +235,10 @@ def add_control_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
-		if E.description == SAME_MSG_CONTENT_ERROR:
-			return
 		logging.info(f"Exception during adding control buttons - {E}")
 
 
-def extract_hashtags(post_data, main_channel_id):
+def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int):
 	text, entities = utils.get_post_content(post_data)
 
 	status_tag_index, user_tag_index, priority_tag_index = find_hashtag_indexes(text, entities, main_channel_id)
@@ -327,7 +323,7 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 	elif callback_type == "O":
 		change_state_button_event(bot, call.message, True)
 	elif callback_type == "S":
-		update_post_button_event(bot, call.message)
+		forward_and_add_inline_keyboard(bot, call.message, force_forward=True)
 	elif callback_type == "R":
 		show_subchannel_buttons(bot, call.message)
 
@@ -372,10 +368,6 @@ def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.type
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
 		forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
-
-
-def update_post_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message):
-	forward_and_add_inline_keyboard(bot, post_data)
 
 
 def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity], hashtag: str, position: int):
@@ -428,7 +420,8 @@ def insert_default_user_hashtags(main_channel_id: int, hashtags: List[str]):
 	return hashtags
 
 
-def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, use_default_user: bool = False):
+def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
+									use_default_user: bool = False, force_forward: bool = False):
 	main_channel_id = post_data.chat.id
 
 	original_post_data = copy.deepcopy(post_data)
@@ -439,7 +432,8 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 			hashtags = insert_default_user_hashtags(main_channel_id, hashtags)
 
 		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
-		forward_to_subchannel(bot, post_data, hashtags)
+		if AUTO_FORWARDING_ENABLED or force_forward:
+			forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
 
 
@@ -447,7 +441,7 @@ def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, h
 					   original_post_data: telebot.types.Message = None):
 	post_data = insert_hashtags(post_data, hashtags)
 
-	if original_post_data and is_post_data_equal(post_data, original_post_data):
+	if original_post_data and utils.is_post_data_equal(post_data, original_post_data):
 		return
 
 	try:
@@ -466,6 +460,8 @@ def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str]):
 	hashtags_start_position = 0
 	if entities and entities[0].type == "text_link" and entities[0].offset == 0:
 		hashtags_start_position += entities[0].length + len(post_link_utils.LINK_ENDING)
+		if hashtags_start_position > len(text):
+			text += " "
 
 	for hashtag in hashtags[::-1]:
 		if hashtag is None:
@@ -475,26 +471,4 @@ def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str]):
 	utils.set_post_content(post_data, text, entities)
 
 	return post_data
-
-
-def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.types.Message):
-	text1, entities1 = utils.get_post_content(post_data1)
-	text2, entities2 = utils.get_post_content(post_data2)
-
-	if text1 != text2:
-		return False
-
-	if entities1 is None and entities2 is None:
-		return True
-
-	if len(entities1) != len(entities2):
-		return False
-
-	for entity_i in range(len(entities1)):
-		e1 = entities1[entity_i]
-		e2 = entities2[entity_i]
-		if e1.type != e2.type or e1.offset != e2.offset or e1.url != e2.url or e1.length != e2.length:
-			return False
-
-	return True
 

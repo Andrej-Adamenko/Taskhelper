@@ -43,10 +43,6 @@ def insert_link_into_post(bot, post_data, link_text, post_url, additional_offset
 
 
 def add_link_to_new_post(bot, post_data):
-	# skip forwarded messages
-#	if utils.get_forwarded_from_id(post_data):
-#		return
-
 	post_url = get_post_url(post_data)
 	link_text = str(post_data.message_id)
 
