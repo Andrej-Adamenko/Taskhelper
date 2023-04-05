@@ -21,8 +21,6 @@ CALLBACK_PREFIX = "FWRD"
 CHECK_MARK_CHARACTER = "\U00002705"
 COMMENTS_CHARACTER = "\U0001F4AC"
 
-MAX_BUTTONS_IN_ROW = 3
-
 
 def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	try:
@@ -141,9 +139,18 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 	current_user = hashtags[1] if hashtags[1] is not None else "-"
 	reassign_button = InlineKeyboardButton(f"к:{current_user}", callback_data=reassign_callback_data)
 
+	priority_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "P")
+	current_priority = "-"
+	if hashtags[2] is not None:
+		current_priority = hashtags[2]
+		current_priority = current_priority[len(PRIORITY_TAG):]
+
+	priority_button = InlineKeyboardButton(current_priority, callback_data=priority_callback_data)
+
 	buttons = [
 		ticket_state_switch_button,
-		reassign_button
+		reassign_button,
+		priority_button
 	]
 
 	main_channel_id_str = str(main_channel_id)
@@ -160,7 +167,9 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 	return keyboard_markup
 
 
-def generate_subchannel_buttons(main_channel_id, post_data):
+def generate_subchannel_buttons(post_data):
+	main_channel_id = post_data.chat.id
+
 	forwarding_data = get_subchannels_forwarding_data(main_channel_id)
 
 	text, entities = utils.get_post_content(post_data)
@@ -185,16 +194,46 @@ def generate_subchannel_buttons(main_channel_id, post_data):
 			btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
 		subchannel_buttons.append(btn)
 
-	rows = [[]]
-	current_row = button_counter = 0
-	for button in subchannel_buttons:
-		if button_counter < MAX_BUTTONS_IN_ROW:
-			rows[current_row].append(button)
-			button_counter += 1
-		else:
-			button_counter = 1
-			current_row += 1
-			rows.append([button])
+	rows = utils.place_buttons_in_rows(subchannel_buttons)
+
+	keyboard_markup = InlineKeyboardMarkup(rows)
+	return keyboard_markup
+
+
+def generate_priority_buttons(post_data: telebot.types.Message):
+	main_channel_id = post_data.chat.id
+
+	text, entities = utils.get_post_content(post_data)
+
+	available_priorities = ["1", "2", "3"]
+
+	_, user_hashtag_index, priority_hashtag_index = find_hashtag_indexes(text, entities, main_channel_id)
+	current_user = ""
+	current_priority = ""
+	if user_hashtag_index is not None:
+		entity = entities[user_hashtag_index]
+		current_user = text[entity.offset + 1:entity.offset + entity.length]
+		if priority_hashtag_index is not None:
+			entity = entities[priority_hashtag_index]
+			current_priority = text[entity.offset + 1 + len(PRIORITY_TAG):entity.offset + entity.length]
+
+	main_channel_id_str = str(main_channel_id)
+	if main_channel_id_str in SUBCHANNEL_DATA:
+		users = SUBCHANNEL_DATA[main_channel_id_str]
+		if current_user in users:
+			available_priorities = list(users[current_user].keys())
+
+	priority_buttons = []
+
+	for priority in available_priorities:
+		callback_str = utils.create_callback_str(CALLBACK_PREFIX, "PR", priority)
+		btn = InlineKeyboardButton(priority, callback_data=callback_str)
+		if priority == current_priority:
+			btn.text += CHECK_MARK_CHARACTER
+			btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
+		priority_buttons.append(btn)
+
+	rows = utils.place_buttons_in_rows(priority_buttons)
 
 	keyboard_markup = InlineKeyboardMarkup(rows)
 	return keyboard_markup
@@ -320,19 +359,21 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 		forward_and_add_inline_keyboard(bot, call.message, force_forward=True)
 	elif callback_type == "R":
 		show_subchannel_buttons(bot, call.message)
+	elif callback_type == "P":
+		show_priority_buttons(bot, call.message)
+	elif callback_type == "PR":
+		priority = other_data[0]
+		change_priority_button_event(bot, call.message, priority)
 
 
 def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
-	main_channel_id = post_data.chat.id
+	keyboard_markup = generate_subchannel_buttons(post_data)
+	utils.edit_message_keyboard(bot, post_data, keyboard_markup)
 
-	keyboard_markup = generate_subchannel_buttons(main_channel_id, post_data)
-	try:
-		text, entities = utils.get_post_content(post_data)
-		utils.edit_message_content(bot, post_data, text=text, entities=entities, reply_markup=keyboard_markup)
-	except ApiTelegramException as E:
-		if E.error_code == 429:
-			raise E
-		logging.info(f"Exception during adding subchannel buttons - {E}")
+
+def show_priority_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
+	keyboard_markup = generate_priority_buttons(post_data)
+	utils.edit_message_keyboard(bot, post_data, keyboard_markup)
 
 
 def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_state: bool):
@@ -342,7 +383,7 @@ def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Mes
 	if hashtags:
 		hashtags[0] = OPENED_TAG if new_state else CLOSED_TAG
 
-		rearrange_hashtags(bot, post_data, hashtags, main_channel_id)
+		rearrange_hashtags(bot, post_data, hashtags)
 		forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
 
@@ -359,7 +400,21 @@ def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.type
 		hashtags[1] = subchannel_user
 		hashtags[2] = PRIORITY_TAG + subchannel_priority
 
-		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
+		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
+		forward_to_subchannel(bot, post_data, hashtags)
+		add_control_buttons(bot, post_data, hashtags)
+
+
+def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_priority: str):
+	main_channel_id = post_data.chat.id
+
+	original_post_data = copy.deepcopy(post_data)
+	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
+
+	if hashtags:
+		hashtags[2] = PRIORITY_TAG + new_priority
+
+		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 		forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
 
@@ -425,13 +480,13 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 		if hashtags[1] is None and hashtags[2] is None and use_default_user:
 			hashtags = insert_default_user_hashtags(main_channel_id, hashtags)
 
-		rearrange_hashtags(bot, post_data, hashtags, main_channel_id, original_post_data)
+		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 		if AUTO_FORWARDING_ENABLED or force_forward:
 			forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
 
 
-def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str], main_channel_id: int,
+def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str],
 					   original_post_data: telebot.types.Message = None):
 	post_data = insert_hashtags(post_data, hashtags)
 

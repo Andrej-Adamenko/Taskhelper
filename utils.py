@@ -1,7 +1,10 @@
+import logging
 from typing import List
 
 import telebot.types
 from telebot.apihelper import ApiTelegramException
+
+from config_utils import MAX_BUTTONS_IN_ROW
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 
@@ -85,3 +88,31 @@ def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.ty
 			return False
 
 	return True
+
+
+def place_buttons_in_rows(buttons: List[telebot.types.InlineKeyboardButton]):
+	rows = [[]]
+	current_row = button_counter = 0
+	for button in buttons:
+		if button_counter < MAX_BUTTONS_IN_ROW:
+			rows[current_row].append(button)
+			button_counter += 1
+		else:
+			button_counter = 1
+			current_row += 1
+			rows.append([button])
+
+	return rows
+
+
+def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, keyboard: telebot.types.InlineKeyboardMarkup):
+	chat_id = post_data.chat.id
+	message_id = post_data.message_id
+	try:
+		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
+	except ApiTelegramException as E:
+		if E.error_code == 429:
+			raise E
+		logging.info(f"Exception during adding keyboard - {E}")
+
+
