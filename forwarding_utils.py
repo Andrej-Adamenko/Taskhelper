@@ -130,26 +130,20 @@ def get_all_discussion_chat_ids():
 
 
 def generate_control_buttons(hashtags, main_channel_id, message_id):
-	close_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "X")
-	close_ticket_button = InlineKeyboardButton("#x", callback_data=close_ticket_callback_data)
-
-	open_ticket_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "O")
-	open_ticket_button = InlineKeyboardButton("#o", callback_data=open_ticket_callback_data)
-
-	if hashtags[0] == CLOSED_TAG:
-		close_ticket_button.text += CHECK_MARK_CHARACTER
-		close_ticket_button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
-	elif hashtags[0] == OPENED_TAG:
-		open_ticket_button.text += CHECK_MARK_CHARACTER
-		open_ticket_button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, "S")
+	if hashtags[0] == OPENED_TAG:
+		ticket_state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "X")
+		ticket_state_switch_button = InlineKeyboardButton("☑️", callback_data=ticket_state_switch_callback_data)
+	else:
+		ticket_state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "O")
+		ticket_state_switch_button = InlineKeyboardButton("❌", callback_data=ticket_state_switch_callback_data)
 
 	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "R")
-	reassign_button = InlineKeyboardButton("Reassign", callback_data=reassign_callback_data)
+	current_user = hashtags[1] if hashtags[1] is not None else "-"
+	reassign_button = InlineKeyboardButton(f"к:{current_user}", callback_data=reassign_callback_data)
 
 	buttons = [
-		reassign_button,
-		close_ticket_button,
-		open_ticket_button
+		ticket_state_switch_button,
+		reassign_button
 	]
 
 	main_channel_id_str = str(main_channel_id)
