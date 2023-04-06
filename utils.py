@@ -18,6 +18,13 @@ def create_callback_str(callback_prefix, callback_type, *args):
 	return callback_str
 
 
+def parse_callback_str(callback_str: str):
+	components = callback_str.split(",")
+	callback_type = components[1]
+	arguments = components[2:]
+	return callback_type, arguments
+
+
 def offset_entities(entities, offset):
 	if not entities:
 		return []
