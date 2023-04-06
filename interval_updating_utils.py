@@ -9,7 +9,8 @@ import forwarding_utils
 import post_link_utils
 import threading
 
-from config_utils import DISCUSSION_CHAT_DATA, CHANNEL_IDS, UPDATE_INTERVAL, INTERVAL_UPDATE_START_DELAY
+from config_utils import DISCUSSION_CHAT_DATA, CHANNEL_IDS, UPDATE_INTERVAL, INTERVAL_UPDATE_START_DELAY, \
+	DELAY_AFTER_ONE_SCAN
 
 UPDATE_STARTED_MSG_TEXT = "Started updating older posts. When update is complete this message will be deleted."
 
@@ -107,7 +108,7 @@ def check_all_messages(bot, main_channel_id, discussion_chat_id=None):
 	last_updated_message_id = current_msg_id
 
 	while current_msg_id > 0:
-		time.sleep(4)
+		time.sleep(DELAY_AFTER_ONE_SCAN)
 		try:
 			if discussion_chat_id:
 				main_channel_message_id = store_discussion_message(bot, main_channel_id, current_msg_id, discussion_chat_id)
@@ -122,6 +123,9 @@ def check_all_messages(bot, main_channel_id, discussion_chat_id=None):
 				time.sleep(20)
 				continue
 			logging.error(f"Error during updating older messages - {E}")
+		except Exception as E:
+			logging.error(f"Updating older messages stopped because of exception - {E}")
+			return
 
 		current_msg_id -= 1
 		if discussion_chat_id and current_msg_id <= 0:

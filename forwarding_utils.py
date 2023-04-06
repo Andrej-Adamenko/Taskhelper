@@ -127,13 +127,16 @@ def get_all_discussion_chat_ids():
 	return discussion_chat_ids
 
 
-def generate_control_buttons(hashtags, main_channel_id, message_id):
+def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Message):
+	main_channel_id = post_data.chat.id
+	message_id = post_data.message_id
+
 	if hashtags[0] == OPENED_TAG:
 		ticket_state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "X")
 		ticket_state_switch_button = InlineKeyboardButton("☑️", callback_data=ticket_state_switch_callback_data)
 	else:
 		ticket_state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "O")
-		ticket_state_switch_button = InlineKeyboardButton("❌", callback_data=ticket_state_switch_callback_data)
+		ticket_state_switch_button = InlineKeyboardButton("✖", callback_data=ticket_state_switch_callback_data)
 
 	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "R")
 	current_user = hashtags[1] if hashtags[1] is not None else "-"
@@ -141,7 +144,7 @@ def generate_control_buttons(hashtags, main_channel_id, message_id):
 
 	priority_callback_data = utils.create_callback_str(CALLBACK_PREFIX, "P")
 	current_priority = "-"
-	if hashtags[2] is not None:
+	if hashtags[2] is not None and hashtags[2] != PRIORITY_TAG:
 		current_priority = hashtags[2]
 		current_priority = current_priority[len(PRIORITY_TAG):]
 
@@ -257,18 +260,8 @@ def get_subchannels_forwarding_data(main_channel_id):
 
 
 def add_control_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str]):
-	main_channel_id = post_data.chat.id
-	message_id = post_data.message_id
-
-	text, entities = utils.get_post_content(post_data)
-
-	keyboard_markup = generate_control_buttons(hashtags, main_channel_id, message_id)
-	try:
-		utils.edit_message_content(bot, post_data, text=text, entities=entities, reply_markup=keyboard_markup)
-	except ApiTelegramException as E:
-		if E.error_code == 429:
-			raise E
-		logging.info(f"Exception during adding control buttons - {E}")
+	keyboard_markup = generate_control_buttons(hashtags, post_data)
+	utils.edit_message_keyboard(bot, post_data, keyboard_markup)
 
 
 def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int):

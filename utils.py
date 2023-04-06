@@ -64,6 +64,8 @@ def edit_message_content(bot: telebot.TeleBot, post_data: telebot.types.Message,
 			kwargs["caption_entities"] = kwargs.pop("entities")
 			bot.edit_message_caption(chat_id=post_data.chat.id, message_id=post_data.message_id, **kwargs)
 	except ApiTelegramException as E:
+		if E.error_code == 429:
+			raise E
 		if E.description == SAME_MSG_CONTENT_ERROR:
 			return
 
@@ -113,6 +115,8 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
+		if E.description == SAME_MSG_CONTENT_ERROR:
+			return
 		logging.info(f"Exception during adding keyboard - {E}")
 
 
