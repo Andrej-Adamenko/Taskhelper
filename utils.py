@@ -114,9 +114,13 @@ def place_buttons_in_rows(buttons: List[telebot.types.InlineKeyboardButton]):
 	return rows
 
 
-def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, keyboard: telebot.types.InlineKeyboardMarkup):
+def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, keyboard: telebot.types.InlineKeyboardMarkup = None):
 	chat_id = post_data.chat.id
 	message_id = post_data.message_id
+
+	if keyboard is None:
+		keyboard = post_data.reply_markup
+
 	try:
 		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
 	except ApiTelegramException as E:

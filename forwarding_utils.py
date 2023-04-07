@@ -22,7 +22,7 @@ CHECK_MARK_CHARACTER = "\U00002705"
 COMMENTS_CHARACTER = "\U0001F4AC"
 
 UNCHECKED_BOX_CHARACTER = "\U0001F7E9"
-CHECKED_BOX_CHARACTER = "\U00002705"
+CHECKED_BOX_CHARACTER = "\U0000274e"
 
 
 class CB_TYPES:
@@ -229,9 +229,9 @@ def generate_priority_buttons(post_data: telebot.types.Message):
 	if user_hashtag_index is not None:
 		entity = entities[user_hashtag_index]
 		current_user = text[entity.offset + 1:entity.offset + entity.length]
-		if priority_hashtag_index is not None:
-			entity = entities[priority_hashtag_index]
-			current_priority = text[entity.offset + 1 + len(PRIORITY_TAG):entity.offset + entity.length]
+	if priority_hashtag_index is not None:
+		entity = entities[priority_hashtag_index]
+		current_priority = text[entity.offset + 1 + len(PRIORITY_TAG):entity.offset + entity.length]
 
 	main_channel_id_str = str(main_channel_id)
 	if main_channel_id_str in SUBCHANNEL_DATA:
@@ -371,24 +371,57 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 
 def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
 	keyboard_markup = generate_subchannel_buttons(post_data)
-	utils.edit_message_keyboard(bot, post_data, keyboard_markup)
+	post_data.reply_markup.keyboard = post_data.reply_markup.keyboard[:1]
+	post_data.reply_markup.keyboard += keyboard_markup.keyboard
+
+	for button in post_data.reply_markup.keyboard[0]:
+		if button.callback_data is None:
+			continue
+		cb_type, _ = utils.parse_callback_str(button.callback_data)
+		if cb_type == CB_TYPES.SHOW_SUBCHANNELS:
+			callback_type = CB_TYPES.SAVE
+			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
+		if cb_type == CB_TYPES.SAVE:
+			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_PRIORITIES)
+
+	utils.edit_message_keyboard(bot, post_data)
 
 
 def show_priority_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
 	keyboard_markup = generate_priority_buttons(post_data)
-	utils.edit_message_keyboard(bot, post_data, keyboard_markup)
+	post_data.reply_markup.keyboard = post_data.reply_markup.keyboard[:1]
+	post_data.reply_markup.keyboard += keyboard_markup.keyboard
+
+	for button in post_data.reply_markup.keyboard[0]:
+		if button.callback_data is None:
+			continue
+		cb_type, _ = utils.parse_callback_str(button.callback_data)
+		if cb_type == CB_TYPES.SHOW_PRIORITIES:
+			callback_type = CB_TYPES.SAVE
+			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
+		if cb_type == CB_TYPES.SAVE:
+			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_SUBCHANNELS)
+
+	utils.edit_message_keyboard(bot, post_data)
 
 
-def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_state: bool):
+def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, is_ticket_open: bool):
 	main_channel_id = post_data.chat.id
 
 	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
 	if hashtags:
-		hashtags[0] = OPENED_TAG if new_state else CLOSED_TAG
+		hashtags[0] = OPENED_TAG if is_ticket_open else CLOSED_TAG
 
 		rearrange_hashtags(bot, post_data, hashtags)
 		forward_to_subchannel(bot, post_data, hashtags)
-		add_control_buttons(bot, post_data, hashtags)
+		for button in post_data.reply_markup.keyboard[0]:
+			cb_type, _ = utils.parse_callback_str(button.callback_data)
+			if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
+				callback_type = CB_TYPES.CLOSE if is_ticket_open else CB_TYPES.OPEN
+				button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
+				button.text = UNCHECKED_BOX_CHARACTER if is_ticket_open else CHECKED_BOX_CHARACTER
+				break
+		utils.edit_message_keyboard(bot, post_data)
 
 
 def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_subchannel_name: str):
