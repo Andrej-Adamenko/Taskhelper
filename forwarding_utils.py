@@ -153,7 +153,7 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 
 	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_SUBCHANNELS)
 	current_user = hashtags[1] if hashtags[1] is not None else "-"
-	reassign_button = InlineKeyboardButton(f"{current_user}", callback_data=reassign_callback_data)
+	reassign_button = InlineKeyboardButton(f"➔ {current_user}", callback_data=reassign_callback_data)
 
 	priority_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_PRIORITIES)
 	current_priority = "-"
