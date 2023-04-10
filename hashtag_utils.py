@@ -93,7 +93,7 @@ def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str]):
 	return post_data
 
 
-def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int):
+def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int, cut_from_text: bool = True):
 	text, entities = utils.get_post_content(post_data)
 
 	status_tag_index, user_tag_indexes, priority_tag_index = find_hashtag_indexes(text, entities, main_channel_id)
@@ -123,15 +123,16 @@ def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int):
 		entity_length = extracted_hashtags[i].length
 		extracted_hashtags[i] = text[entity_offset + 1:entity_offset + entity_length]
 
-	entities_to_remove = [status_tag_index, priority_tag_index]
-	if user_tag_indexes:
-		entities_to_remove += user_tag_indexes
-	entities_to_remove = list(filter(lambda elem: elem is not None, entities_to_remove))
-	entities_to_remove.sort(reverse=True)
+	if cut_from_text:
+		entities_to_remove = [status_tag_index, priority_tag_index]
+		if user_tag_indexes:
+			entities_to_remove += user_tag_indexes
+		entities_to_remove = list(filter(lambda elem: elem is not None, entities_to_remove))
+		entities_to_remove.sort(reverse=True)
 
-	for entity_index in entities_to_remove:
-		text, entities = utils.cut_entity_from_post(text, entities, entity_index)
+		for entity_index in entities_to_remove:
+			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 
-	utils.set_post_content(post_data, text, entities)
+		utils.set_post_content(post_data, text, entities)
 
 	return extracted_hashtags, post_data

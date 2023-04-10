@@ -18,8 +18,8 @@ CALLBACK_PREFIX = "FWRD"
 CHECK_MARK_CHARACTER = "\U00002705"
 COMMENTS_CHARACTER = "\U0001F4AC"
 
-UNCHECKED_BOX_CHARACTER = "\U0001F7E9"
-CHECKED_BOX_CHARACTER = "\U0000274e"
+OPENED_TICKED_CHARACTER = "\U0001F7E9"
+CLOSED_TICKED_CHARACTER = "\U00002705"
 
 
 class CB_TYPES:
@@ -30,6 +30,8 @@ class CB_TYPES:
 	SAVE = "S"
 	SHOW_SUBCHANNELS = "R"
 	SHOW_PRIORITIES = "P"
+	SHOW_CC = "CC"
+	TOGGLE_CC = "TCC"
 
 
 def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
@@ -144,10 +146,10 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 
 	if hashtags[0] == hashtag_utils.OPENED_TAG:
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CLOSE)
-		state_switch_button = InlineKeyboardButton(UNCHECKED_BOX_CHARACTER, callback_data=state_switch_callback_data)
+		state_switch_button = InlineKeyboardButton(OPENED_TICKED_CHARACTER, callback_data=state_switch_callback_data)
 	else:
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.OPEN)
-		state_switch_button = InlineKeyboardButton(CHECKED_BOX_CHARACTER, callback_data=state_switch_callback_data)
+		state_switch_button = InlineKeyboardButton(CLOSED_TICKED_CHARACTER, callback_data=state_switch_callback_data)
 
 	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_SUBCHANNELS)
 	current_user = hashtags[1] if hashtags[1] is not None else "-"
@@ -161,9 +163,13 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 
 	priority_button = InlineKeyboardButton(current_priority, callback_data=priority_callback_data)
 
+	cc_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_CC)
+	cc_button = InlineKeyboardButton(f"CC", callback_data=cc_callback_data)
+
 	buttons = [
 		state_switch_button,
 		reassign_button,
+		cc_button,
 		priority_button
 	]
 
@@ -255,6 +261,45 @@ def generate_priority_buttons(post_data: telebot.types.Message):
 	return keyboard_markup
 
 
+def generate_cc_buttons(post_data: telebot.types.Message):
+	main_channel_id = post_data.chat.id
+	main_channel_id_str = str(main_channel_id)
+
+	text, entities = utils.get_post_content(post_data)
+
+	_, user_hashtag_indexes, _ = hashtag_utils.find_hashtag_indexes(text, entities, main_channel_id)
+
+	if not user_hashtag_indexes:
+		return
+
+	user_tags = []
+	for user_hashtag_index in user_hashtag_indexes:
+		entity = entities[user_hashtag_index]
+		user = text[entity.offset + 1:entity.offset + entity.length]
+		user_tags.append(user)
+
+	current_subchannel_user = user_tags[0]
+
+	if main_channel_id_str not in SUBCHANNEL_DATA:
+		return
+
+	subchannel_buttons = []
+	for user in SUBCHANNEL_DATA[main_channel_id_str]:
+		if user == current_subchannel_user:
+			continue
+		callback_str = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_CC, user)
+		btn = InlineKeyboardButton("#" + user, callback_data=callback_str)
+		if user in user_tags[1:]:
+			btn.text += CHECK_MARK_CHARACTER
+
+		subchannel_buttons.append(btn)
+
+	rows = utils.place_buttons_in_rows(subchannel_buttons)
+
+	keyboard_markup = InlineKeyboardMarkup(rows)
+	return keyboard_markup
+
+
 def get_subchannels_forwarding_data(main_channel_id):
 	main_channel_id_str = str(main_channel_id)
 	if main_channel_id_str not in SUBCHANNEL_DATA:
@@ -296,42 +341,49 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 	elif callback_type == CB_TYPES.CHANGE_PRIORITY:
 		priority = other_data[0]
 		change_priority_button_event(bot, call.message, priority)
+	elif callback_type == CB_TYPES.SHOW_CC:
+		show_cc_buttons(bot, call.message)
+	elif callback_type == CB_TYPES.TOGGLE_CC:
+		user = other_data[0]
+		toggle_cc_button_event(bot, call.message, user)
 
 
 def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
-	keyboard_markup = generate_subchannel_buttons(post_data)
-	post_data.reply_markup.keyboard = post_data.reply_markup.keyboard[:1]
-	post_data.reply_markup.keyboard += keyboard_markup.keyboard
-
-	for button in post_data.reply_markup.keyboard[0]:
-		if button.callback_data is None:
-			continue
-		cb_type, _ = utils.parse_callback_str(button.callback_data)
-		if cb_type == CB_TYPES.SHOW_SUBCHANNELS:
-			callback_type = CB_TYPES.SAVE
-			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
-		if cb_type == CB_TYPES.SAVE:
-			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_PRIORITIES)
+	subchannel_keyboard_markup = generate_subchannel_buttons(post_data)
+	update_show_buttons(post_data, CB_TYPES.SHOW_SUBCHANNELS)
+	post_data.reply_markup.keyboard += subchannel_keyboard_markup.keyboard
 
 	utils.edit_message_keyboard(bot, post_data)
 
 
 def show_priority_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
-	keyboard_markup = generate_priority_buttons(post_data)
-	post_data.reply_markup.keyboard = post_data.reply_markup.keyboard[:1]
-	post_data.reply_markup.keyboard += keyboard_markup.keyboard
+	priority_keyboard_markup = generate_priority_buttons(post_data)
+	update_show_buttons(post_data, CB_TYPES.SHOW_PRIORITIES)
+	post_data.reply_markup.keyboard += priority_keyboard_markup.keyboard
+
+	utils.edit_message_keyboard(bot, post_data)
+
+
+def show_cc_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
+	cc_keyboard_markup = generate_cc_buttons(post_data)
+	update_show_buttons(post_data, CB_TYPES.SHOW_CC)
+	post_data.reply_markup.keyboard += cc_keyboard_markup.keyboard
+
+	utils.edit_message_keyboard(bot, post_data)
+
+
+def update_show_buttons(post_data: telebot.types.Message, current_button_type: str):
+	main_channel_id = post_data.chat.id
+	hashtags, _ = hashtag_utils.extract_hashtags(post_data, main_channel_id, False)
+	control_buttons = generate_control_buttons(hashtags, post_data)
+	post_data.reply_markup.keyboard = control_buttons.keyboard
 
 	for button in post_data.reply_markup.keyboard[0]:
 		if button.callback_data is None:
 			continue
 		cb_type, _ = utils.parse_callback_str(button.callback_data)
-		if cb_type == CB_TYPES.SHOW_PRIORITIES:
-			callback_type = CB_TYPES.SAVE
-			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
-		if cb_type == CB_TYPES.SAVE:
-			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_SUBCHANNELS)
-
-	utils.edit_message_keyboard(bot, post_data)
+		if cb_type == current_button_type:
+			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE)
 
 
 def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, is_ticket_open: bool):
@@ -348,7 +400,7 @@ def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Mes
 			if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
 				callback_type = CB_TYPES.CLOSE if is_ticket_open else CB_TYPES.OPEN
 				button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
-				button.text = UNCHECKED_BOX_CHARACTER if is_ticket_open else CHECKED_BOX_CHARACTER
+				button.text = OPENED_TICKED_CHARACTER if is_ticket_open else CLOSED_TICKED_CHARACTER
 				break
 		utils.edit_message_keyboard(bot, post_data)
 
@@ -385,6 +437,23 @@ def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.
 		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 		forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
+
+
+def toggle_cc_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, selected_user: str):
+	main_channel_id = post_data.chat.id
+
+	original_post_data = copy.deepcopy(post_data)
+	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
+
+	if hashtags:
+		if selected_user in hashtags:
+			hashtags.remove(selected_user)
+		else:
+			hashtags.insert(-1, selected_user)
+
+		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
+		forward_to_subchannel(bot, post_data, hashtags)
+		show_cc_buttons(bot, post_data)
 
 
 def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
