@@ -7,14 +7,11 @@ from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEntity
 
 import db_utils
+import hashtag_utils
 import post_link_utils
 import utils
 
 from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID, AUTO_FORWARDING_ENABLED
-
-PRIORITY_TAG = "п"
-OPENED_TAG = "о"
-CLOSED_TAG = "х"
 
 CALLBACK_PREFIX = "FWRD"
 
@@ -66,7 +63,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 				raise E
 			logging.info(f"Exception during delete_message [{forwarded_msg_id}, {forwarded_channel_id}] - {E}")
 
-	if OPENED_TAG not in hashtags:
+	if hashtag_utils.OPENED_TAG not in hashtags:
 		return
 
 	subchannel_id = get_subchannel_id_from_hashtags(main_channel_id, hashtags)
@@ -97,17 +94,18 @@ def get_subchannel_id_from_hashtags(main_channel_id: int, hashtags: List[str]):
 	found_user = None
 
 	subchannel_users = SUBCHANNEL_DATA[main_channel_id_str]
-	for user in subchannel_users:
-		if user in hashtags:
-			user_priority_list = subchannel_users[user]
-			found_user = user
+
+	user_tag = hashtags[1]
+	if user_tag in subchannel_users:
+		user_priority_list = subchannel_users[user_tag]
+		found_user = user_tag
 
 	if not user_priority_list:
 		return
 
 	for hashtag in hashtags:
-		if hashtag and hashtag.startswith(PRIORITY_TAG):
-			priority = hashtag[len(PRIORITY_TAG):]
+		if hashtag and hashtag.startswith(hashtag_utils.PRIORITY_TAG):
+			priority = hashtag[len(hashtag_utils.PRIORITY_TAG):]
 
 	if priority == "" and main_channel_id_str in DEFAULT_USER_DATA:
 		default_user, default_priority = DEFAULT_USER_DATA[main_channel_id_str].split()
@@ -144,7 +142,7 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
-	if hashtags[0] == OPENED_TAG:
+	if hashtags[0] == hashtag_utils.OPENED_TAG:
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CLOSE)
 		state_switch_button = InlineKeyboardButton(UNCHECKED_BOX_CHARACTER, callback_data=state_switch_callback_data)
 	else:
@@ -157,9 +155,9 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 
 	priority_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_PRIORITIES)
 	current_priority = "-"
-	if hashtags[2] is not None and hashtags[2] != PRIORITY_TAG:
-		current_priority = hashtags[2]
-		current_priority = current_priority[len(PRIORITY_TAG):]
+	if hashtags[-1] is not None and hashtags[-1] != hashtag_utils.PRIORITY_TAG:
+		current_priority = hashtags[-1]
+		current_priority = current_priority[len(hashtag_utils.PRIORITY_TAG):]
 
 	priority_button = InlineKeyboardButton(current_priority, callback_data=priority_callback_data)
 
@@ -190,15 +188,16 @@ def generate_subchannel_buttons(post_data):
 
 	text, entities = utils.get_post_content(post_data)
 
-	_, user_hashtag_index, priority_hashtag_index = find_hashtag_indexes(text, entities, main_channel_id)
+	_, user_hashtag_indexes, priority_hashtag_index = hashtag_utils.find_hashtag_indexes(text, entities, main_channel_id)
 	current_subchannel_name = ""
 
-	if user_hashtag_index is not None:
+	if user_hashtag_indexes:
+		user_hashtag_index = user_hashtag_indexes[0]
 		entity = entities[user_hashtag_index]
 		current_subchannel_name += text[entity.offset + 1:entity.offset + entity.length]
 		if priority_hashtag_index is not None:
 			entity = entities[priority_hashtag_index]
-			priority = text[entity.offset + 1 + len(PRIORITY_TAG):entity.offset + entity.length]
+			priority = text[entity.offset + 1 + len(hashtag_utils.PRIORITY_TAG):entity.offset + entity.length]
 			current_subchannel_name += " " + priority
 
 	subchannel_buttons = []
@@ -223,15 +222,16 @@ def generate_priority_buttons(post_data: telebot.types.Message):
 
 	available_priorities = ["1", "2", "3"]
 
-	_, user_hashtag_index, priority_hashtag_index = find_hashtag_indexes(text, entities, main_channel_id)
+	_, user_hashtag_indexes, priority_hashtag_index = hashtag_utils.find_hashtag_indexes(text, entities, main_channel_id)
 	current_user = ""
 	current_priority = ""
-	if user_hashtag_index is not None:
+	if user_hashtag_indexes:
+		user_hashtag_index = user_hashtag_indexes[0]
 		entity = entities[user_hashtag_index]
 		current_user = text[entity.offset + 1:entity.offset + entity.length]
 	if priority_hashtag_index is not None:
 		entity = entities[priority_hashtag_index]
-		current_priority = text[entity.offset + 1 + len(PRIORITY_TAG):entity.offset + entity.length]
+		current_priority = text[entity.offset + 1 + len(hashtag_utils.PRIORITY_TAG):entity.offset + entity.length]
 
 	main_channel_id_str = str(main_channel_id)
 	if main_channel_id_str in SUBCHANNEL_DATA:
@@ -275,77 +275,6 @@ def get_subchannels_forwarding_data(main_channel_id):
 def add_control_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str]):
 	keyboard_markup = generate_control_buttons(hashtags, post_data)
 	utils.edit_message_keyboard(bot, post_data, keyboard_markup)
-
-
-def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int):
-	text, entities = utils.get_post_content(post_data)
-
-	status_tag_index, user_tag_index, priority_tag_index = find_hashtag_indexes(text, entities, main_channel_id)
-
-	extracted_hashtags = []
-	if status_tag_index is None:
-		extracted_hashtags.append(None)
-	else:
-		extracted_hashtags.append(entities[status_tag_index])
-
-	if user_tag_index is None:
-		extracted_hashtags.append(None)
-	else:
-		extracted_hashtags.append(entities[user_tag_index])
-
-	if priority_tag_index is None:
-		extracted_hashtags.append(None)
-	else:
-		extracted_hashtags.append(entities[priority_tag_index])
-
-	for i in range(len(extracted_hashtags)):
-		if extracted_hashtags[i] is None:
-			continue
-
-		entity_offset = extracted_hashtags[i].offset
-		entity_length = extracted_hashtags[i].length
-		extracted_hashtags[i] = text[entity_offset + 1:entity_offset + entity_length]
-
-	entities_to_remove = [status_tag_index, user_tag_index, priority_tag_index]
-	entities_to_remove = list(filter(lambda elem: elem is not None, entities_to_remove))
-	entities_to_remove.sort(reverse=True)
-
-	for entity_index in entities_to_remove:
-		text, entities = cut_entity_from_post(text, entities, entity_index)
-
-	utils.set_post_content(post_data, text, entities)
-
-	return extracted_hashtags, post_data
-
-
-def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
-	status_tag_index = None
-	user_tag_index = None
-	priority_tag_index = None
-
-	if entities is None:
-		return None, None, None
-
-	main_channel_id_str = str(main_channel_id)
-
-	for entity_index in reversed(range(len(entities))):
-		entity = entities[entity_index]
-		if entity.type == "hashtag":
-			tag = text[entity.offset + 1:entity.offset + entity.length]
-			if tag == OPENED_TAG or tag == CLOSED_TAG:
-				status_tag_index = entity_index
-				continue
-
-			if main_channel_id_str in SUBCHANNEL_DATA:
-				main_channel_users = SUBCHANNEL_DATA[main_channel_id_str]
-				if tag in main_channel_users:
-					user_tag_index = entity_index
-					continue
-
-			if tag.startswith(PRIORITY_TAG):
-				priority_tag_index = entity_index
-
-	return status_tag_index, user_tag_index, priority_tag_index
 
 
 def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
@@ -408,9 +337,9 @@ def show_priority_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message
 def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, is_ticket_open: bool):
 	main_channel_id = post_data.chat.id
 
-	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
+	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 	if hashtags:
-		hashtags[0] = OPENED_TAG if is_ticket_open else CLOSED_TAG
+		hashtags[0] = hashtag_utils.OPENED_TAG if is_ticket_open else hashtag_utils.CLOSED_TAG
 
 		rearrange_hashtags(bot, post_data, hashtags)
 		forward_to_subchannel(bot, post_data, hashtags)
@@ -430,11 +359,14 @@ def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.type
 	subchannel_user, subchannel_priority = new_subchannel_name.split(" ")
 
 	original_post_data = copy.deepcopy(post_data)
-	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
+	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
 	if hashtags:
-		hashtags[1] = subchannel_user
-		hashtags[2] = PRIORITY_TAG + subchannel_priority
+		if subchannel_user in hashtags[1:-1]:
+			hashtags.remove(subchannel_user)
+		hashtags.insert(1, subchannel_user)
+
+		hashtags[-1] = hashtag_utils.PRIORITY_TAG + subchannel_priority
 
 		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 		forward_to_subchannel(bot, post_data, hashtags)
@@ -445,64 +377,14 @@ def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.
 	main_channel_id = post_data.chat.id
 
 	original_post_data = copy.deepcopy(post_data)
-	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
+	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
 	if hashtags:
-		hashtags[2] = PRIORITY_TAG + new_priority
+		hashtags[-1] = hashtag_utils.PRIORITY_TAG + new_priority
 
 		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 		forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
-
-
-def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity], hashtag: str, position: int):
-	hashtag_text = hashtag
-	if len(text) > position:
-		hashtag_text += " "
-
-	text = text[:position] + hashtag_text + text[position:]
-
-	if entities is None:
-		entities = []
-
-	for entity in entities:
-		if entity.offset >= position:
-			entity.offset += len(hashtag_text)
-
-	hashtag_entity = MessageEntity(type="hashtag", offset=position, length=len(hashtag))
-	entities.append(hashtag_entity)
-	entities.sort(key=lambda e: e.offset)
-
-	return text, entities
-
-
-def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
-
-	entity_to_cut = entities[entity_index]
-	if entity_to_cut.offset != 0 and text[entity_to_cut.offset - 1] == " ":
-		entity_to_cut.offset -= 1
-		entity_to_cut.length += 1
-	if len(text) > entity_to_cut.offset + entity_to_cut.length:
-		character_after_entity = text[entity_to_cut.offset + entity_to_cut.length]
-		if character_after_entity == " ":
-			entity_to_cut.length += 1
-
-	text = text[:entity_to_cut.offset] + " " + text[entity_to_cut.offset + entity_to_cut.length:]
-	offsetted_entities = utils.offset_entities(entities[entity_index + 1:], -entity_to_cut.length + 1)
-	entities[entity_index:] = offsetted_entities
-
-	return text, entities
-
-
-def insert_default_user_hashtags(main_channel_id: int, hashtags: List[str]):
-	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str in DEFAULT_USER_DATA:
-		hashtags[0] = OPENED_TAG if hashtags[0] is None else hashtags[0]
-		user, priority = DEFAULT_USER_DATA[main_channel_id_str].split(" ")
-		hashtags[1] = user
-		hashtags[2] = PRIORITY_TAG
-
-	return hashtags
 
 
 def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
@@ -511,10 +393,10 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 	original_post_data = copy.deepcopy(post_data)
 
-	hashtags, post_data = extract_hashtags(post_data, main_channel_id)
+	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 	if hashtags:
-		if hashtags[1] is None and hashtags[2] is None and use_default_user:
-			hashtags = insert_default_user_hashtags(main_channel_id, hashtags)
+		if hashtags[1] is None and hashtags[-1] is None and use_default_user:
+			hashtags = hashtag_utils.insert_default_user_hashtags(main_channel_id, hashtags)
 
 		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 		if AUTO_FORWARDING_ENABLED or force_forward:
@@ -524,7 +406,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str],
 					   original_post_data: telebot.types.Message = None):
-	post_data = insert_hashtags(post_data, hashtags)
+	post_data = hashtag_utils.insert_hashtags(post_data, hashtags)
 
 	if original_post_data and utils.is_post_data_equal(post_data, original_post_data):
 		return
@@ -537,23 +419,4 @@ def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, h
 			raise E
 		logging.info(f"Exception during rearranging hashtags - {E}")
 		return
-
-
-def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str]):
-	text, entities = utils.get_post_content(post_data)
-
-	hashtags_start_position = 0
-	if entities and entities[0].type == "text_link" and entities[0].offset == 0:
-		hashtags_start_position += entities[0].length + len(post_link_utils.LINK_ENDING)
-		if hashtags_start_position > len(text):
-			text += " "
-
-	for hashtag in hashtags[::-1]:
-		if hashtag is None:
-			continue
-		text, entities = insert_hashtag_in_post(text, entities, "#" + hashtag, hashtags_start_position)
-
-	utils.set_post_content(post_data, text, entities)
-
-	return post_data
 
