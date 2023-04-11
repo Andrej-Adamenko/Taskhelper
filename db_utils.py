@@ -91,20 +91,16 @@ def get_discussion_message_id(main_message_id, main_channel_id):
 
 
 @db_thread_lock
-def insert_or_update_copied_message(main_message_id, main_channel_id, copied_message_id, copied_channel_id):
-	if get_copied_message_data(main_message_id, main_channel_id):
-		sql = "UPDATE copied_messages SET copied_message_id=(?), copied_channel_id=(?) WHERE main_message_id=(?) and main_channel_id=(?)"
-	else:
-		sql = "INSERT INTO copied_messages (copied_message_id, copied_channel_id, main_message_id, main_channel_id) VALUES (?, ?, ?, ?)"
-
+def insert_copied_message(main_message_id, main_channel_id, copied_message_id, copied_channel_id):
+	sql = "INSERT INTO copied_messages (copied_message_id, copied_channel_id, main_message_id, main_channel_id) VALUES (?, ?, ?, ?)"
 	CURSOR.execute(sql, (copied_message_id, copied_channel_id, main_message_id, main_channel_id,))
 	DB_CONNECTION.commit()
 
 
 @db_thread_lock
-def delete_copied_message(main_message_id, main_channel_id):
-	sql = "DELETE FROM copied_messages WHERE main_message_id=(?) and main_channel_id=(?)"
-	CURSOR.execute(sql, (main_message_id, main_channel_id,))
+def delete_copied_message(copied_message_id, copied_channel_id):
+	sql = "DELETE FROM copied_messages WHERE copied_message_id=(?) and copied_channel_id=(?)"
+	CURSOR.execute(sql, (copied_message_id, copied_channel_id))
 	DB_CONNECTION.commit()
 
 
@@ -112,7 +108,7 @@ def delete_copied_message(main_message_id, main_channel_id):
 def get_copied_message_data(main_message_id, main_channel_id):
 	sql = "SELECT copied_message_id, copied_channel_id FROM copied_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
-	result = CURSOR.fetchone()
+	result = CURSOR.fetchall()
 	return result
 
 

@@ -51,42 +51,50 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
-	forwarded_message_data = db_utils.get_copied_message_data(message_id, main_channel_id)
-	if forwarded_message_data:
-		forwarded_msg_id, forwarded_channel_id = forwarded_message_data
+	forwarded_messages = db_utils.get_copied_message_data(message_id, main_channel_id)
+	subchannels_to_ignore = []
+	for forwarded_message in forwarded_messages:
+		forwarded_msg_id, forwarded_channel_id = forwarded_message
 		forwarded_msg_data = get_message_content_by_id(bot, forwarded_channel_id, forwarded_msg_id)
 		if forwarded_msg_data and utils.is_post_data_equal(forwarded_msg_data, post_data):
-			return
+			subchannels_to_ignore.append(forwarded_channel_id)  # ignore unchanged posts
+			continue
 
 		try:
 			bot.delete_message(chat_id=forwarded_channel_id, message_id=forwarded_msg_id)
+			db_utils.delete_copied_message(forwarded_msg_id, forwarded_channel_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				raise E
+			elif E.description.endswith("message to delete not found"):
+				db_utils.delete_copied_message(forwarded_msg_id, forwarded_channel_id)
 			logging.info(f"Exception during delete_message [{forwarded_msg_id}, {forwarded_channel_id}] - {E}")
 
 	if hashtag_utils.OPENED_TAG not in hashtags:
 		return
 
-	subchannel_id = get_subchannel_id_from_hashtags(main_channel_id, hashtags)
-	if not subchannel_id:
+	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, hashtags)
+	if not subchannel_ids:
 		logging.warning(f"Subchannel not found in config file {hashtags}, {main_channel_id}")
 		return
 
-	try:
-		copied_message = bot.copy_message(chat_id=subchannel_id, message_id=message_id, from_chat_id=main_channel_id)
-		logging.info(f"Successfully forwarded post [{message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtags}")
-	except ApiTelegramException as E:
-		if E.error_code == 429:
-			raise E
-		logging.warning(f"Exception during forwarding post to subchannel {hashtags} - {E}")
-		return
+	for subchannel_id in subchannel_ids:
+		if subchannel_id in subchannels_to_ignore:
+			continue
 
-	db_utils.insert_or_update_copied_message(message_id, main_channel_id, copied_message.message_id, subchannel_id)
-	return subchannel_id, copied_message.message_id
+		try:
+			copied_message = bot.copy_message(chat_id=subchannel_id, message_id=message_id, from_chat_id=main_channel_id)
+			logging.info(f"Successfully forwarded post [{message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtags}")
+		except ApiTelegramException as E:
+			if E.error_code == 429:
+				raise E
+			logging.warning(f"Exception during forwarding post to subchannel {hashtags} - {E}")
+			continue
+
+		db_utils.insert_copied_message(message_id, main_channel_id, copied_message.message_id, subchannel_id)
 
 
-def get_subchannel_id_from_hashtags(main_channel_id: int, hashtags: List[str]):
+def get_subchannel_ids_from_hashtags(main_channel_id: int, hashtags: List[str]):
 	main_channel_id_str = str(main_channel_id)
 	if main_channel_id_str not in SUBCHANNEL_DATA:
 		return
@@ -109,15 +117,30 @@ def get_subchannel_id_from_hashtags(main_channel_id: int, hashtags: List[str]):
 		if hashtag and hashtag.startswith(hashtag_utils.PRIORITY_TAG):
 			priority = hashtag[len(hashtag_utils.PRIORITY_TAG):]
 
-	if priority == "" and main_channel_id_str in DEFAULT_USER_DATA:
-		default_user, default_priority = DEFAULT_USER_DATA[main_channel_id_str].split()
-		if default_user == found_user:
-			return user_priority_list[default_priority]
+	current_subchannel_id = None
 
-	if priority not in user_priority_list or priority is None:
+	if priority == "" and main_channel_id_str in DEFAULT_USER_DATA:
+		user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
+		if user == found_user:
+			current_subchannel_id = user_priority_list[priority]
+	elif priority in user_priority_list:
+		current_subchannel_id = user_priority_list[priority]
+	else:
 		return
 
-	return user_priority_list[priority]
+	all_subchannel_ids = [current_subchannel_id]
+	for followed_user in hashtags[2:-1]:
+		if followed_user not in subchannel_users:
+			continue
+
+		user_subchannels = subchannel_users[followed_user]
+		if priority not in user_subchannels:
+			continue
+
+		user_subchannel = user_subchannels[priority]
+		all_subchannel_ids.append(user_subchannel)
+
+	return all_subchannel_ids
 
 
 def get_all_subchannel_ids():
@@ -367,7 +390,8 @@ def show_priority_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message
 def show_cc_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
 	cc_keyboard_markup = generate_cc_buttons(post_data)
 	update_show_buttons(post_data, CB_TYPES.SHOW_CC)
-	post_data.reply_markup.keyboard += cc_keyboard_markup.keyboard
+	if cc_keyboard_markup:
+		post_data.reply_markup.keyboard += cc_keyboard_markup.keyboard
 
 	utils.edit_message_keyboard(bot, post_data)
 
@@ -394,7 +418,6 @@ def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Mes
 		hashtags[0] = hashtag_utils.OPENED_TAG if is_ticket_open else hashtag_utils.CLOSED_TAG
 
 		rearrange_hashtags(bot, post_data, hashtags)
-		forward_to_subchannel(bot, post_data, hashtags)
 		for button in post_data.reply_markup.keyboard[0]:
 			cb_type, _ = utils.parse_callback_str(button.callback_data)
 			if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
@@ -403,6 +426,7 @@ def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Mes
 				button.text = OPENED_TICKED_CHARACTER if is_ticket_open else CLOSED_TICKED_CHARACTER
 				break
 		utils.edit_message_keyboard(bot, post_data)
+		forward_to_subchannel(bot, post_data, hashtags)
 
 
 def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_subchannel_name: str):
@@ -421,8 +445,8 @@ def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.type
 		hashtags[-1] = hashtag_utils.PRIORITY_TAG + subchannel_priority
 
 		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
-		forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
+		forward_to_subchannel(bot, post_data, hashtags)
 
 
 def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_priority: str):
@@ -435,8 +459,8 @@ def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.
 		hashtags[-1] = hashtag_utils.PRIORITY_TAG + new_priority
 
 		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
-		forward_to_subchannel(bot, post_data, hashtags)
 		add_control_buttons(bot, post_data, hashtags)
+		forward_to_subchannel(bot, post_data, hashtags)
 
 
 def toggle_cc_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, selected_user: str):
@@ -452,8 +476,8 @@ def toggle_cc_button_event(bot: telebot.TeleBot, post_data: telebot.types.Messag
 			hashtags.insert(-1, selected_user)
 
 		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
-		forward_to_subchannel(bot, post_data, hashtags)
 		show_cc_buttons(bot, post_data)
+		forward_to_subchannel(bot, post_data, hashtags)
 
 
 def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
@@ -468,9 +492,9 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 			hashtags = hashtag_utils.insert_default_user_hashtags(main_channel_id, hashtags)
 
 		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
+		add_control_buttons(bot, post_data, hashtags)
 		if AUTO_FORWARDING_ENABLED or force_forward:
 			forward_to_subchannel(bot, post_data, hashtags)
-		add_control_buttons(bot, post_data, hashtags)
 
 
 def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str],
