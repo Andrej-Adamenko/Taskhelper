@@ -8,7 +8,6 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEnt
 
 import db_utils
 import hashtag_utils
-import post_link_utils
 import utils
 
 from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID, AUTO_FORWARDING_ENABLED
@@ -141,26 +140,6 @@ def get_subchannel_ids_from_hashtags(main_channel_id: int, hashtags: List[str]):
 		all_subchannel_ids.append(user_subchannel)
 
 	return all_subchannel_ids
-
-
-def get_all_subchannel_ids():
-	subchannel_ids = []
-	for main_channel_id in SUBCHANNEL_DATA:
-		channel_users = SUBCHANNEL_DATA[main_channel_id]
-		for user in channel_users:
-			user_priorities = channel_users[user]
-			for priority in user_priorities:
-				subchannel_id = user_priorities[priority]
-				subchannel_ids.append(subchannel_id)
-
-	return subchannel_ids
-
-
-def get_all_discussion_chat_ids():
-	discussion_chat_ids = []
-	for discussion_chat_id in DISCUSSION_CHAT_DATA.values():
-		discussion_chat_ids.append(discussion_chat_id)
-	return discussion_chat_ids
 
 
 def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Message):
@@ -371,6 +350,16 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 		toggle_cc_button_event(bot, call.message, user)
 
 
+def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message, text: str):
+	main_message_id = post_data.message_id
+	main_channel_id = post_data.chat.id
+	comment_message_id = db_utils.get_discussion_message_id(main_message_id, main_channel_id)
+	if comment_message_id:
+		main_channel_id_str = str(main_channel_id)
+		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
+		bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text)
+
+
 def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
 	subchannel_keyboard_markup = generate_subchannel_buttons(post_data)
 	update_show_buttons(post_data, CB_TYPES.SHOW_SUBCHANNELS)
@@ -414,19 +403,22 @@ def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Mes
 	main_channel_id = post_data.chat.id
 
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
-	if hashtags:
-		hashtags[0] = hashtag_utils.OPENED_TAG if is_ticket_open else hashtag_utils.CLOSED_TAG
 
-		rearrange_hashtags(bot, post_data, hashtags)
-		for button in post_data.reply_markup.keyboard[0]:
-			cb_type, _ = utils.parse_callback_str(button.callback_data)
-			if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
-				callback_type = CB_TYPES.CLOSE if is_ticket_open else CB_TYPES.OPEN
-				button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
-				button.text = OPENED_TICKED_CHARACTER if is_ticket_open else CLOSED_TICKED_CHARACTER
-				break
-		utils.edit_message_keyboard(bot, post_data)
-		forward_to_subchannel(bot, post_data, hashtags)
+	state_str = "opened" if is_ticket_open else "closed"
+	add_comment_to_ticket(bot, post_data, f"The ticket was {state_str}.")
+
+	hashtags[0] = hashtag_utils.OPENED_TAG if is_ticket_open else hashtag_utils.CLOSED_TAG
+
+	rearrange_hashtags(bot, post_data, hashtags)
+	for button in post_data.reply_markup.keyboard[0]:
+		cb_type, _ = utils.parse_callback_str(button.callback_data)
+		if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
+			callback_type = CB_TYPES.CLOSE if is_ticket_open else CB_TYPES.OPEN
+			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
+			button.text = OPENED_TICKED_CHARACTER if is_ticket_open else CLOSED_TICKED_CHARACTER
+			break
+	utils.edit_message_keyboard(bot, post_data)
+	forward_to_subchannel(bot, post_data, hashtags)
 
 
 def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_subchannel_name: str):
@@ -437,16 +429,25 @@ def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.type
 	original_post_data = copy.deepcopy(post_data)
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
-	if hashtags:
-		if subchannel_user in hashtags[1:-1]:
-			hashtags.remove(subchannel_user)
-		hashtags.insert(1, subchannel_user)
+	comment_text = ""
+	if hashtags[1] != subchannel_user:
+		comment_text += f"The ticket was reassigned to \"{subchannel_user}\". "
+	if hashtags[-1] != subchannel_priority:
+		comment_text += f"The priority was changed to {subchannel_priority}. "
 
-		hashtags[-1] = hashtag_utils.PRIORITY_TAG + subchannel_priority
+	if comment_text:
+		add_comment_to_ticket(bot, post_data, comment_text)
 
-		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
-		add_control_buttons(bot, post_data, hashtags)
-		forward_to_subchannel(bot, post_data, hashtags)
+	if subchannel_user in hashtags[1:-1]:
+		hashtags.remove(subchannel_user)
+
+	hashtags.insert(1, subchannel_user)
+
+	hashtags[-1] = hashtag_utils.PRIORITY_TAG + subchannel_priority
+
+	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
+	add_control_buttons(bot, post_data, hashtags)
+	forward_to_subchannel(bot, post_data, hashtags)
 
 
 def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_priority: str):
@@ -455,12 +456,12 @@ def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.
 	original_post_data = copy.deepcopy(post_data)
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
-	if hashtags:
-		hashtags[-1] = hashtag_utils.PRIORITY_TAG + new_priority
+	add_comment_to_ticket(bot, post_data, f"The priority was changed to {new_priority}. ")
+	hashtags[-1] = hashtag_utils.PRIORITY_TAG + new_priority
 
-		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
-		add_control_buttons(bot, post_data, hashtags)
-		forward_to_subchannel(bot, post_data, hashtags)
+	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
+	add_control_buttons(bot, post_data, hashtags)
+	forward_to_subchannel(bot, post_data, hashtags)
 
 
 def toggle_cc_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, selected_user: str):
@@ -469,15 +470,16 @@ def toggle_cc_button_event(bot: telebot.TeleBot, post_data: telebot.types.Messag
 	original_post_data = copy.deepcopy(post_data)
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
-	if hashtags:
-		if selected_user in hashtags:
-			hashtags.remove(selected_user)
-		else:
-			hashtags.insert(-1, selected_user)
+	if selected_user in hashtags:
+		hashtags.remove(selected_user)
+		add_comment_to_ticket(bot, post_data, f"User \"{selected_user}\" was removed from ticket's followers.")
+	else:
+		hashtags.insert(-1, selected_user)
+		add_comment_to_ticket(bot, post_data, f"User \"{selected_user}\" was added to ticket's followers.")
 
-		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
-		show_cc_buttons(bot, post_data)
-		forward_to_subchannel(bot, post_data, hashtags)
+	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
+	show_cc_buttons(bot, post_data)
+	forward_to_subchannel(bot, post_data, hashtags)
 
 
 def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
@@ -487,14 +489,13 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 	original_post_data = copy.deepcopy(post_data)
 
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
-	if hashtags:
-		if hashtags[1] is None and hashtags[-1] is None and use_default_user:
-			hashtags = hashtag_utils.insert_default_user_hashtags(main_channel_id, hashtags)
+	if hashtags[1] is None and hashtags[-1] is None and use_default_user:
+		hashtags = hashtag_utils.insert_default_user_hashtags(main_channel_id, hashtags)
 
-		rearrange_hashtags(bot, post_data, hashtags, original_post_data)
-		add_control_buttons(bot, post_data, hashtags)
-		if AUTO_FORWARDING_ENABLED or force_forward:
-			forward_to_subchannel(bot, post_data, hashtags)
+	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
+	add_control_buttons(bot, post_data, hashtags)
+	if AUTO_FORWARDING_ENABLED or force_forward:
+		forward_to_subchannel(bot, post_data, hashtags)
 
 
 def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str],

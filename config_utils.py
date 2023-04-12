@@ -25,6 +25,8 @@ AUTO_FORWARDING_ENABLED: bool = False
 MAX_BUTTONS_IN_ROW: int = 3
 DELAY_AFTER_ONE_SCAN = 4
 
+CHAT_IDS_TO_IGNORE: list = []
+
 config_json = {}
 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
 	config_json = json.load(f)
@@ -59,5 +61,4 @@ def update_config(updated_config_data):
 
 	with open(CONFIG_FILE, "w", encoding="utf-8") as f:
 		json.dump(current_config, f, indent=4, ensure_ascii=False)
-
 

@@ -6,14 +6,13 @@ import interval_updating_utils
 import post_link_utils
 import config_utils
 import db_utils
+import utils
 
-from config_utils import BOT_TOKEN, CHANNEL_IDS, DUMP_CHAT_ID, DISCUSSION_CHAT_DATA
+from config_utils import BOT_TOKEN, CHANNEL_IDS, CHAT_IDS_TO_IGNORE, DISCUSSION_CHAT_DATA
 
 db_utils.initialize_db()
 
-CHAT_IDS_TO_IGNORE = forwarding_utils.get_all_subchannel_ids()
-CHAT_IDS_TO_IGNORE.append(DUMP_CHAT_ID)
-CHAT_IDS_TO_IGNORE += forwarding_utils.get_all_discussion_chat_ids()
+CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
 
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
 
@@ -63,6 +62,23 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	msg_data.message_id = main_message_id
 	edited_post = post_link_utils.add_link_to_new_post(bot, msg_data)
 	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=True)
+
+
+@bot.channel_post_handler(func=lambda post_data: post_data.chat.id in utils.get_all_subchannel_ids(),
+					 content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
+def handle_subchannel_message(post_data: telebot.types.Message):
+	if post_data.forward_from_chat is None:
+		return
+
+	if post_data.forward_from_chat.id not in CHANNEL_IDS:
+		return
+
+	main_channel_id = post_data.forward_from_chat.id
+	message_id = post_data.forward_from_message_id
+	forwarded_message_id = post_data.message_id
+	subchannel_id = post_data.chat.id
+
+	db_utils.insert_copied_message(message_id, main_channel_id, forwarded_message_id, subchannel_id)
 
 
 @bot.edited_channel_post_handler(func=channel_id_filter,

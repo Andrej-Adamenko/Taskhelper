@@ -4,7 +4,7 @@ from typing import List
 import telebot.types
 from telebot.apihelper import ApiTelegramException
 
-from config_utils import MAX_BUTTONS_IN_ROW
+from config_utils import MAX_BUTTONS_IN_ROW, DISCUSSION_CHAT_DATA, SUBCHANNEL_DATA, DUMP_CHAT_ID
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 
@@ -146,3 +146,24 @@ def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity],
 	entities[entity_index:] = offsetted_entities
 
 	return text, entities
+
+
+def get_all_subchannel_ids():
+	subchannel_ids = []
+	for main_channel_id in SUBCHANNEL_DATA:
+		channel_users = SUBCHANNEL_DATA[main_channel_id]
+		for user in channel_users:
+			user_priorities = channel_users[user]
+			for priority in user_priorities:
+				subchannel_id = user_priorities[priority]
+				subchannel_ids.append(subchannel_id)
+
+	return subchannel_ids
+
+
+def get_ignored_chat_ids():
+	ignored_chat_ids = [DUMP_CHAT_ID]
+	ignored_chat_ids += list(DISCUSSION_CHAT_DATA.values())
+	ignored_chat_ids += get_all_subchannel_ids()
+
+	return ignored_chat_ids
