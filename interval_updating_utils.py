@@ -43,7 +43,8 @@ def store_discussion_message(bot, main_channel_id, current_msg_id, discussion_ch
 	if forwarded_message is None:
 		return
 
-	if utils.get_forwarded_from_id(forwarded_message) != main_channel_id:
+	forwarded_from_id = utils.get_forwarded_from_id(forwarded_message)
+	if forwarded_from_id != main_channel_id:
 		return
 
 	main_channel_message_id = forwarded_message.forward_from_message_id

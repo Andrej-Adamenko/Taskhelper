@@ -167,3 +167,15 @@ def get_ignored_chat_ids():
 	ignored_chat_ids += get_all_subchannel_ids()
 
 	return ignored_chat_ids
+
+
+def get_key_by_value(d: dict, value: object):
+	key_list = list(d.keys())
+	val_list = list(d.values())
+
+	try:
+		position = val_list.index(value)
+	except ValueError:
+		return
+
+	return key_list[position]

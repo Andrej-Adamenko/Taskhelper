@@ -67,6 +67,19 @@ def create_tables():
 
 		CURSOR.execute(last_message_ids_table_sql)
 
+	if not is_table_exists("comment_messages"):
+		comment_messages_table_sql = '''
+			CREATE TABLE "comment_messages" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_message_id"	INT NOT NULL,
+				"main_channel_id"	INT NOT NULL,
+				"discussion_message_id"	INT NOT NULL,
+				"discussion_channel_id"	INT NOT NULL,
+				"sender_id"	INT NOT NULL
+			); '''
+
+		CURSOR.execute(comment_messages_table_sql)
+
 	DB_CONNECTION.commit()
 
 
@@ -131,3 +144,27 @@ def get_last_message_id(chat_id):
 	if result:
 		return result[0]
 
+
+@db_thread_lock
+def insert_comment_message(main_message_id, main_channel_id, discussion_message_id, discussion_channel_id, sender_id):
+	if is_comment_exist(discussion_message_id, discussion_channel_id):
+		return
+
+	sql = "INSERT INTO comment_messages (main_message_id, main_channel_id, discussion_message_id, discussion_channel_id, sender_id) VALUES (?, ?, ?, ?, ?)"
+	CURSOR.execute(sql, (main_message_id, main_channel_id, discussion_message_id, discussion_channel_id, sender_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def is_comment_exist(discussion_message_id, discussion_channel_id):
+	sql = "SELECT id FROM comment_messages WHERE discussion_message_id=(?) and discussion_channel_id=(?)"
+	CURSOR.execute(sql, (discussion_message_id, discussion_channel_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+def get_comments_count(main_message_id, main_channel_id, ignored_sender_id):
+	sql = "SELECT COUNT(id) FROM comment_messages WHERE main_message_id=(?) and main_channel_id=(?) and sender_id!=(?)"
+	CURSOR.execute(sql, (main_message_id, main_channel_id, ignored_sender_id,))
+	result = CURSOR.fetchone()
+	return result[0]

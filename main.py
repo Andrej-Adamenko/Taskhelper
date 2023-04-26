@@ -8,25 +8,27 @@ import config_utils
 import db_utils
 import utils
 
-from config_utils import BOT_TOKEN, CHANNEL_IDS, CHAT_IDS_TO_IGNORE, DISCUSSION_CHAT_DATA
+import messages_export_utils
+from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH, CHANNEL_IDS, CHAT_IDS_TO_IGNORE, DISCUSSION_CHAT_DATA, SUPPORTED_CONTENT_TYPES
 
 db_utils.initialize_db()
-
-CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
-
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
 
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
 
+forwarding_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
-
+CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
 interval_updating_utils.start_interval_updating(bot)
+
+if APP_API_ID and APP_API_HASH:
+	pyrogram_app = messages_export_utils.init_pyrogram(APP_API_ID, APP_API_HASH, BOT_TOKEN)
+	messages_export_utils.export_comments_from_discussion_chats(pyrogram_app)
 
 channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
 
-@bot.channel_post_handler(func=channel_id_filter,
-						  content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
+@bot.channel_post_handler(func=channel_id_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_post(post_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
 
@@ -36,8 +38,7 @@ def handle_post(post_data: telebot.types.Message):
 		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=True)
 
 
-@bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward,
-					 content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
+@bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(msg_data.message_id, msg_data.chat.id)
 
@@ -65,7 +66,7 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 
 
 @bot.channel_post_handler(func=lambda post_data: post_data.chat.id in utils.get_all_subchannel_ids(),
-					 content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
+					 content_types=SUPPORTED_CONTENT_TYPES)
 def handle_subchannel_message(post_data: telebot.types.Message):
 	if post_data.forward_from_chat is None:
 		return
@@ -81,8 +82,28 @@ def handle_subchannel_message(post_data: telebot.types.Message):
 	db_utils.insert_copied_message(message_id, main_channel_id, forwarded_message_id, subchannel_id)
 
 
-@bot.edited_channel_post_handler(func=channel_id_filter,
-					 content_types=['audio', 'photo', 'voice', 'video', 'document', 'text'])
+@bot.message_handler(func=lambda msg_data: msg_data.chat.id in DISCUSSION_CHAT_DATA.values(),
+					 content_types=SUPPORTED_CONTENT_TYPES)
+def handle_discussion_message(msg_data: telebot.types.Message):
+	discussion_message_id = msg_data.message_id
+	discussion_channel_id = msg_data.chat.id
+
+	if msg_data.reply_to_message and msg_data.reply_to_message.is_automatic_forward:
+		main_channel_id = utils.get_key_by_value(DISCUSSION_CHAT_DATA, discussion_channel_id)
+		if main_channel_id is None:
+			return
+
+		main_channel_id = int(main_channel_id)
+
+		main_message_id = msg_data.reply_to_message.forward_from_message_id
+		sender_id = msg_data.from_user.id
+		db_utils.insert_comment_message(main_message_id, main_channel_id, discussion_message_id, discussion_channel_id, sender_id)
+		interval_updating_utils.update_older_message(bot, main_channel_id, main_message_id)
+
+	db_utils.insert_or_update_last_msg_id(discussion_message_id, discussion_channel_id)
+
+
+@bot.edited_channel_post_handler(func=channel_id_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_edited_post(post_data: telebot.types.Message):
 	post_link_utils.update_post_link(bot, post_data)
 

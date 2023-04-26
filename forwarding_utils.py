@@ -10,7 +10,8 @@ import db_utils
 import hashtag_utils
 import utils
 
-from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID, AUTO_FORWARDING_ENABLED
+from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID, \
+	AUTO_FORWARDING_ENABLED
 
 CALLBACK_PREFIX = "FWRD"
 
@@ -19,6 +20,8 @@ COMMENTS_CHARACTER = "\U0001F4AC"
 
 OPENED_TICKED_CHARACTER = "\U0001F7E9"
 CLOSED_TICKED_CHARACTER = "\U00002705"
+
+BOT_ID = 0
 
 
 class CB_TYPES:
@@ -182,14 +185,15 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 		if discussion_message_id:
 			discussion_chat_id = str(discussion_chat_id)[4:]
 			comments_url = f"tg://privatepost?channel={discussion_chat_id}&post={discussion_message_id}&thread={discussion_message_id}"
-			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER, url=comments_url)
+			comments_amount_text = f" ({db_utils.get_comments_count(message_id, main_channel_id, BOT_ID)})"
+			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER + comments_amount_text, url=comments_url)
 			buttons.append(comments_button)
 
 	keyboard_markup = InlineKeyboardMarkup([buttons])
 	return keyboard_markup
 
 
-def generate_subchannel_buttons(post_data):
+def generate_subchannel_buttons(post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
 
 	forwarding_data = get_subchannels_forwarding_data(main_channel_id)

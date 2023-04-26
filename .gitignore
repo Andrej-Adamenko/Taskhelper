@@ -1,5 +1,7 @@
 config.json
 taskhelper_data.db
+*.session
+*.session-journal
 
 __pycache__
 .idea
