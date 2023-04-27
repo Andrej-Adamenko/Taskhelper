@@ -185,7 +185,7 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 		if discussion_message_id:
 			discussion_chat_id_str = str(discussion_chat_id)[4:]
 			comments_url = f"tg://privatepost?channel={discussion_chat_id_str}&post={discussion_message_id}&thread={discussion_message_id}"
-			comments_amount_text = f" ({db_utils.get_comments_count(discussion_message_id, discussion_chat_id, BOT_ID)})"
+			comments_amount_text = f" ({db_utils.get_comments_count(discussion_message_id, discussion_chat_id)})"
 			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER + comments_amount_text, url=comments_url)
 			buttons.append(comments_button)
 
@@ -361,7 +361,8 @@ def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message
 	if comment_message_id:
 		main_channel_id_str = str(main_channel_id)
 		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
-		bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text)
+		comment_msg = bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text)
+		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, BOT_ID)
 
 
 def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):

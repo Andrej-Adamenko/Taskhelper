@@ -172,7 +172,7 @@ def is_comment_exist(discussion_message_id, discussion_chat_id):
 
 
 @db_thread_lock
-def get_comments_count(discussion_message_id, discussion_chat_id, ignored_sender_id):
+def get_comments_count(discussion_message_id, discussion_chat_id, ignored_sender_id=0):
 	sql = '''
 		WITH RECURSIVE
 		  reply_messages(comment_id) AS (

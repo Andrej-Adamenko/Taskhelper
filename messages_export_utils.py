@@ -5,10 +5,9 @@ from pyrogram import Client
 
 import config_utils
 import db_utils
-import utils
 from config_utils import DISCUSSION_CHAT_DATA, EXPORTED_DISCUSSION_CHATS
 
-_EXPORT_BATCH_SIZE = 100
+_EXPORT_BATCH_SIZE = 50
 
 
 def init_pyrogram(api_id: int, api_hash: str, bot_token: str):
@@ -55,6 +54,7 @@ def export_chat_comments(app, discussion_chat_id):
 			sender_id = message.from_user.id
 
 		db_utils.insert_comment_message(reply_to_message_id, discussion_message_id, discussion_chat_id, sender_id)
+		logging.info(f"Exported comment [{reply_to_message_id}, {discussion_message_id}, {discussion_chat_id}]")
 
 
 def export_comments_from_discussion_chats(app):
