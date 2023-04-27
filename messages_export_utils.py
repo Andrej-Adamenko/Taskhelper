@@ -1,3 +1,4 @@
+import logging
 import time
 
 from pyrogram import Client
@@ -7,7 +8,7 @@ import db_utils
 import utils
 from config_utils import DISCUSSION_CHAT_DATA, EXPORTED_DISCUSSION_CHATS
 
-_EXPORT_BATCH_SIZE = 200
+_EXPORT_BATCH_SIZE = 100
 
 
 def init_pyrogram(api_id: int, api_hash: str, bot_token: str):
@@ -45,19 +46,15 @@ def export_chat_comments(app, discussion_chat_id):
 		if message.reply_to_message is None:
 			continue
 
-		main_channel_id = utils.get_key_by_value(DISCUSSION_CHAT_DATA, discussion_chat_id)
-		if main_channel_id is None:
-			return
-
-		main_channel_id = int(main_channel_id)
 		discussion_message_id = message.id
-		main_message_id = message.reply_to_message.forward_from_message_id
+
+		reply_to_message_id = message.reply_to_message.id
 		if message.sender_chat:
 			sender_id = message.sender_chat.id
 		else:
 			sender_id = message.from_user.id
 
-		db_utils.insert_comment_message(main_message_id, main_channel_id, discussion_message_id, discussion_chat_id, sender_id)
+		db_utils.insert_comment_message(reply_to_message_id, discussion_message_id, discussion_chat_id, sender_id)
 
 
 def export_comments_from_discussion_chats(app):
@@ -66,6 +63,9 @@ def export_comments_from_discussion_chats(app):
 	for chat_id in discussion_chat_ids:
 		if chat_id in EXPORTED_DISCUSSION_CHATS:
 			continue
+
+		logging.info(f"Exporting comments from {chat_id}")
 		export_chat_comments(app, chat_id)
 		EXPORTED_DISCUSSION_CHATS.append(chat_id)
 		config_utils.update_config({"EXPORTED_DISCUSSION_CHATS": EXPORTED_DISCUSSION_CHATS})
+		logging.info(f"Successfully exported comments from {chat_id}")

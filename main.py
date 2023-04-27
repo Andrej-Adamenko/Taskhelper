@@ -19,11 +19,12 @@ bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
 forwarding_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
 CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
-interval_updating_utils.start_interval_updating(bot)
 
 if APP_API_ID and APP_API_HASH:
 	pyrogram_app = messages_export_utils.init_pyrogram(APP_API_ID, APP_API_HASH, BOT_TOKEN)
 	messages_export_utils.export_comments_from_discussion_chats(pyrogram_app)
+
+interval_updating_utils.start_interval_updating(bot)
 
 channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
@@ -86,21 +87,27 @@ def handle_subchannel_message(post_data: telebot.types.Message):
 					 content_types=SUPPORTED_CONTENT_TYPES)
 def handle_discussion_message(msg_data: telebot.types.Message):
 	discussion_message_id = msg_data.message_id
-	discussion_channel_id = msg_data.chat.id
+	discussion_chat_id = msg_data.chat.id
 
-	if msg_data.reply_to_message and msg_data.reply_to_message.is_automatic_forward:
-		main_channel_id = utils.get_key_by_value(DISCUSSION_CHAT_DATA, discussion_channel_id)
+	if msg_data.reply_to_message:
+		reply_to_message_id = msg_data.reply_to_message.message_id
+
+		sender_id = msg_data.from_user.id
+		db_utils.insert_comment_message(reply_to_message_id, discussion_message_id, discussion_chat_id, sender_id)
+
+		main_channel_id = utils.get_key_by_value(DISCUSSION_CHAT_DATA, discussion_chat_id)
 		if main_channel_id is None:
 			return
 
 		main_channel_id = int(main_channel_id)
+		top_discussion_message_id = db_utils.get_comment_top_parent(discussion_message_id, discussion_chat_id)
+		if top_discussion_message_id == discussion_message_id:
+			return
+		main_message_id = db_utils.get_main_from_discussion_message(top_discussion_message_id, main_channel_id)
+		if main_message_id:
+			interval_updating_utils.update_older_message(bot, main_channel_id, main_message_id)
 
-		main_message_id = msg_data.reply_to_message.forward_from_message_id
-		sender_id = msg_data.from_user.id
-		db_utils.insert_comment_message(main_message_id, main_channel_id, discussion_message_id, discussion_channel_id, sender_id)
-		interval_updating_utils.update_older_message(bot, main_channel_id, main_message_id)
-
-	db_utils.insert_or_update_last_msg_id(discussion_message_id, discussion_channel_id)
+	db_utils.insert_or_update_last_msg_id(discussion_message_id, discussion_chat_id)
 
 
 @bot.edited_channel_post_handler(func=channel_id_filter, content_types=SUPPORTED_CONTENT_TYPES)

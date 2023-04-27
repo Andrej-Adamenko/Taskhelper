@@ -71,10 +71,9 @@ def create_tables():
 		comment_messages_table_sql = '''
 			CREATE TABLE "comment_messages" (
 				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
-				"main_message_id"	INT NOT NULL,
-				"main_channel_id"	INT NOT NULL,
-				"discussion_message_id"	INT NOT NULL,
-				"discussion_channel_id"	INT NOT NULL,
+				"discussion_chat_id"	INT NOT NULL,
+				"message_id"	INT NOT NULL,
+				"reply_to_message_id"	INT NOT NULL,
 				"sender_id"	INT NOT NULL
 			); '''
 
@@ -98,6 +97,15 @@ def insert_or_update_discussion_message(main_message_id, main_channel_id, discus
 def get_discussion_message_id(main_message_id, main_channel_id):
 	sql = "SELECT discussion_message_id FROM discussion_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def get_main_from_discussion_message(discussion_message_id, main_channel_id):
+	sql = "SELECT main_message_id FROM discussion_messages WHERE discussion_message_id=(?) and main_channel_id=(?)"
+	CURSOR.execute(sql, (discussion_message_id, main_channel_id,))
 	result = CURSOR.fetchone()
 	if result:
 		return result[0]
@@ -146,25 +154,54 @@ def get_last_message_id(chat_id):
 
 
 @db_thread_lock
-def insert_comment_message(main_message_id, main_channel_id, discussion_message_id, discussion_channel_id, sender_id):
-	if is_comment_exist(discussion_message_id, discussion_channel_id):
+def insert_comment_message(reply_to_message_id, discussion_message_id, discussion_chat_id, sender_id):
+	if is_comment_exist(discussion_message_id, discussion_chat_id):
 		return
 
-	sql = "INSERT INTO comment_messages (main_message_id, main_channel_id, discussion_message_id, discussion_channel_id, sender_id) VALUES (?, ?, ?, ?, ?)"
-	CURSOR.execute(sql, (main_message_id, main_channel_id, discussion_message_id, discussion_channel_id, sender_id,))
+	sql = "INSERT INTO comment_messages (reply_to_message_id, message_id, discussion_chat_id, sender_id) VALUES (?, ?, ?, ?)"
+	CURSOR.execute(sql, (reply_to_message_id, discussion_message_id, discussion_chat_id, sender_id,))
 	DB_CONNECTION.commit()
 
 
 @db_thread_lock
-def is_comment_exist(discussion_message_id, discussion_channel_id):
-	sql = "SELECT id FROM comment_messages WHERE discussion_message_id=(?) and discussion_channel_id=(?)"
-	CURSOR.execute(sql, (discussion_message_id, discussion_channel_id,))
+def is_comment_exist(discussion_message_id, discussion_chat_id):
+	sql = "SELECT id FROM comment_messages WHERE message_id=(?) and discussion_chat_id=(?)"
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
 	result = CURSOR.fetchone()
 	return bool(result)
 
 
-def get_comments_count(main_message_id, main_channel_id, ignored_sender_id):
-	sql = "SELECT COUNT(id) FROM comment_messages WHERE main_message_id=(?) and main_channel_id=(?) and sender_id!=(?)"
-	CURSOR.execute(sql, (main_message_id, main_channel_id, ignored_sender_id,))
+@db_thread_lock
+def get_comments_count(discussion_message_id, discussion_chat_id, ignored_sender_id):
+	sql = '''
+		WITH RECURSIVE
+		  reply_messages(comment_id) AS (
+			 SELECT (?)
+			 UNION ALL
+			 SELECT message_id FROM comment_messages, reply_messages WHERE reply_to_message_id = reply_messages.comment_id
+			 AND discussion_chat_id = (?) AND sender_id != (?)
+		  )
+		SELECT count(comment_id) - 1 FROM reply_messages;
+	'''
+
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id, ignored_sender_id,))
+	result = CURSOR.fetchone()
+	return result[0]
+
+
+@db_thread_lock
+def get_comment_top_parent(discussion_message_id, discussion_chat_id):
+	sql = '''
+		WITH RECURSIVE
+		  reply_messages(comment_id) AS (
+		   SELECT (?)
+		   UNION ALL
+		   SELECT reply_to_message_id FROM comment_messages, reply_messages WHERE message_id = reply_messages.comment_id
+		   AND discussion_chat_id = (?)
+		  )
+		SELECT MIN(comment_id) FROM reply_messages;	
+	'''
+
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
 	result = CURSOR.fetchone()
 	return result[0]

@@ -183,9 +183,9 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
 		discussion_message_id = db_utils.get_discussion_message_id(message_id, main_channel_id)
 		if discussion_message_id:
-			discussion_chat_id = str(discussion_chat_id)[4:]
-			comments_url = f"tg://privatepost?channel={discussion_chat_id}&post={discussion_message_id}&thread={discussion_message_id}"
-			comments_amount_text = f" ({db_utils.get_comments_count(message_id, main_channel_id, BOT_ID)})"
+			discussion_chat_id_str = str(discussion_chat_id)[4:]
+			comments_url = f"tg://privatepost?channel={discussion_chat_id_str}&post={discussion_message_id}&thread={discussion_message_id}"
+			comments_amount_text = f" ({db_utils.get_comments_count(discussion_message_id, discussion_chat_id, BOT_ID)})"
 			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER + comments_amount_text, url=comments_url)
 			buttons.append(comments_button)
 
