@@ -35,7 +35,7 @@ def export_messages(app: Client, chat_id: int, last_message_id: int):
 	return exported_messages
 
 
-def export_chat_comments(app, discussion_chat_id):
+def export_chat_comments(app: Client, discussion_chat_id: int):
 	last_msg_id = db_utils.get_last_message_id(discussion_chat_id)
 	if last_msg_id is None:
 		return
@@ -57,7 +57,7 @@ def export_chat_comments(app, discussion_chat_id):
 		logging.info(f"Exported comment [{reply_to_message_id}, {discussion_message_id}, {discussion_chat_id}]")
 
 
-def export_comments_from_discussion_chats(app):
+def export_comments_from_discussion_chats(app: Client):
 	discussion_chat_ids = list(DISCUSSION_CHAT_DATA.values())
 	discussion_chat_ids = [chat_id for chat_id in discussion_chat_ids if chat_id]
 	for chat_id in discussion_chat_ids:

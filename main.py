@@ -6,6 +6,7 @@ import interval_updating_utils
 import post_link_utils
 import config_utils
 import db_utils
+import scheduled_messages_utils
 import utils
 
 import messages_export_utils
@@ -146,6 +147,8 @@ def handle_keyboard_callback(call: telebot.types.CallbackQuery):
 		forwarding_utils.handle_callback(bot, call)
 	elif call.data.startswith(post_link_utils.CALLBACK_PREFIX):
 		post_link_utils.handle_callback(bot, call)
+	elif call.data.startswith(scheduled_messages_utils.CALLBACK_PREFIX):
+		scheduled_messages_utils.handle_callback(bot, call)
 
 
 bot.infinity_polling()

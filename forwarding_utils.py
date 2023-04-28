@@ -8,6 +8,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEnt
 
 import db_utils
 import hashtag_utils
+import scheduled_messages_utils
 import utils
 
 from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID, \
@@ -52,6 +53,13 @@ def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: in
 def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str]):
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
+
+	scheduled_message = db_utils.get_scheduled_message(message_id, main_channel_id)
+	if scheduled_message:
+		scheduled_message_id, scheduled_chat_id, send_time = scheduled_message
+		post_data.message_id = scheduled_message_id
+		post_data.chat.id = scheduled_chat_id
+		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities)
 
 	forwarded_messages = db_utils.get_copied_message_data(message_id, main_channel_id)
 	subchannels_to_ignore = []
@@ -171,11 +179,14 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 	cc_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_CC)
 	cc_button = InlineKeyboardButton(f"CC", callback_data=cc_callback_data)
 
+	schedule_button = scheduled_messages_utils.generate_schedule_button()
+
 	buttons = [
 		state_switch_button,
 		reassign_button,
 		cc_button,
-		priority_button
+		priority_button,
+		schedule_button
 	]
 
 	main_channel_id_str = str(main_channel_id)

@@ -27,7 +27,8 @@ DELAY_AFTER_ONE_SCAN: int = 4
 SUPPORTED_CONTENT_TYPES: list = ["audio", "photo", "voice", "video", "document", "text"]
 APP_API_ID: int = 0
 APP_API_HASH: str = ""
-EXPORTED_DISCUSSION_CHATS = []
+EXPORTED_DISCUSSION_CHATS: list = []
+SCHEDULED_STORAGE_CHAT_IDS: dict = {}
 
 CHAT_IDS_TO_IGNORE: list = []
 
