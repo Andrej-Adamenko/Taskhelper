@@ -1,10 +1,10 @@
 import logging
 import telebot
 
+import config_utils
 import forwarding_utils
 import interval_updating_utils
 import post_link_utils
-import config_utils
 import db_utils
 import scheduled_messages_utils
 import utils
@@ -20,6 +20,8 @@ bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
 forwarding_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
 CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
+
+scheduled_messages_utils.start_scheduled_threads(bot)
 
 if APP_API_ID and APP_API_HASH:
 	pyrogram_app = messages_export_utils.init_pyrogram(APP_API_ID, APP_API_HASH, BOT_TOKEN)
@@ -37,7 +39,7 @@ def handle_post(post_data: telebot.types.Message):
 	main_channel_id_str = str(post_data.chat.id)
 	if DISCUSSION_CHAT_DATA[main_channel_id_str] is None:
 		edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
-		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=True)
+		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=False)
 
 
 @bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward, content_types=SUPPORTED_CONTENT_TYPES)
@@ -64,7 +66,7 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	msg_data.chat.id = main_channel_id
 	msg_data.message_id = main_message_id
 	edited_post = post_link_utils.add_link_to_new_post(bot, msg_data)
-	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=True)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=False)
 
 
 @bot.channel_post_handler(func=lambda post_data: post_data.chat.id in utils.get_all_subchannel_ids(),

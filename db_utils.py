@@ -86,7 +86,7 @@ def create_tables():
 				"main_message_id"	INT NOT NULL,
 				"main_channel_id"	INT NOT NULL,
 				"scheduled_message_id"	INT NOT NULL,
-				"scheduled_chat_id"	INT NOT NULL,
+				"scheduled_channel_id"	INT NOT NULL,
 				"send_time"	INT NOT NULL
 			); '''
 
@@ -222,29 +222,22 @@ def get_comment_top_parent(discussion_message_id, discussion_chat_id):
 
 
 @db_thread_lock
-def insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_chat_id, send_time):
-	sql = "INSERT INTO scheduled_messages (main_message_id, main_channel_id, scheduled_message_id, scheduled_chat_id, send_time) VALUES (?, ?, ?, ?, ?)"
-	CURSOR.execute(sql, (main_message_id, main_channel_id, scheduled_message_id, scheduled_chat_id, send_time,))
+def insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time):
+	sql = "INSERT INTO scheduled_messages (main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time) VALUES (?, ?, ?, ?, ?)"
+	CURSOR.execute(sql, (main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time,))
 	DB_CONNECTION.commit()
 
 
 @db_thread_lock
-def update_scheduled_message_main(main_message_id, main_channel_id, send_time):
-	sql = "UPDATE scheduled_messages SET send_time=(?) WHERE main_message_id=(?) AND main_channel_id=(?)"
-	CURSOR.execute(sql, (send_time, main_message_id, main_channel_id,))
-	DB_CONNECTION.commit()
-
-
-@db_thread_lock
-def update_scheduled_message(scheduled_message_id, scheduled_chat_id, send_time):
-	sql = "UPDATE scheduled_messages SET send_time=(?) WHERE scheduled_message_id=(?) and scheduled_chat_id=(?)"
-	CURSOR.execute(sql, (send_time, scheduled_message_id, scheduled_chat_id,))
+def update_scheduled_message(scheduled_message_id, scheduled_channel_id, send_time):
+	sql = "UPDATE scheduled_messages SET send_time=(?) WHERE scheduled_message_id=(?) and scheduled_channel_id=(?)"
+	CURSOR.execute(sql, (send_time, scheduled_message_id, scheduled_channel_id,))
 	DB_CONNECTION.commit()
 
 
 @db_thread_lock
 def get_scheduled_message(main_message_id, main_channel_id):
-	sql = "SELECT scheduled_message_id, scheduled_chat_id, send_time FROM scheduled_messages WHERE main_message_id=(?) and main_channel_id=(?)"
+	sql = "SELECT scheduled_message_id, scheduled_channel_id, send_time FROM scheduled_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
 	result = CURSOR.fetchone()
 	if result:
@@ -252,8 +245,15 @@ def get_scheduled_message(main_message_id, main_channel_id):
 
 
 @db_thread_lock
-def delete_scheduled_message(scheduled_message_id, scheduled_chat_id):
-	sql = "DELETE FROM scheduled_messages WHERE scheduled_message_id=(?) scheduled_chat_id=(?)"
-	CURSOR.execute(sql, (scheduled_message_id, scheduled_chat_id,))
+def delete_scheduled_message(scheduled_message_id, scheduled_channel_id):
+	sql = "DELETE FROM scheduled_messages WHERE scheduled_message_id=(?) AND scheduled_channel_id=(?)"
+	CURSOR.execute(sql, (scheduled_message_id, scheduled_channel_id,))
 	DB_CONNECTION.commit()
 
+
+@db_thread_lock
+def get_all_scheduled_messages():
+	sql = "SELECT main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time FROM scheduled_messages"
+	CURSOR.execute(sql, ())
+	result = CURSOR.fetchall()
+	return result

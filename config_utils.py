@@ -29,6 +29,7 @@ APP_API_ID: int = 0
 APP_API_HASH: str = ""
 EXPORTED_DISCUSSION_CHATS: list = []
 SCHEDULED_STORAGE_CHAT_IDS: dict = {}
+TIMEZONE_NAME: str = "UTC"
 
 CHAT_IDS_TO_IGNORE: list = []
 

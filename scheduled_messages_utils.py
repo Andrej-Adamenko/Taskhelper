@@ -1,17 +1,26 @@
 import calendar
 import datetime
+import logging
+import threading
+import time
 
+import pytz
 import telebot
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
+from typing import Dict
 
 import db_utils
 import forwarding_utils
 import utils
-from config_utils import SCHEDULED_STORAGE_CHAT_IDS
+from config_utils import SCHEDULED_STORAGE_CHAT_IDS, TIMEZONE_NAME
 
 CALLBACK_PREFIX = "SCH"
 
 CURRENT_DATE_SYMBOL = "✅"
+
+SCHEDULED_THREADS: Dict[str, threading.Timer] = {}
+
+TIMEZONE = pytz.timezone(TIMEZONE_NAME)
 
 class CB_TYPES:
 	MONTH_CALENDAR = "CALENDAR"
@@ -33,15 +42,27 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 
 	scheduled_message = db_utils.get_scheduled_message(main_message_id, main_channel_id)
 	if scheduled_message:
-		scheduled_message_id, scheduled_chat_id, _ = scheduled_message
-		db_utils.update_scheduled_message(scheduled_message_id, scheduled_chat_id, send_time)
-		forwarding_utils.forward_and_add_inline_keyboard(bot, message, force_forward=True)
+		scheduled_message_id, scheduled_channel_id, _ = scheduled_message
+		db_utils.update_scheduled_message(scheduled_message_id, scheduled_channel_id, send_time)
+
+		scheduled_thread_name = f"{main_message_id}:{main_channel_id}"
+		SCHEDULED_THREADS[scheduled_thread_name].cancel()
+		del SCHEDULED_THREADS[scheduled_thread_name]
+
+		scheduled_info = [main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time]
+		create_scheduled_message_timer(bot, scheduled_info)
 		return
 
-	scheduled_storage_chat_id = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str]
-	copied_message = bot.copy_message(chat_id=scheduled_storage_chat_id, from_chat_id=main_channel_id, message_id=main_message_id)
+	if send_time <= 0:
+		return
+
+	scheduled_storage_id = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str]
+	copied_message = bot.copy_message(chat_id=scheduled_storage_id, from_chat_id=main_channel_id, message_id=main_message_id)
 	scheduled_message_id = copied_message.message_id
-	db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_chat_id, send_time)
+	db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time)
+
+	scheduled_info = [main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time]
+	create_scheduled_message_timer(bot, scheduled_info)
 
 
 def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
@@ -94,10 +115,11 @@ def schedule_message_event(bot: telebot.TeleBot, msg_data: telebot.types.Message
 	date, hour, minute = args
 	format_str = "%d.%m.%Y %H:%M"
 	dt = datetime.datetime.strptime(f"{date} {hour}:{minute}", format_str)
-	send_time = int(dt.timestamp())
+	dt = TIMEZONE.localize(dt)
+	send_time = int(dt.astimezone(pytz.UTC).timestamp())
 
-	forwarding_utils.forward_and_add_inline_keyboard(bot, msg_data)
 	schedule_message(bot, msg_data, send_time)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, msg_data, force_forward=True)
 
 
 def generate_schedule_button():
@@ -107,7 +129,7 @@ def generate_schedule_button():
 
 
 def generate_days_buttons(date_info=None):
-	now = datetime.datetime.now()
+	now = datetime.datetime.now(tz=TIMEZONE)
 
 	if date_info:
 		current_month, current_year = date_info
@@ -182,3 +204,46 @@ def generate_minutes_buttons(current_date, current_hour):
 
 	return InlineKeyboardMarkup(keyboard_rows)
 
+
+def scheduled_send_thread(bot: telebot.TeleBot, scheduled_message_info):
+	main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time = scheduled_message_info
+	message = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+	if message is None:
+		return
+
+	message.message_id = main_message_id
+	message.chat.id = main_channel_id
+
+	bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
+	db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
+
+	forwarding_utils.forward_and_add_inline_keyboard(bot, message, force_forward=True)
+
+
+def create_scheduled_message_timer(bot: telebot.TeleBot, message_info: list):
+	main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time = message_info
+	start_timeout = send_time - time.time()
+	start_timeout = max(start_timeout, 0)
+	logging.info(f"Message {main_message_id}:{main_channel_id} will be sent in {start_timeout} seconds")
+
+	timer = threading.Timer(function=scheduled_send_thread, args=(bot, message_info,), interval=start_timeout)
+	SCHEDULED_THREADS[f"{main_message_id}:{main_channel_id}"] = timer
+	timer.start()
+
+
+def start_scheduled_threads(bot: telebot.TeleBot):
+	scheduled_messages = db_utils.get_all_scheduled_messages()
+	for message_info in scheduled_messages:
+		create_scheduled_message_timer(bot, message_info)
+
+
+def update_scheduled_message(bot: telebot.TeleBot, scheduled_message_info: list, post_data: telebot.types.Message):
+	scheduled_message_id, scheduled_chat_id, send_time = scheduled_message_info
+	post_data.message_id = scheduled_message_id
+	post_data.chat.id = scheduled_chat_id
+
+	send_time_str = datetime.datetime.fromtimestamp(send_time).strftime("%d %B %Y, %H:%M")
+	send_time_button = InlineKeyboardButton(text=send_time_str, callback_data="_")
+	keyboard = InlineKeyboardMarkup([[send_time_button]])
+
+	utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities, reply_markup=keyboard)

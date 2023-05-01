@@ -56,10 +56,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 
 	scheduled_message = db_utils.get_scheduled_message(message_id, main_channel_id)
 	if scheduled_message:
-		scheduled_message_id, scheduled_chat_id, send_time = scheduled_message
-		post_data.message_id = scheduled_message_id
-		post_data.chat.id = scheduled_chat_id
-		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities)
+		scheduled_messages_utils.update_scheduled_message(bot, scheduled_message, post_data)
+		return
 
 	forwarded_messages = db_utils.get_copied_message_data(message_id, main_channel_id)
 	subchannels_to_ignore = []
@@ -433,7 +431,7 @@ def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Mes
 			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
 			button.text = OPENED_TICKED_CHARACTER if is_ticket_open else CLOSED_TICKED_CHARACTER
 			break
-	utils.edit_message_keyboard(bot, post_data)
+	add_control_buttons(bot, post_data, hashtags)
 	forward_to_subchannel(bot, post_data, hashtags)
 
 
