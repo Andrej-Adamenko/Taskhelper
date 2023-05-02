@@ -1,3 +1,4 @@
+import re
 from typing import List
 
 import telebot
@@ -10,6 +11,7 @@ from config_utils import DEFAULT_USER_DATA, SUBCHANNEL_DATA
 PRIORITY_TAG = "п"
 OPENED_TAG = "о"
 CLOSED_TAG = "х"
+SCHEDULED_TAG = "з"
 
 
 def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
@@ -26,7 +28,7 @@ def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity],
 		entity = entities[entity_index]
 		if entity.type == "hashtag":
 			tag = text[entity.offset + 1:entity.offset + entity.length]
-			if tag == OPENED_TAG or tag == CLOSED_TAG:
+			if tag == OPENED_TAG or tag == CLOSED_TAG or tag.startswith(SCHEDULED_TAG):
 				status_tag_index = entity_index
 				continue
 
@@ -93,6 +95,18 @@ def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str]):
 	return post_data
 
 
+def check_scheduled_tag(text: str, entities: List[telebot.types.MessageEntity], status_tag_index: int):
+	status_offset = entities[status_tag_index].offset
+	if text[status_offset + 1:].startswith(SCHEDULED_TAG):
+		text_after_tag = text[status_offset + 1 + len(SCHEDULED_TAG) + 1:]
+		result = re.search("^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}", text_after_tag)
+		if result is None:
+			return
+		entities[status_tag_index].length += 1 + result.end()
+		return True
+	return False
+
+
 def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int, cut_from_text: bool = True):
 	text, entities = utils.get_post_content(post_data)
 
@@ -102,6 +116,7 @@ def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int, cut
 	if status_tag_index is None:
 		extracted_hashtags.append(None)
 	else:
+		check_scheduled_tag(text, entities, status_tag_index)
 		extracted_hashtags.append(entities[status_tag_index])
 
 	if not user_tag_indexes:

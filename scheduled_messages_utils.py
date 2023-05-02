@@ -11,6 +11,7 @@ from typing import Dict
 
 import db_utils
 import forwarding_utils
+import hashtag_utils
 import utils
 from config_utils import SCHEDULED_STORAGE_CHAT_IDS, TIMEZONE_NAME
 
@@ -19,6 +20,8 @@ CALLBACK_PREFIX = "SCH"
 CURRENT_DATE_SYMBOL = "✅"
 
 SCHEDULED_THREADS: Dict[str, threading.Timer] = {}
+
+DATE_FORMAT = "%Y-%m-%d %H:%M"
 
 TIMEZONE = pytz.timezone(TIMEZONE_NAME)
 
@@ -111,15 +114,22 @@ def select_hour_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, arg
 	utils.edit_message_keyboard(bot, msg_data, keyboard)
 
 
-def schedule_message_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list):
+def schedule_message_event(bot: telebot.TeleBot, post_data: telebot.types.Message, args: list):
 	date, hour, minute = args
 	format_str = "%d.%m.%Y %H:%M"
 	dt = datetime.datetime.strptime(f"{date} {hour}:{minute}", format_str)
 	dt = TIMEZONE.localize(dt)
 	send_time = int(dt.astimezone(pytz.UTC).timestamp())
 
-	schedule_message(bot, msg_data, send_time)
-	forwarding_utils.forward_and_add_inline_keyboard(bot, msg_data, force_forward=True)
+	schedule_message(bot, post_data, send_time)
+
+	main_channel_id = post_data.chat.id
+	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
+	hashtags[0] = hashtag_utils.SCHEDULED_TAG + " " + dt.strftime(DATE_FORMAT)
+
+	forwarding_utils.rearrange_hashtags(bot, post_data, hashtags)
+	forwarding_utils.add_control_buttons(bot, post_data, hashtags)
+	forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
 
 
 def generate_schedule_button():
@@ -214,10 +224,15 @@ def scheduled_send_thread(bot: telebot.TeleBot, scheduled_message_info):
 	message.message_id = main_message_id
 	message.chat.id = main_channel_id
 
-	bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
 	db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
+	bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
 
-	forwarding_utils.forward_and_add_inline_keyboard(bot, message, force_forward=True)
+	hashtags, post_data = hashtag_utils.extract_hashtags(message, main_channel_id)
+	hashtags[0] = hashtag_utils.OPENED_TAG
+
+	forwarding_utils.rearrange_hashtags(bot, post_data, hashtags)
+	forwarding_utils.add_control_buttons(bot, post_data, hashtags)
+	forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
 
 
 def create_scheduled_message_timer(bot: telebot.TeleBot, message_info: list):
@@ -237,13 +252,20 @@ def start_scheduled_threads(bot: telebot.TeleBot):
 		create_scheduled_message_timer(bot, message_info)
 
 
-def update_scheduled_message(bot: telebot.TeleBot, scheduled_message_info: list, post_data: telebot.types.Message):
-	scheduled_message_id, scheduled_chat_id, send_time = scheduled_message_info
+def update_scheduled_message(bot: telebot.TeleBot, scheduled_message_info: list, post_data: telebot.types.Message, hashtags: list):
+	scheduled_message_id, scheduled_channel_id, send_time = scheduled_message_info
+	if hashtag_utils.CLOSED_TAG in hashtags:
+		bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
+		db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
+
+		main_message_id = post_data.message_id
+		main_channel_id = post_data.chat.id
+		scheduled_thread_name = f"{main_message_id}:{main_channel_id}"
+		SCHEDULED_THREADS[scheduled_thread_name].cancel()
+		del SCHEDULED_THREADS[scheduled_thread_name]
+		return
+
 	post_data.message_id = scheduled_message_id
-	post_data.chat.id = scheduled_chat_id
+	post_data.chat.id = scheduled_channel_id
+	utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities)
 
-	send_time_str = datetime.datetime.fromtimestamp(send_time).strftime("%d %B %Y, %H:%M")
-	send_time_button = InlineKeyboardButton(text=send_time_str, callback_data="_")
-	keyboard = InlineKeyboardMarkup([[send_time_button]])
-
-	utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities, reply_markup=keyboard)

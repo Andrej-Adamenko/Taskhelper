@@ -54,11 +54,6 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
-	scheduled_message = db_utils.get_scheduled_message(message_id, main_channel_id)
-	if scheduled_message:
-		scheduled_messages_utils.update_scheduled_message(bot, scheduled_message, post_data)
-		return
-
 	forwarded_messages = db_utils.get_copied_message_data(message_id, main_channel_id)
 	subchannels_to_ignore = []
 	for forwarded_message in forwarded_messages:
@@ -77,6 +72,11 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			elif E.description.endswith("message to delete not found"):
 				db_utils.delete_copied_message(forwarded_msg_id, forwarded_channel_id)
 			logging.info(f"Exception during delete_message [{forwarded_msg_id}, {forwarded_channel_id}] - {E}")
+
+	scheduled_message = db_utils.get_scheduled_message(message_id, main_channel_id)
+	if scheduled_message:
+		scheduled_messages_utils.update_scheduled_message(bot, scheduled_message, post_data, hashtags)
+		return
 
 	if hashtag_utils.OPENED_TAG not in hashtags:
 		return
@@ -158,6 +158,9 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 	if hashtags[0] == hashtag_utils.OPENED_TAG:
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CLOSE)
 		state_switch_button = InlineKeyboardButton(OPENED_TICKED_CHARACTER, callback_data=state_switch_callback_data)
+	elif hashtags[0] and hashtags[0].startswith(hashtag_utils.SCHEDULED_TAG):
+		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CLOSE)
+		state_switch_button = InlineKeyboardButton(OPENED_TICKED_CHARACTER, callback_data=state_switch_callback_data)
 	else:
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.OPEN)
 		state_switch_button = InlineKeyboardButton(CLOSED_TICKED_CHARACTER, callback_data=state_switch_callback_data)
@@ -194,7 +197,7 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 		if discussion_message_id:
 			discussion_chat_id_str = str(discussion_chat_id)[4:]
 			comments_url = f"tg://privatepost?channel={discussion_chat_id_str}&post={discussion_message_id}&thread={discussion_message_id}"
-			comments_amount_text = f" ({db_utils.get_comments_count(discussion_message_id, discussion_chat_id)})"
+			comments_amount_text = f" {db_utils.get_comments_count(discussion_message_id, discussion_chat_id)}"
 			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER + comments_amount_text, url=comments_url)
 			buttons.append(comments_button)
 
