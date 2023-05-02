@@ -22,6 +22,13 @@ COMMENTS_CHARACTER = "\U0001F4AC"
 OPENED_TICKED_CHARACTER = "\U0001F7E9"
 CLOSED_TICKED_CHARACTER = "\U00002705"
 
+PRIORITY_VALUES = {
+	"-" : "\u26a0?",
+	"1": "\u0031\uFE0F\u20E3",
+	"2": "\u0032\uFE0F\u20E3",
+	"3": "\u0033\uFE0F\u20E3"
+}
+
 BOT_ID = 0
 
 
@@ -175,7 +182,10 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 		current_priority = hashtags[-1]
 		current_priority = current_priority[len(hashtag_utils.PRIORITY_TAG):]
 
-	priority_button = InlineKeyboardButton(current_priority, callback_data=priority_callback_data)
+	priority_text = current_priority
+	if current_priority in PRIORITY_VALUES:
+		priority_text = PRIORITY_VALUES[current_priority]
+	priority_button = InlineKeyboardButton(priority_text, callback_data=priority_callback_data)
 
 	cc_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_CC)
 	cc_button = InlineKeyboardButton(f"CC", callback_data=cc_callback_data)
@@ -197,8 +207,8 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 		if discussion_message_id:
 			discussion_chat_id_str = str(discussion_chat_id)[4:]
 			comments_url = f"tg://privatepost?channel={discussion_chat_id_str}&post={discussion_message_id}&thread={discussion_message_id}"
-			comments_amount_text = f" {db_utils.get_comments_count(discussion_message_id, discussion_chat_id)}"
-			comments_button = InlineKeyboardButton(COMMENTS_CHARACTER + comments_amount_text, url=comments_url)
+			comments_amount_text = f"({db_utils.get_comments_count(discussion_message_id, discussion_chat_id)})"
+			comments_button = InlineKeyboardButton(comments_amount_text, url=comments_url)
 			buttons.append(comments_button)
 
 	keyboard_markup = InlineKeyboardMarkup([buttons])

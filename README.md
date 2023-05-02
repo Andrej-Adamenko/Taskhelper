@@ -68,6 +68,22 @@ DELAY_AFTER_ONE_SCAN:
 * delay(in seconds) before next message check during interval checking
 * example: 5
 
+APP_API_ID:
+* app id of your telegram application, needed for exporting comments from discussion chat 
+* example: 12345
+
+APP_API_HASH:
+* app hash of your telegram application, needed for exporting comments from discussion chat 
+* example: "42f28ff2118430bdff5f9a189e0034ec"
+
+TIMEZONE_NAME:
+* timezone for scheduled messages
+* example: "Europe/Kiev"
+
+SCHEDULED_STORAGE_CHAT_IDS:
+* data about storage channels for scheduled messages, keys are main channel ids, values are storage channel ids 
+* example: {"-1001234234134": -1001234234134}
+
 ## FAQ
 How to create bot and get bot token:
 * Find @BotFather in Telegram and text to him `/newbot` 
