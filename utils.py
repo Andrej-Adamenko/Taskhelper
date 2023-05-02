@@ -5,7 +5,7 @@ import telebot.types
 from telebot.apihelper import ApiTelegramException
 
 from config_utils import MAX_BUTTONS_IN_ROW, DISCUSSION_CHAT_DATA, SUBCHANNEL_DATA, DUMP_CHAT_ID, \
-	SCHEDULED_STORAGE_CHAT_IDS
+	SCHEDULED_STORAGE_CHAT_IDS, USER_DATA
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 
@@ -181,3 +181,35 @@ def get_key_by_value(d: dict, value: object):
 		return
 
 	return key_list[position]
+
+
+def insert_user_reference(main_channel_id: int, user_tag: str, text: str):
+	placeholder_text = "{USER}"
+	placeholder_position = text.find(placeholder_text)
+	if placeholder_position < 0:
+		return text, None
+
+	text = text[:placeholder_position] + text[placeholder_position + len(placeholder_text):]
+
+	main_channel_id_str = str(main_channel_id)
+	if main_channel_id_str not in USER_DATA:
+		text = text[:placeholder_position] + user_tag + text[placeholder_position:]
+		return text, None
+	user_tags = USER_DATA[main_channel_id_str]
+	if user_tag not in user_tags:
+		text = text[:placeholder_position] + user_tag + text[placeholder_position:]
+		return text, None
+
+	user_obj = user_tags[user_tag]
+	if user_obj.username:
+		user_reference_text = f"@{user_obj.username}"
+		text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
+		return text, None
+	else:
+		user_reference_text = user_obj.first_name
+		text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
+		mentioned_user = {"id": user_obj.id, "first_name": user_obj.first_name, "last_name": user_obj.last_name}
+		entity = telebot.types.MessageEntity(offset=placeholder_position, length=len(user_reference_text),
+		                                     type="text_mention", user=mentioned_user)
+		return text, [entity]
+

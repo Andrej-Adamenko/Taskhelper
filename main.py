@@ -19,6 +19,7 @@ bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
 
 forwarding_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
+config_utils.load_users(bot)
 CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
 
 scheduled_messages_utils.start_scheduled_threads(bot)
