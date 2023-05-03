@@ -7,7 +7,6 @@ import time
 import pytz
 import telebot
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
-from typing import Dict
 
 import db_utils
 import forwarding_utils
@@ -19,7 +18,7 @@ CALLBACK_PREFIX = "SCH"
 
 CURRENT_DATE_SYMBOL = "✅"
 
-SCHEDULED_THREADS: Dict[str, threading.Timer] = {}
+SCHEDULED_MESSAGES_LIST: list = []
 
 DATE_FORMAT = "%Y-%m-%d %H:%M"
 
@@ -48,12 +47,10 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 		scheduled_message_id, scheduled_channel_id, _ = scheduled_message
 		db_utils.update_scheduled_message(scheduled_message_id, scheduled_channel_id, send_time)
 
-		scheduled_thread_name = f"{main_message_id}:{main_channel_id}"
-		SCHEDULED_THREADS[scheduled_thread_name].cancel()
-		del SCHEDULED_THREADS[scheduled_thread_name]
-
-		scheduled_info = [main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time]
-		create_scheduled_message_timer(bot, scheduled_info)
+		for msg in SCHEDULED_MESSAGES_LIST:
+			message_id, channel_id, _, _, _ = msg
+			if message_id == main_message_id and channel_id == main_channel_id:
+				msg[4] = send_time
 		return
 
 	if send_time <= 0:
@@ -65,7 +62,18 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 	db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time)
 
 	scheduled_info = [main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time]
-	create_scheduled_message_timer(bot, scheduled_info)
+
+	insert_schedule_message_info(scheduled_info)
+
+
+def insert_schedule_message_info(scheduled_info):
+	send_time = scheduled_info[4]
+	for i in range(len(SCHEDULED_MESSAGES_LIST)):
+		current_send_time = SCHEDULED_MESSAGES_LIST[i][4]
+		if send_time < current_send_time:
+			SCHEDULED_MESSAGES_LIST.insert(i, scheduled_info)
+			return
+	SCHEDULED_MESSAGES_LIST.append(scheduled_info)
 
 
 def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
@@ -179,8 +187,8 @@ def generate_days_buttons(date_info=None):
 
 def generate_hours_buttons(current_date):
 	keyboard_rows = []
-	width = 6
-	height = 4
+	width = 4
+	height = 6
 
 	for i in range(height):
 		buttons_row = []
@@ -215,7 +223,7 @@ def generate_minutes_buttons(current_date, current_hour):
 	return InlineKeyboardMarkup(keyboard_rows)
 
 
-def scheduled_send_thread(bot: telebot.TeleBot, scheduled_message_info):
+def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 	main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time = scheduled_message_info
 	message = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
 	if message is None:
@@ -235,21 +243,38 @@ def scheduled_send_thread(bot: telebot.TeleBot, scheduled_message_info):
 	forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
 
 
-def create_scheduled_message_timer(bot: telebot.TeleBot, message_info: list):
-	main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time = message_info
-	start_timeout = send_time - time.time()
-	start_timeout = max(start_timeout, 0)
-	logging.info(f"Message {main_message_id}:{main_channel_id} will be sent in {start_timeout} seconds")
-
-	timer = threading.Timer(function=scheduled_send_thread, args=(bot, message_info,), interval=start_timeout)
-	SCHEDULED_THREADS[f"{main_message_id}:{main_channel_id}"] = timer
-	timer.start()
+def scheduled_message_comparison_func(msg):
+	send_time = msg[4]
+	return send_time
 
 
-def start_scheduled_threads(bot: telebot.TeleBot):
+def get_scheduled_messages_for_send():
+	filtered_messages = []
+	current_time = time.time()
+	for msg in SCHEDULED_MESSAGES_LIST:
+		if msg[4] < current_time:
+			filtered_messages.append(msg)
+		else:
+			break
+	return filtered_messages
+
+
+def start_scheduled_thread(bot: telebot.TeleBot):
 	scheduled_messages = db_utils.get_all_scheduled_messages()
-	for message_info in scheduled_messages:
-		create_scheduled_message_timer(bot, message_info)
+	for m in scheduled_messages:
+		SCHEDULED_MESSAGES_LIST.append(list(m))
+	SCHEDULED_MESSAGES_LIST.sort(key=scheduled_message_comparison_func)
+
+	threading.Thread(target=schedule_loop_thread, args=(bot,)).start()
+
+
+def schedule_loop_thread(bot: telebot.TeleBot):
+	while 1:
+		for_send = get_scheduled_messages_for_send()
+		for msg_info in for_send:
+			send_scheduled_message(bot, msg_info)
+			SCHEDULED_MESSAGES_LIST.remove(msg_info)
+		time.sleep(1)
 
 
 def update_scheduled_message(bot: telebot.TeleBot, scheduled_message_info: list, post_data: telebot.types.Message, hashtags: list):
@@ -260,9 +285,11 @@ def update_scheduled_message(bot: telebot.TeleBot, scheduled_message_info: list,
 
 		main_message_id = post_data.message_id
 		main_channel_id = post_data.chat.id
-		scheduled_thread_name = f"{main_message_id}:{main_channel_id}"
-		SCHEDULED_THREADS[scheduled_thread_name].cancel()
-		del SCHEDULED_THREADS[scheduled_thread_name]
+
+		for msg in SCHEDULED_MESSAGES_LIST:
+			message_id, channel_id, _, _, _ = msg
+			if message_id == main_message_id and channel_id == main_channel_id:
+				msg[4] = send_time
 		return
 
 	post_data.message_id = scheduled_message_id

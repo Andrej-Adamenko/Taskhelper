@@ -21,7 +21,7 @@ forwarding_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
 CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
 
-scheduled_messages_utils.start_scheduled_threads(bot)
+scheduled_messages_utils.start_scheduled_thread(bot)
 
 if APP_API_ID and APP_API_HASH:
 	pyrogram_app = messages_export_utils.init_pyrogram(APP_API_ID, APP_API_HASH, BOT_TOKEN)
