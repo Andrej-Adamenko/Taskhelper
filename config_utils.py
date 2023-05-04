@@ -30,6 +30,7 @@ APP_API_HASH: str = ""
 EXPORTED_DISCUSSION_CHATS: list = []
 SCHEDULED_STORAGE_CHAT_IDS: dict = {}
 TIMEZONE_NAME: str = "UTC"
+USER_DATA: dict = {}
 
 CHAT_IDS_TO_IGNORE: list = []
 
@@ -67,4 +68,19 @@ def update_config(updated_config_data):
 
 	with open(CONFIG_FILE, "w", encoding="utf-8") as f:
 		json.dump(current_config, f, indent=4, ensure_ascii=False)
+
+
+def load_users(bot: telebot.TeleBot):
+	users = set()
+	for main_channel_id in USER_DATA:
+		for user_tag in USER_DATA[main_channel_id]:
+			users.add(USER_DATA[main_channel_id][user_tag])
+			user_id = USER_DATA[main_channel_id][user_tag]
+			try:
+				user_info = bot.get_chat(user_id)
+			except Exception as E:
+				logging.error(f"Error during loading info about user {user_id}, {E}")
+				continue
+			if user_info:
+				USER_DATA[main_channel_id][user_tag] = user_info
 

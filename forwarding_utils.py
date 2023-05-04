@@ -6,13 +6,13 @@ import telebot
 from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEntity
 
+import config_utils
 import db_utils
 import hashtag_utils
 import scheduled_messages_utils
 import utils
 
-from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID, \
-	AUTO_FORWARDING_ENABLED
+from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID
 
 CALLBACK_PREFIX = "FWRD"
 
@@ -46,9 +46,9 @@ class CB_TYPES:
 
 def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	try:
-		forwarded_message = bot.forward_message(chat_id=DUMP_CHAT_ID, from_chat_id=chat_id,
+		forwarded_message = bot.forward_message(chat_id=config_utils.DUMP_CHAT_ID, from_chat_id=chat_id,
 												message_id=message_id)
-		bot.delete_message(chat_id=DUMP_CHAT_ID, message_id=forwarded_message.message_id)
+		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
@@ -355,11 +355,11 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 
 	if callback_type == CB_TYPES.CHANGE_SUBCHANNEL:
 		subchannel_name = other_data[0]
-		change_subchannel_button_event(bot, call.message, subchannel_name)
+		change_subchannel_button_event(bot, call, subchannel_name)
 	elif callback_type == CB_TYPES.CLOSE:
-		change_state_button_event(bot, call.message, False)
+		change_state_button_event(bot, call, False)
 	elif callback_type == CB_TYPES.OPEN:
-		change_state_button_event(bot, call.message, True)
+		change_state_button_event(bot, call, True)
 	elif callback_type == CB_TYPES.SAVE:
 		forward_and_add_inline_keyboard(bot, call.message, force_forward=True)
 	elif callback_type == CB_TYPES.SHOW_SUBCHANNELS:
@@ -368,22 +368,22 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 		show_priority_buttons(bot, call.message)
 	elif callback_type == CB_TYPES.CHANGE_PRIORITY:
 		priority = other_data[0]
-		change_priority_button_event(bot, call.message, priority)
+		change_priority_button_event(bot, call, priority)
 	elif callback_type == CB_TYPES.SHOW_CC:
 		show_cc_buttons(bot, call.message)
 	elif callback_type == CB_TYPES.TOGGLE_CC:
 		user = other_data[0]
-		toggle_cc_button_event(bot, call.message, user)
+		toggle_cc_button_event(bot, call, user)
 
 
-def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message, text: str):
+def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message, text: str, entities: list = None):
 	main_message_id = post_data.message_id
 	main_channel_id = post_data.chat.id
 	comment_message_id = db_utils.get_discussion_message_id(main_message_id, main_channel_id)
 	if comment_message_id:
 		main_channel_id_str = str(main_channel_id)
 		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
-		comment_msg = bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text)
+		comment_msg = bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text, entities=entities)
 		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, BOT_ID)
 
 
@@ -426,13 +426,14 @@ def update_show_buttons(post_data: telebot.types.Message, current_button_type: s
 			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE)
 
 
-def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, is_ticket_open: bool):
+def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, is_ticket_open: bool):
+	post_data = call.message
 	main_channel_id = post_data.chat.id
 
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
 	state_str = "opened" if is_ticket_open else "closed"
-	add_comment_to_ticket(bot, post_data, f"The ticket was {state_str}.")
+	add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} {state_str} the ticket.")
 
 	hashtags[0] = hashtag_utils.OPENED_TAG if is_ticket_open else hashtag_utils.CLOSED_TAG
 
@@ -448,7 +449,8 @@ def change_state_button_event(bot: telebot.TeleBot, post_data: telebot.types.Mes
 	forward_to_subchannel(bot, post_data, hashtags)
 
 
-def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_subchannel_name: str):
+def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, new_subchannel_name: str):
+	post_data = call.message
 	main_channel_id = post_data.chat.id
 
 	subchannel_user, subchannel_priority = new_subchannel_name.split(" ")
@@ -456,14 +458,17 @@ def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.type
 	original_post_data = copy.deepcopy(post_data)
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
-	comment_text = ""
-	if hashtags[1] != subchannel_user:
-		comment_text += f"The ticket was reassigned to \"{subchannel_user}\". "
-	if hashtags[-1] != subchannel_priority:
-		comment_text += f"The priority was changed to {subchannel_priority}. "
+	comment_text = f"{call.from_user.first_name} "
+	if hashtags[1] != subchannel_user and hashtags[-1] != subchannel_priority:
+		comment_text += f"reassigned the ticket to {{USER}}, and changed the priority to {subchannel_priority}."
+	elif hashtags[1] != subchannel_user:
+		comment_text += f"reassigned the ticket to {{USER}}."
+	elif hashtags[-1] != subchannel_priority:
+		comment_text += f"changed ticket's priority to {subchannel_priority}."
 
 	if comment_text:
-		add_comment_to_ticket(bot, post_data, comment_text)
+		text, entities = utils.insert_user_reference(main_channel_id, subchannel_user, comment_text)
+		add_comment_to_ticket(bot, post_data, text, entities)
 
 	if subchannel_user in hashtags[1:-1]:
 		hashtags.remove(subchannel_user)
@@ -477,13 +482,14 @@ def change_subchannel_button_event(bot: telebot.TeleBot, post_data: telebot.type
 	forward_to_subchannel(bot, post_data, hashtags)
 
 
-def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, new_priority: str):
+def change_priority_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, new_priority: str):
+	post_data = call.message
 	main_channel_id = post_data.chat.id
 
 	original_post_data = copy.deepcopy(post_data)
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
-	add_comment_to_ticket(bot, post_data, f"The priority was changed to {new_priority}. ")
+	add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} changed ticket's priority to {new_priority}. ")
 	hashtags[-1] = hashtag_utils.PRIORITY_TAG + new_priority
 
 	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
@@ -491,7 +497,8 @@ def change_priority_button_event(bot: telebot.TeleBot, post_data: telebot.types.
 	forward_to_subchannel(bot, post_data, hashtags)
 
 
-def toggle_cc_button_event(bot: telebot.TeleBot, post_data: telebot.types.Message, selected_user: str):
+def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, selected_user: str):
+	post_data = call.message
 	main_channel_id = post_data.chat.id
 
 	original_post_data = copy.deepcopy(post_data)
@@ -499,10 +506,13 @@ def toggle_cc_button_event(bot: telebot.TeleBot, post_data: telebot.types.Messag
 
 	if selected_user in hashtags:
 		hashtags.remove(selected_user)
-		add_comment_to_ticket(bot, post_data, f"User \"{selected_user}\" was removed from ticket's followers.")
+		comment_text = f"{call.from_user.first_name} removed {{USER}} from ticket's followers."
 	else:
 		hashtags.insert(-1, selected_user)
-		add_comment_to_ticket(bot, post_data, f"User \"{selected_user}\" was added to ticket's followers.")
+		comment_text = f"{call.from_user.first_name} added {{USER}} to ticket's followers."
+
+	text, entities = utils.insert_user_reference(main_channel_id, selected_user, comment_text)
+	add_comment_to_ticket(bot, post_data, text, entities)
 
 	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 	show_cc_buttons(bot, post_data)
@@ -521,7 +531,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 	add_control_buttons(bot, post_data, hashtags)
-	if AUTO_FORWARDING_ENABLED or force_forward:
+	if config_utils.AUTO_FORWARDING_ENABLED or force_forward:
 		forward_to_subchannel(bot, post_data, hashtags)
 
 

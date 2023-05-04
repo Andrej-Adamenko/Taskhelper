@@ -22,8 +22,6 @@ SCHEDULED_MESSAGES_LIST: list = []
 
 DATE_FORMAT = "%Y-%m-%d %H:%M"
 
-TIMEZONE = pytz.timezone(TIMEZONE_NAME)
-
 class CB_TYPES:
 	MONTH_CALENDAR = "CALENDAR"
 	SELECT_DAY = "DAY"
@@ -126,7 +124,8 @@ def schedule_message_event(bot: telebot.TeleBot, post_data: telebot.types.Messag
 	date, hour, minute = args
 	format_str = "%d.%m.%Y %H:%M"
 	dt = datetime.datetime.strptime(f"{date} {hour}:{minute}", format_str)
-	dt = TIMEZONE.localize(dt)
+	timezone = pytz.timezone(TIMEZONE_NAME)
+	dt = timezone.localize(dt)
 	send_time = int(dt.astimezone(pytz.UTC).timestamp())
 
 	schedule_message(bot, post_data, send_time)
@@ -147,7 +146,8 @@ def generate_schedule_button():
 
 
 def generate_days_buttons(date_info=None):
-	now = datetime.datetime.now(tz=TIMEZONE)
+	timezone = pytz.timezone(TIMEZONE_NAME)
+	now = datetime.datetime.now(tz=timezone)
 
 	if date_info:
 		current_month, current_year = date_info

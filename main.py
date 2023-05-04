@@ -1,6 +1,7 @@
 import logging
 import telebot
 
+import command_utils
 import config_utils
 import forwarding_utils
 import interval_updating_utils
@@ -19,8 +20,10 @@ bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
 
 forwarding_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
+config_utils.load_users(bot)
 CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
 
+command_utils.initialize_bot_commands(bot)
 scheduled_messages_utils.start_scheduled_thread(bot)
 
 if APP_API_ID and APP_API_HASH:
@@ -151,6 +154,11 @@ def handle_keyboard_callback(call: telebot.types.CallbackQuery):
 		post_link_utils.handle_callback(bot, call)
 	elif call.data.startswith(scheduled_messages_utils.CALLBACK_PREFIX):
 		scheduled_messages_utils.handle_callback(bot, call)
+
+
+@bot.message_handler(func=lambda msg: msg.text.startswith("/"), chat_types=["private"])
+def handle_bot_command(msg_data: telebot.types.Message):
+	command_utils.handle_command(bot, msg_data)
 
 
 bot.infinity_polling()
