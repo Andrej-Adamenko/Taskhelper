@@ -3,6 +3,7 @@ import time
 
 from telebot.apihelper import ApiTelegramException
 
+import config_utils
 import utils
 import db_utils
 import forwarding_utils
@@ -84,7 +85,7 @@ def interval_update_thread(bot):
 			check_all_messages(bot, main_channel_id, discussion_chat_id)
 
 		logging.info("Interval check complete")
-		time.sleep(UPDATE_INTERVAL * 60)
+		time.sleep(config_utils.UPDATE_INTERVAL * 60)
 
 
 def get_last_message(bot, channel_id):

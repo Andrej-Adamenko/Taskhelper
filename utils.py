@@ -4,8 +4,8 @@ from typing import List
 import telebot.types
 from telebot.apihelper import ApiTelegramException
 
-from config_utils import MAX_BUTTONS_IN_ROW, DISCUSSION_CHAT_DATA, SUBCHANNEL_DATA, DUMP_CHAT_ID, \
-	SCHEDULED_STORAGE_CHAT_IDS, USER_DATA
+import config_utils
+from config_utils import MAX_BUTTONS_IN_ROW, DISCUSSION_CHAT_DATA, SUBCHANNEL_DATA, SCHEDULED_STORAGE_CHAT_IDS, USER_DATA
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 
@@ -163,7 +163,7 @@ def get_all_subchannel_ids():
 
 
 def get_ignored_chat_ids():
-	ignored_chat_ids = [DUMP_CHAT_ID]
+	ignored_chat_ids = [config_utils.DUMP_CHAT_ID]
 	ignored_chat_ids += list(DISCUSSION_CHAT_DATA.values())
 	ignored_chat_ids += list(SCHEDULED_STORAGE_CHAT_IDS.values())
 	ignored_chat_ids += get_all_subchannel_ids()

@@ -6,13 +6,13 @@ import telebot
 from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEntity
 
+import config_utils
 import db_utils
 import hashtag_utils
 import scheduled_messages_utils
 import utils
 
-from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID, \
-	AUTO_FORWARDING_ENABLED
+from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID
 
 CALLBACK_PREFIX = "FWRD"
 
@@ -46,9 +46,9 @@ class CB_TYPES:
 
 def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	try:
-		forwarded_message = bot.forward_message(chat_id=DUMP_CHAT_ID, from_chat_id=chat_id,
+		forwarded_message = bot.forward_message(chat_id=config_utils.DUMP_CHAT_ID, from_chat_id=chat_id,
 												message_id=message_id)
-		bot.delete_message(chat_id=DUMP_CHAT_ID, message_id=forwarded_message.message_id)
+		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
@@ -531,7 +531,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
 	add_control_buttons(bot, post_data, hashtags)
-	if AUTO_FORWARDING_ENABLED or force_forward:
+	if config_utils.AUTO_FORWARDING_ENABLED or force_forward:
 		forward_to_subchannel(bot, post_data, hashtags)
 
 
