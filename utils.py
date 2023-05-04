@@ -200,15 +200,18 @@ def insert_user_reference(main_channel_id: int, user_tag: str, text: str):
 		text = text[:placeholder_position] + user_tag + text[placeholder_position:]
 		return text, None
 
-	user_obj = user_tags[user_tag]
-	if user_obj.username:
-		user_reference_text = f"@{user_obj.username}"
+	user = user_tags[user_tag]
+	if type(user) == str:
+		text = text[:placeholder_position] + user + text[placeholder_position:]
+		return text, None
+	elif user.username:
+		user_reference_text = f"@{user.username}"
 		text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
 		return text, None
 	else:
-		user_reference_text = user_obj.first_name
+		user_reference_text = user.first_name
 		text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
-		mentioned_user = {"id": user_obj.id, "first_name": user_obj.first_name, "last_name": user_obj.last_name}
+		mentioned_user = {"id": user.id, "first_name": user.first_name, "last_name": user.last_name}
 		entity = telebot.types.MessageEntity(offset=placeholder_position, length=len(user_reference_text),
 		                                     type="text_mention", user=mentioned_user)
 		return text, [entity]

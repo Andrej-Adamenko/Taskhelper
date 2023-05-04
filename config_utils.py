@@ -11,7 +11,7 @@ if not os.path.exists(CONFIG_FILE):
 	logging.error("Config file not found")
 	exit()
 
-MANDATORY_KEYS = ["BOT_TOKEN", "DUMP_CHAT_ID"]
+MANDATORY_KEYS = ["BOT_TOKEN", "ADMIN_USERS"]
 
 BOT_TOKEN: str = ""
 DUMP_CHAT_ID: str = ""
@@ -31,6 +31,7 @@ EXPORTED_DISCUSSION_CHATS: list = []
 SCHEDULED_STORAGE_CHAT_IDS: dict = {}
 TIMEZONE_NAME: str = "UTC"
 USER_DATA: dict = {}
+ADMIN_USERS: list = []
 
 CHAT_IDS_TO_IGNORE: list = []
 
@@ -71,11 +72,11 @@ def update_config(updated_config_data):
 
 
 def load_users(bot: telebot.TeleBot):
-	users = set()
 	for main_channel_id in USER_DATA:
 		for user_tag in USER_DATA[main_channel_id]:
-			users.add(USER_DATA[main_channel_id][user_tag])
 			user_id = USER_DATA[main_channel_id][user_tag]
+			if type(user_id) != int:
+				continue
 			try:
 				user_info = bot.get_chat(user_id)
 			except Exception as E:

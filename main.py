@@ -158,6 +158,12 @@ def handle_keyboard_callback(call: telebot.types.CallbackQuery):
 
 @bot.message_handler(func=lambda msg: msg.text.startswith("/"), chat_types=["private"])
 def handle_bot_command(msg_data: telebot.types.Message):
+	user_id = msg_data.from_user.id
+	username = msg_data.from_user.username
+	if username:
+		username = f"@{username}"
+	if user_id not in config_utils.ADMIN_USERS and username not in config_utils.ADMIN_USERS:
+		return
 	command_utils.handle_command(bot, msg_data)
 
 

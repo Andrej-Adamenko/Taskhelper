@@ -165,7 +165,11 @@ def generate_days_buttons(date_info=None):
 
 	current_month_button = InlineKeyboardButton(f"{current_year} {calendar.month_name[current_month]}", callback_data="_")
 
-	keyboard_rows = [[left_arrow_button, current_month_button, right_arrow_button]]
+	back_button_callback = utils.create_callback_str(forwarding_utils.CALLBACK_PREFIX, forwarding_utils.CB_TYPES.SAVE)
+	back_button = InlineKeyboardButton("Back", callback_data=back_button_callback)
+
+	keyboard_rows = [[back_button]]
+	keyboard_rows += [[left_arrow_button, current_month_button, right_arrow_button]]
 
 	month_list = calendar.monthcalendar(current_year, current_month)
 	for week in month_list:
@@ -186,7 +190,10 @@ def generate_days_buttons(date_info=None):
 
 
 def generate_hours_buttons(current_date):
-	keyboard_rows = []
+	back_button_callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.MONTH_CALENDAR)
+	back_button = InlineKeyboardButton("Back", callback_data=back_button_callback)
+
+	keyboard_rows = [[back_button]]
 	width = 4
 	height = 6
 
@@ -205,7 +212,10 @@ def generate_hours_buttons(current_date):
 
 
 def generate_minutes_buttons(current_date, current_hour):
-	keyboard_rows = []
+	back_button_callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SELECT_DAY, current_date)
+	back_button = InlineKeyboardButton("Back", callback_data=back_button_callback)
+
+	keyboard_rows = [[back_button]]
 	width = 2
 	height = 6
 
@@ -232,15 +242,18 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 	message.message_id = main_message_id
 	message.chat.id = main_channel_id
 
-	db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
 	bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
 
 	hashtags, post_data = hashtag_utils.extract_hashtags(message, main_channel_id)
 	hashtags[0] = hashtag_utils.OPENED_TAG
 
+	db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
+
 	forwarding_utils.rearrange_hashtags(bot, post_data, hashtags)
 	forwarding_utils.add_control_buttons(bot, post_data, hashtags)
 	forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
+
+	SCHEDULED_MESSAGES_LIST.remove(scheduled_message_info)
 
 
 def scheduled_message_comparison_func(msg):
@@ -272,8 +285,10 @@ def schedule_loop_thread(bot: telebot.TeleBot):
 	while 1:
 		for_send = get_scheduled_messages_for_send()
 		for msg_info in for_send:
-			send_scheduled_message(bot, msg_info)
-			SCHEDULED_MESSAGES_LIST.remove(msg_info)
+			try:
+				send_scheduled_message(bot, msg_info)
+			except Exception as E:
+				logging.error(f"Exception during sending scheduled message: {E}")
 		time.sleep(1)
 
 

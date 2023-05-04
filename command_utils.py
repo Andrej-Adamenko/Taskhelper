@@ -1,3 +1,5 @@
+import copy
+
 import pytz
 import telebot
 
@@ -91,11 +93,13 @@ def handle_main_channel_change(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 
 	if msg_data.text.startswith("/add_main_channel"):
 		if channel_id in config_utils.CHANNEL_IDS:
+			bot.send_message(chat_id=msg_data.chat.id, text="This channel already added.")
 			return
 		config_utils.CHANNEL_IDS.append(channel_id)
 		bot.send_message(chat_id=msg_data.chat.id, text="Main channel was successfully added.")
 	elif msg_data.text.startswith("/remove_main_channel"):
 		if channel_id not in config_utils.CHANNEL_IDS:
+			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
 		config_utils.CHANNEL_IDS.remove(channel_id)
 		bot.send_message(chat_id=msg_data.chat.id, text="Main channel was successfully removed.")
@@ -136,8 +140,10 @@ def handle_subchannel_change(bot: telebot.TeleBot, msg_data: telebot.types.Messa
 			return
 
 		if main_channel_id not in config_utils.SUBCHANNEL_DATA:
+			bot.send_message(chat_id=msg_data.chat.id, text="Main channel not found in subchannel data.")
 			return
 		if tag not in config_utils.SUBCHANNEL_DATA[main_channel_id]:
+			bot.send_message(chat_id=msg_data.chat.id, text="Tag not found in subchannel data.")
 			return
 		del config_utils.SUBCHANNEL_DATA[main_channel_id][tag]
 		bot.send_message(chat_id=msg_data.chat.id, text="Subchannel data was successfully updated.")
@@ -149,7 +155,6 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 	if msg_data.text.startswith("/set_user_tag"):
 		try:
 			main_channel_id, tag, user = arguments.split(" ")
-			main_channel_id = int(main_channel_id)
 		except ValueError:
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
 			return
@@ -163,10 +168,9 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 
 		config_utils.USER_DATA[main_channel_id][tag] = user
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was successfully updated.")
-	elif msg_data.text.startswith("/remove_subchannel_tag"):
+	elif msg_data.text.startswith("/remove_user_tag"):
 		try:
 			main_channel_id, tag = arguments.split(" ")
-			main_channel_id = int(main_channel_id)
 		except ValueError:
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
 			return
@@ -176,13 +180,21 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			return
 
 		if main_channel_id not in config_utils.USER_DATA:
+			bot.send_message(chat_id=msg_data.chat.id, text="Main channel not found in user data.")
 			return
 		if tag not in config_utils.USER_DATA[main_channel_id]:
+			bot.send_message(chat_id=msg_data.chat.id, text="Tag not found in user data.")
 			return
 		del config_utils.USER_DATA[main_channel_id][tag]
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was removed updated.")
 
-	config_utils.update_config({"USER_DATA": config_utils.USER_DATA}) # OBJECTS in user data
+	config_utils.load_users(bot)
+	user_data = copy.deepcopy(config_utils.USER_DATA)
+	for channel_id in user_data:
+		for tag in user_data[channel_id]:
+			if type(user_data[channel_id][tag]) == telebot.types.Chat:
+				user_data[channel_id][tag] = user_data[channel_id][tag].id
+	config_utils.update_config({"USER_DATA": user_data})
 
 
 def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
