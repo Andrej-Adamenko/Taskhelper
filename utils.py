@@ -165,7 +165,9 @@ def get_all_subchannel_ids():
 def get_ignored_chat_ids():
 	ignored_chat_ids = [config_utils.DUMP_CHAT_ID]
 	ignored_chat_ids += list(DISCUSSION_CHAT_DATA.values())
-	ignored_chat_ids += list(SCHEDULED_STORAGE_CHAT_IDS.values())
+	for main_channel_id in SCHEDULED_STORAGE_CHAT_IDS:
+		for tag in SCHEDULED_STORAGE_CHAT_IDS[main_channel_id]:
+			ignored_chat_ids.append(SCHEDULED_STORAGE_CHAT_IDS[main_channel_id][tag])
 	ignored_chat_ids += get_all_subchannel_ids()
 
 	return ignored_chat_ids

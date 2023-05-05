@@ -32,7 +32,7 @@ class CB_TYPES:
 	SCHEDULE_MESSAGE = "SCHEDULE"
 
 
-def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_time: int):
+def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_time: int, dt: datetime.datetime):
 	main_message_id = message.message_id
 	main_channel_id = message.chat.id
 
@@ -40,34 +40,49 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 	if main_channel_id_str not in SCHEDULED_STORAGE_CHAT_IDS:
 		return
 
-	scheduled_message = db_utils.get_scheduled_message(main_message_id, main_channel_id)
-	if scheduled_message:
-		scheduled_message_id, scheduled_channel_id, _ = scheduled_message
-		db_utils.update_scheduled_message(scheduled_message_id, scheduled_channel_id, send_time)
+	scheduled_messages = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
+	if scheduled_messages:
+		db_utils.update_scheduled_message(main_message_id, main_channel_id, send_time)
 
 		for msg in SCHEDULED_MESSAGES_LIST:
-			message_id, channel_id, _, _, _ = msg
+			message_id, channel_id, _ = msg
 			if message_id == main_message_id and channel_id == main_channel_id:
-				msg[4] = send_time
+				msg[2] = send_time
+
+		hashtags, message = hashtag_utils.extract_hashtags(message, main_channel_id, True)
+		hashtags[0] = hashtag_utils.SCHEDULED_TAG + " " + dt.strftime(DATE_FORMAT)
+		forwarding_utils.rearrange_hashtags(bot, message, hashtags)
+
+		forwarding_utils.add_control_buttons(bot, message, hashtags)
+		forwarding_utils.forward_to_subchannel(bot, message, hashtags)
 		return
 
 	if send_time <= 0:
 		return
 
-	scheduled_storage_id = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str]
-	copied_message = bot.copy_message(chat_id=scheduled_storage_id, from_chat_id=main_channel_id, message_id=main_message_id)
-	scheduled_message_id = copied_message.message_id
-	db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time)
+	hashtags, message = hashtag_utils.extract_hashtags(message, main_channel_id, True)
+	hashtags[0] = hashtag_utils.SCHEDULED_TAG + " " + dt.strftime(DATE_FORMAT)
+	forwarding_utils.rearrange_hashtags(bot, message, hashtags)
 
-	scheduled_info = [main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time]
+	for user_tag in hashtags[1:-1]:
+		if user_tag not in SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str]:
+			continue
+		scheduled_storage_id = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str][user_tag]
+		copied_message = bot.copy_message(chat_id=scheduled_storage_id, from_chat_id=main_channel_id, message_id=main_message_id)
+		scheduled_message_id = copied_message.message_id
+		db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time)
 
+	forwarding_utils.add_control_buttons(bot, message, hashtags)
+	forwarding_utils.forward_to_subchannel(bot, message, hashtags)
+
+	scheduled_info = [main_message_id, main_channel_id, send_time]
 	insert_schedule_message_info(scheduled_info)
 
 
 def insert_schedule_message_info(scheduled_info):
-	send_time = scheduled_info[4]
+	send_time = scheduled_info[2]
 	for i in range(len(SCHEDULED_MESSAGES_LIST)):
-		current_send_time = SCHEDULED_MESSAGES_LIST[i][4]
+		current_send_time = SCHEDULED_MESSAGES_LIST[i][2]
 		if send_time < current_send_time:
 			SCHEDULED_MESSAGES_LIST.insert(i, scheduled_info)
 			return
@@ -128,15 +143,7 @@ def schedule_message_event(bot: telebot.TeleBot, post_data: telebot.types.Messag
 	dt = timezone.localize(dt)
 	send_time = int(dt.astimezone(pytz.UTC).timestamp())
 
-	schedule_message(bot, post_data, send_time)
-
-	main_channel_id = post_data.chat.id
-	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
-	hashtags[0] = hashtag_utils.SCHEDULED_TAG + " " + dt.strftime(DATE_FORMAT)
-
-	forwarding_utils.rearrange_hashtags(bot, post_data, hashtags)
-	forwarding_utils.add_control_buttons(bot, post_data, hashtags)
-	forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
+	schedule_message(bot, post_data, send_time, dt)
 
 
 def generate_schedule_button():
@@ -234,7 +241,7 @@ def generate_minutes_buttons(current_date, current_hour):
 
 
 def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
-	main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time = scheduled_message_info
+	main_message_id, main_channel_id, send_time = scheduled_message_info
 	message = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
 	if message is None:
 		return
@@ -242,12 +249,22 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 	message.message_id = main_message_id
 	message.chat.id = main_channel_id
 
-	bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
-
 	hashtags, post_data = hashtag_utils.extract_hashtags(message, main_channel_id)
+
+	scheduled_messages = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
+	if not scheduled_messages:
+		SCHEDULED_MESSAGES_LIST.remove(scheduled_message_info)
+		forwarding_utils.add_control_buttons(bot, post_data, hashtags)
+		forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
+		return
+
+	for msg in scheduled_messages:
+		scheduled_message_id, scheduled_channel_id, send_time = msg
+		bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
+
 	hashtags[0] = hashtag_utils.OPENED_TAG
 
-	db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
+	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
 
 	forwarding_utils.rearrange_hashtags(bot, post_data, hashtags)
 	forwarding_utils.add_control_buttons(bot, post_data, hashtags)
@@ -257,7 +274,7 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 
 
 def scheduled_message_comparison_func(msg):
-	send_time = msg[4]
+	send_time = msg[2]
 	return send_time
 
 
@@ -265,7 +282,7 @@ def get_scheduled_messages_for_send():
 	filtered_messages = []
 	current_time = time.time()
 	for msg in SCHEDULED_MESSAGES_LIST:
-		if msg[4] < current_time:
+		if msg[2] < current_time:
 			filtered_messages.append(msg)
 		else:
 			break
@@ -275,7 +292,8 @@ def get_scheduled_messages_for_send():
 def start_scheduled_thread(bot: telebot.TeleBot):
 	scheduled_messages = db_utils.get_all_scheduled_messages()
 	for m in scheduled_messages:
-		SCHEDULED_MESSAGES_LIST.append(list(m))
+		main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time = m
+		SCHEDULED_MESSAGES_LIST.append([main_message_id, main_channel_id, send_time])
 	SCHEDULED_MESSAGES_LIST.sort(key=scheduled_message_comparison_func)
 
 	threading.Thread(target=schedule_loop_thread, args=(bot,)).start()
@@ -292,22 +310,48 @@ def schedule_loop_thread(bot: telebot.TeleBot):
 		time.sleep(1)
 
 
-def update_scheduled_message(bot: telebot.TeleBot, scheduled_message_info: list, post_data: telebot.types.Message, hashtags: list):
-	scheduled_message_id, scheduled_channel_id, send_time = scheduled_message_info
-	if hashtag_utils.CLOSED_TAG in hashtags:
-		bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
-		db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
+def update_scheduled_messages(bot: telebot.TeleBot, scheduled_messages_info: list, post_data: telebot.types.Message, hashtags: list):
+	_, _, send_time = scheduled_messages_info[0]
 
-		main_message_id = post_data.message_id
-		main_channel_id = post_data.chat.id
+	main_message_id = post_data.message_id
+	main_channel_id = post_data.chat.id
+
+	if hashtag_utils.CLOSED_TAG in hashtags:
+		for msg in scheduled_messages_info:
+			scheduled_message_id, scheduled_channel_id, _ = msg
+			bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
+		db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
 
 		for msg in SCHEDULED_MESSAGES_LIST:
-			message_id, channel_id, _, _, _ = msg
+			message_id, channel_id, _ = msg
 			if message_id == main_message_id and channel_id == main_channel_id:
-				msg[4] = send_time
+				msg[2] = send_time
 		return
 
-	post_data.message_id = scheduled_message_id
-	post_data.chat.id = scheduled_channel_id
-	utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities)
+	main_channel_id_str = str(main_channel_id)
+	storage_channels = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str]
+
+	for msg in scheduled_messages_info:
+		scheduled_message_id, scheduled_channel_id, _ = msg
+		user_tag = utils.get_key_by_value(storage_channels, scheduled_channel_id)
+		if user_tag not in hashtags:
+			bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
+			db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
+			scheduled_messages_info.remove(msg)
+
+	hashtag_scheduled_channels = [m[1] for m in scheduled_messages_info]
+	for user_tag in hashtags[1:-1]:
+		if user_tag not in storage_channels:
+			continue
+		scheduled_storage_id = storage_channels[user_tag]
+		if scheduled_storage_id not in hashtag_scheduled_channels:
+			copied_message = bot.copy_message(chat_id=scheduled_storage_id, from_chat_id=main_channel_id, message_id=main_message_id)
+			scheduled_message_id = copied_message.message_id
+			db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time)
+
+	for msg in scheduled_messages_info:
+		scheduled_message_id, scheduled_channel_id, _ = msg
+		post_data.message_id = scheduled_message_id
+		post_data.chat.id = scheduled_channel_id
+		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities)
 

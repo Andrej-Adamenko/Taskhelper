@@ -80,9 +80,9 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 				db_utils.delete_copied_message(forwarded_msg_id, forwarded_channel_id)
 			logging.info(f"Exception during delete_message [{forwarded_msg_id}, {forwarded_channel_id}] - {E}")
 
-	scheduled_message = db_utils.get_scheduled_message(message_id, main_channel_id)
-	if scheduled_message:
-		scheduled_messages_utils.update_scheduled_message(bot, scheduled_message, post_data, hashtags)
+	scheduled_messages = db_utils.get_scheduled_messages(message_id, main_channel_id)
+	if scheduled_messages:
+		scheduled_messages_utils.update_scheduled_messages(bot, scheduled_messages, post_data, hashtags)
 		return
 
 	if hashtag_utils.OPENED_TAG not in hashtags:

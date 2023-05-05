@@ -47,7 +47,8 @@ def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, a
 	help_text += "Example with username: /remove_user_tag -100987987987 aa\n\n"
 	help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — changes default subchannel\n"
 	help_text += "Example: /set_user_tag -100987987987 aa 1\n\n"
-	help_text += "/set_storage_channel <MAIN_CHANNEL_ID> <STORAGE_CHANNEL_ID> — changes storage channel for scheduled messages\n"
+	help_text += "/set_storage_channel <MAIN_CHANNEL_ID> <STORAGE_CHANNEL_ID> <TAG> — changes storage channel for scheduled messages\n"
+	help_text += "Example: /set_storage_channel -100987987987 -100432423423 aa\n\n"
 	bot.send_message(chat_id=msg_data.chat.id, text=help_text)
 
 
@@ -216,7 +217,7 @@ def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.
 
 def handle_set_storage_channel(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
 	try:
-		main_channel_id, storage_channel_id = arguments.split(" ")
+		main_channel_id, storage_channel_id, tag = arguments.split(" ")
 		storage_channel_id = int(storage_channel_id)
 	except ValueError:
 		bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
@@ -226,8 +227,12 @@ def handle_set_storage_channel(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 		bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 		return
 
-	config_utils.SCHEDULED_STORAGE_CHAT_IDS[main_channel_id] = storage_channel_id
-	bot.send_message(chat_id=msg_data.chat.id, text="Storage for scheduled messages was successfully changed.")
+	if main_channel_id not in config_utils.SCHEDULED_STORAGE_CHAT_IDS:
+		config_utils.SCHEDULED_STORAGE_CHAT_IDS[main_channel_id] = {}
+
+	config_utils.SCHEDULED_STORAGE_CHAT_IDS[main_channel_id][tag] = storage_channel_id
+
+	bot.send_message(chat_id=msg_data.chat.id, text="Storage for scheduled messages was successfully added.")
 	config_utils.update_config({"SCHEDULED_STORAGE_CHAT_IDS": config_utils.SCHEDULED_STORAGE_CHAT_IDS})
 
 
