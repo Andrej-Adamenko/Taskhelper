@@ -4,6 +4,9 @@ import pytz
 import telebot
 
 import config_utils
+import db_utils
+import hashtag_utils
+import interval_updating_utils
 import utils
 
 
@@ -48,6 +51,12 @@ def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, a
 	help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — changes default subchannel\n"
 	help_text += "Example: /set_user_tag -100987987987 aa 1\n\n"
 	help_text += "/set_storage_channel <MAIN_CHANNEL_ID> <STORAGE_CHANNEL_ID> — changes storage channel for scheduled messages\n"
+	help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — changes storage channel for scheduled messages\n"
+	help_text += "Available buttons: opened, closed, assigned, cc, schedule, check, priority\n"
+	help_text += "Example: /set_button_text opened Op\n\n"
+	help_text += "/set_hashtag_text <HASHTAG_NAME> <NEW_VALUE> — changes storage channel for scheduled messages\n"
+	help_text += "Available hashtags: opened, closed, scheduled, priority\n"
+	help_text += "Example: /set_hashtag_text opened Op\n\n"
 	bot.send_message(chat_id=msg_data.chat.id, text=help_text)
 
 
@@ -241,6 +250,82 @@ def handle_change_auto_forwarding(bot: telebot.TeleBot, msg_data: telebot.types.
 	config_utils.update_config({"AUTO_FORWARDING_ENABLED": config_utils.AUTO_FORWARDING_ENABLED})
 
 
+def handle_change_button_text(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
+	space_index = arguments.find(" ")
+	button_name = arguments[:space_index]
+	arguments = arguments[space_index + 1:]
+
+	if button_name == "opened":
+		config_utils.BUTTON_TEXTS["OPENED_TICKET"] = arguments
+	elif button_name == "closed":
+		config_utils.BUTTON_TEXTS["CLOSED_TICKET"] = arguments
+	elif button_name == "assigned":
+		config_utils.BUTTON_TEXTS["ASSIGNED_USER_PREFIX"] = arguments
+	elif button_name == "cc":
+		config_utils.BUTTON_TEXTS["CC"] = arguments
+	elif button_name == "schedule":
+		config_utils.BUTTON_TEXTS["SCHEDULE_MESSAGE"] = arguments
+	elif button_name == "check":
+		config_utils.BUTTON_TEXTS["CHECK"] = arguments
+	elif button_name == "priority":
+		no_priority, first_priority, second_priority, third_priority = arguments.split(" ")
+		config_utils.BUTTON_TEXTS["PRIORITIES"] = {
+			"-": no_priority,
+			"1": first_priority,
+			"2": second_priority,
+			"3": third_priority
+		}
+	else:
+		bot.send_message(chat_id=msg_data.chat.id, text=f"Unknown button name.")
+		return
+	bot.send_message(chat_id=msg_data.chat.id, text=f"Successfully updated button text.")
+	interval_updating_utils.start_interval_updating(bot)
+	config_utils.update_config({"BUTTON_TEXTS": config_utils.BUTTON_TEXTS})
+
+
+def handle_change_hashtag_text(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
+	tag_name, new_value = arguments.split(" ")
+
+	if config_utils.HASHTAGS_BEFORE_UPDATE is None:
+		config_utils.HASHTAGS_BEFORE_UPDATE = copy.deepcopy(config_utils.HASHTAGS)
+
+	if tag_name == "opened":
+		if hashtag_utils.OPENED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]:
+			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
+			return
+		config_utils.HASHTAGS["OPENED"] = new_value
+		hashtag_utils.OPENED_TAG = new_value
+	elif tag_name == "closed":
+		if hashtag_utils.CLOSED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]:
+			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
+			return
+		config_utils.HASHTAGS["CLOSED"] = new_value
+		hashtag_utils.CLOSED_TAG = new_value
+	elif tag_name == "scheduled":
+		if hashtag_utils.SCHEDULED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]:
+			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
+			return
+		config_utils.HASHTAGS["SCHEDULED"] = new_value
+		hashtag_utils.SCHEDULED_TAG = new_value
+	elif tag_name == "priority":
+		if hashtag_utils.PRIORITY_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]:
+			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
+			return
+		config_utils.HASHTAGS["PRIORITY"] = new_value
+		hashtag_utils.PRIORITY_TAG = new_value
+	else:
+		if config_utils.HASHTAGS_BEFORE_UPDATE == config_utils.HASHTAGS:
+			config_utils.HASHTAGS_BEFORE_UPDATE = None
+		bot.send_message(chat_id=msg_data.chat.id, text=f"Unknown hashtag name.")
+		return
+
+	bot.send_message(chat_id=msg_data.chat.id, text=f"Successfully changed hashtag text.")
+	interval_updating_utils.start_interval_updating(bot)
+	config_utils.update_config({"HASHTAGS": config_utils.HASHTAGS})
+	config_utils.update_config({"HASHTAGS_BEFORE_UPDATE": config_utils.HASHTAGS_BEFORE_UPDATE})
+
+
+
 COMMAND_LIST = [
 	["/help", "Command explanations", handle_help_command],
 	["/set_dump_chat_id", "Set dump chat id", handle_set_dump_chat_id],
@@ -256,5 +341,7 @@ COMMAND_LIST = [
 	["/set_storage_channel", "Set storage channel", handle_set_storage_channel],
 	["/enable_auto_forwarding", "Enables auto forwarding during scanning", handle_change_auto_forwarding],
 	["/disable_auto_forwarding", "Enables auto forwarding during scanning", handle_change_auto_forwarding],
+	["/set_button_text", "Set text of specified button", handle_change_button_text],
+	["/set_hashtag_text", "Set text of specified hashtag", handle_change_hashtag_text],
 ]
 

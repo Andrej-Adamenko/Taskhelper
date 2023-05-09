@@ -4,14 +4,15 @@ from typing import List
 import telebot
 from telebot.types import MessageEntity
 
+import config_utils
 import post_link_utils
 import utils
-from config_utils import DEFAULT_USER_DATA, SUBCHANNEL_DATA
+from config_utils import DEFAULT_USER_DATA, SUBCHANNEL_DATA, HASHTAGS
 
-PRIORITY_TAG = "п"
-OPENED_TAG = "о"
-CLOSED_TAG = "х"
-SCHEDULED_TAG = "з"
+PRIORITY_TAG = HASHTAGS["PRIORITY"]
+OPENED_TAG = HASHTAGS["OPENED"]
+CLOSED_TAG = HASHTAGS["CLOSED"]
+SCHEDULED_TAG = HASHTAGS["SCHEDULED"]
 
 
 def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
@@ -28,6 +29,10 @@ def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity],
 		entity = entities[entity_index]
 		if entity.type == "hashtag":
 			tag = text[entity.offset + 1:entity.offset + entity.length]
+			if config_utils.HASHTAGS_BEFORE_UPDATE and check_old_status_tag(tag):
+				status_tag_index = entity_index
+				continue
+
 			if tag == OPENED_TAG or tag == CLOSED_TAG or tag.startswith(SCHEDULED_TAG):
 				status_tag_index = entity_index
 				continue
@@ -38,10 +43,29 @@ def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity],
 					user_tag_indexes.insert(0, entity_index)
 					continue
 
+			if config_utils.HASHTAGS_BEFORE_UPDATE and check_old_priority_tag(tag):
+				priority_tag_index = entity_index
+				continue
+
 			if tag.startswith(PRIORITY_TAG):
 				priority_tag_index = entity_index
 
 	return status_tag_index, user_tag_indexes, priority_tag_index
+
+
+def check_old_status_tag(tag: str):
+	old_opened_tag = config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]
+	old_closed_tag = config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]
+	old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]
+	if tag == old_opened_tag or tag == old_closed_tag or tag.startswith(old_scheduled_tag):
+		return True
+	return False
+
+
+def check_old_priority_tag(tag: str):
+	if tag.startswith(config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]):
+		return True
+	return False
 
 
 def insert_default_user_hashtags(main_channel_id: int, hashtags: List[str]):
@@ -116,6 +140,9 @@ def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int, cut
 	if status_tag_index is None:
 		extracted_hashtags.append(None)
 	else:
+		if config_utils.HASHTAGS_BEFORE_UPDATE:
+			result = replace_old_status_tag(text, entities, status_tag_index)
+			text = result if result else text
 		check_scheduled_tag(text, entities, status_tag_index)
 		extracted_hashtags.append(entities[status_tag_index])
 
@@ -128,6 +155,9 @@ def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int, cut
 	if priority_tag_index is None:
 		extracted_hashtags.append(None)
 	else:
+		if config_utils.HASHTAGS_BEFORE_UPDATE:
+			result = replace_old_priority_tag(text, entities, priority_tag_index)
+			text = result if result else text
 		extracted_hashtags.append(entities[priority_tag_index])
 
 	for i in range(len(extracted_hashtags)):
@@ -151,3 +181,33 @@ def extract_hashtags(post_data: telebot.types.Message, main_channel_id: int, cut
 		utils.set_post_content(post_data, text, entities)
 
 	return extracted_hashtags, post_data
+
+
+def replace_old_status_tag(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+	tag = text[entities[entity_index].offset + 1:entities[entity_index].offset + entities[entity_index].length]
+	old_opened_tag = config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]
+	old_closed_tag = config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]
+	old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]
+	if tag == old_opened_tag or tag == old_closed_tag or tag.startswith(old_scheduled_tag):
+		position = entities[entity_index].offset
+		text, entities = utils.cut_entity_from_post(text, entities, entity_index)
+		if tag == old_opened_tag:
+			new_hashtag = OPENED_TAG
+		elif tag == old_closed_tag:
+			new_hashtag = CLOSED_TAG
+		else:
+			new_hashtag = SCHEDULED_TAG
+		text, entities = insert_hashtag_in_post(text, entities, "#" + new_hashtag, position)
+		return text
+
+
+def replace_old_priority_tag(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+	tag = text[entities[entity_index].offset + 1:entities[entity_index].offset + entities[entity_index].length]
+	old_priority_tag = config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]
+	if tag.startswith(old_priority_tag):
+		position = entities[entity_index].offset
+		text, entities = utils.cut_entity_from_post(text, entities, entity_index)
+		new_hashtag = PRIORITY_TAG + tag[len(old_priority_tag):]
+		text, entities = insert_hashtag_in_post(text, entities, "#" + new_hashtag, position)
+		return text
+

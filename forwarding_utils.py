@@ -16,21 +16,6 @@ from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DAT
 
 CALLBACK_PREFIX = "FWRD"
 
-CHECK_MARK_CHARACTER = "\U00002705"
-COMMENTS_CHARACTER = "\U0001F4AC"
-
-OPENED_TICKED_CHARACTER = "\U0001F7E9"
-CLOSED_TICKED_CHARACTER = "\U00002705"
-
-PRIORITY_VALUES = {
-	"-" : "\u26a0?",
-	"1": "\u0031\uFE0F\u20E3",
-	"2": "\u0032\uFE0F\u20E3",
-	"3": "\u0033\uFE0F\u20E3"
-}
-
-BOT_ID = 0
-
 
 class CB_TYPES:
 	CHANGE_SUBCHANNEL = "SUB"
@@ -164,17 +149,21 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 
 	if hashtags[0] == hashtag_utils.OPENED_TAG:
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CLOSE)
-		state_switch_button = InlineKeyboardButton(OPENED_TICKED_CHARACTER, callback_data=state_switch_callback_data)
+		state_btn_text = config_utils.BUTTON_TEXTS["OPENED_TICKET"]
+		state_switch_button = InlineKeyboardButton(state_btn_text, callback_data=state_switch_callback_data)
 	elif hashtags[0] and hashtags[0].startswith(hashtag_utils.SCHEDULED_TAG):
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CLOSE)
-		state_switch_button = InlineKeyboardButton(OPENED_TICKED_CHARACTER, callback_data=state_switch_callback_data)
+		state_btn_text = config_utils.BUTTON_TEXTS["OPENED_TICKET"]
+		state_switch_button = InlineKeyboardButton(state_btn_text, callback_data=state_switch_callback_data)
 	else:
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.OPEN)
-		state_switch_button = InlineKeyboardButton(CLOSED_TICKED_CHARACTER, callback_data=state_switch_callback_data)
+		state_btn_text = config_utils.BUTTON_TEXTS["CLOSED_TICKET"]
+		state_switch_button = InlineKeyboardButton(state_btn_text, callback_data=state_switch_callback_data)
 
 	reassign_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_SUBCHANNELS)
 	current_user = hashtags[1] if hashtags[1] is not None else "-"
-	reassign_button = InlineKeyboardButton(f"➔ {current_user}", callback_data=reassign_callback_data)
+	reassign_button_text = config_utils.BUTTON_TEXTS["ASSIGNED_USER_PREFIX"] + " " + current_user
+	reassign_button = InlineKeyboardButton(reassign_button_text, callback_data=reassign_callback_data)
 
 	priority_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_PRIORITIES)
 	current_priority = "-"
@@ -183,12 +172,12 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 		current_priority = current_priority[len(hashtag_utils.PRIORITY_TAG):]
 
 	priority_text = current_priority
-	if current_priority in PRIORITY_VALUES:
-		priority_text = PRIORITY_VALUES[current_priority]
+	if current_priority in config_utils.BUTTON_TEXTS["PRIORITIES"]:
+		priority_text = config_utils.BUTTON_TEXTS["PRIORITIES"][current_priority]
 	priority_button = InlineKeyboardButton(priority_text, callback_data=priority_callback_data)
 
 	cc_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_CC)
-	cc_button = InlineKeyboardButton(f"CC", callback_data=cc_callback_data)
+	cc_button = InlineKeyboardButton(config_utils.BUTTON_TEXTS["CC"], callback_data=cc_callback_data)
 
 	schedule_button = scheduled_messages_utils.generate_schedule_button()
 
@@ -239,7 +228,7 @@ def generate_subchannel_buttons(post_data: telebot.types.Message):
 		callback_str = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CHANGE_SUBCHANNEL, subchannel_name)
 		btn = InlineKeyboardButton("#" + subchannel_name, callback_data=callback_str)
 		if subchannel_name == current_subchannel_name:
-			btn.text += CHECK_MARK_CHARACTER
+			btn.text += config_utils.BUTTON_TEXTS["CHECK"]
 			btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE)
 		subchannel_buttons.append(btn)
 
@@ -279,7 +268,7 @@ def generate_priority_buttons(post_data: telebot.types.Message):
 		callback_str = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CHANGE_PRIORITY, priority)
 		btn = InlineKeyboardButton(priority, callback_data=callback_str)
 		if priority == current_priority:
-			btn.text += CHECK_MARK_CHARACTER
+			btn.text += config_utils.BUTTON_TEXTS["CHECK"]
 			btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE)
 		priority_buttons.append(btn)
 
@@ -318,7 +307,7 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 		callback_str = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_CC, user)
 		btn = InlineKeyboardButton("#" + user, callback_data=callback_str)
 		if user in user_tags[1:]:
-			btn.text += CHECK_MARK_CHARACTER
+			btn.text += config_utils.BUTTON_TEXTS["CHECK"]
 
 		subchannel_buttons.append(btn)
 
@@ -384,7 +373,7 @@ def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message
 		main_channel_id_str = str(main_channel_id)
 		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
 		comment_msg = bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text, entities=entities)
-		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, BOT_ID)
+		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, config_utils.BOT_ID)
 
 
 def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
@@ -443,7 +432,8 @@ def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.Callback
 		if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
 			callback_type = CB_TYPES.CLOSE if is_ticket_open else CB_TYPES.OPEN
 			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
-			button.text = OPENED_TICKED_CHARACTER if is_ticket_open else CLOSED_TICKED_CHARACTER
+			state_btn_text = config_utils.BUTTON_TEXTS["OPENED_TICKET" if is_ticket_open else "CLOSED_TICKET"]
+			button.text = state_btn_text
 			break
 	add_control_buttons(bot, post_data, hashtags)
 	forward_to_subchannel(bot, post_data, hashtags)
