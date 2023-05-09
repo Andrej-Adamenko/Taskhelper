@@ -8,6 +8,7 @@ import pytz
 import telebot
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+import config_utils
 import db_utils
 import forwarding_utils
 import hashtag_utils
@@ -15,8 +16,6 @@ import utils
 from config_utils import SCHEDULED_STORAGE_CHAT_IDS, TIMEZONE_NAME
 
 CALLBACK_PREFIX = "SCH"
-
-CURRENT_DATE_SYMBOL = "✅"
 
 SCHEDULED_MESSAGES_LIST: list = []
 
@@ -148,7 +147,8 @@ def schedule_message_event(bot: telebot.TeleBot, post_data: telebot.types.Messag
 
 def generate_schedule_button():
 	callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.MONTH_CALENDAR)
-	schedule_button = InlineKeyboardButton(f"🕒", callback_data=callback_data)
+	schedule_button_text = config_utils.BUTTON_TEXTS["SCHEDULE_MESSAGE"]
+	schedule_button = InlineKeyboardButton(schedule_button_text, callback_data=callback_data)
 	return schedule_button
 
 
@@ -184,7 +184,7 @@ def generate_days_buttons(date_info=None):
 		for day in week:
 			button_text = str(day) if day > 0 else " "
 			if now.day == day and now.month == current_month and now.year == current_year:
-				button_text = CURRENT_DATE_SYMBOL + button_text
+				button_text = config_utils.BUTTON_TEXTS["CHECK"] + button_text
 			callback = "_"
 			if day > 0:
 				callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SELECT_DAY, f"{day}.{current_date_str}")

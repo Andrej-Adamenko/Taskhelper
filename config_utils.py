@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import sys
+import typing
 
 import telebot
 
@@ -32,7 +33,31 @@ SCHEDULED_STORAGE_CHAT_IDS: dict = {}
 TIMEZONE_NAME: str = "UTC"
 USER_DATA: dict = {}
 ADMIN_USERS: list = []
+BUTTON_TEXTS: dict = {
+	"OPENED_TICKET": "\U0001F7E9",
+	"CLOSED_TICKET": "\U00002705",
+	"ASSIGNED_USER_PREFIX": "➔",
+	"CC": "CC",
+	"SCHEDULE_MESSAGE": "\U0001f552",
+	"CHECK": "\U00002705",
+	"PRIORITIES": {
+		"-": "\u26a0?",
+		"1": "\u0031\uFE0F\u20E3",
+		"2": "\u0032\uFE0F\u20E3",
+		"3": "\u0033\uFE0F\u20E3"
+	}
+}
 
+HASHTAGS: dict = {
+	"OPENED": "о",
+	"CLOSED": "х",
+	"SCHEDULED": "з",
+	"PRIORITY": "п",
+}
+
+HASHTAGS_BEFORE_UPDATE: typing.Optional[dict] = None
+
+BOT_ID: int = 0
 CHAT_IDS_TO_IGNORE: list = []
 
 config_json = {}
@@ -65,6 +90,10 @@ def update_config(updated_config_data):
 		current_config = json.load(f)
 
 	for config_key in updated_config_data:
+		if updated_config_data[config_key] is None:
+			if config_key in current_config:
+				del current_config[config_key]
+			continue
 		current_config[config_key] = updated_config_data[config_key]
 
 	with open(CONFIG_FILE, "w", encoding="utf-8") as f:

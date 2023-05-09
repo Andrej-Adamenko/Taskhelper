@@ -92,6 +92,15 @@ def create_tables():
 
 		CURSOR.execute(scheduled_messages_table_sql)
 
+	if not is_table_exists("interval_updates_status"):
+		interval_updates_status_table_sql = '''
+			CREATE TABLE "interval_updates_status" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_channel_id"	INT NOT NULL,
+				"current_message_id"    INT NOT NULL
+			); '''
+
+		CURSOR.execute(interval_updates_status_table_sql)
 
 	DB_CONNECTION.commit()
 
@@ -264,3 +273,47 @@ def get_all_scheduled_messages():
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
 	return result
+
+
+@db_thread_lock
+def get_finished_update_channels():
+	sql = "SELECT main_channel_id FROM interval_updates_status WHERE current_message_id <= 0"
+	CURSOR.execute(sql, ())
+	result = CURSOR.fetchall()
+	return result
+
+
+@db_thread_lock
+def get_unfinished_update_channel():
+	sql = "SELECT main_channel_id, current_message_id FROM interval_updates_status WHERE current_message_id > 0"
+	CURSOR.execute(sql, ())
+	result = CURSOR.fetchone()
+	if result:
+		return result
+
+
+@db_thread_lock
+def insert_or_update_channel_update_progress(main_channel_id, current_message_id):
+	if get_update_in_progress_channel(main_channel_id):
+		sql = "UPDATE interval_updates_status SET current_message_id=(?) WHERE main_channel_id=(?)"
+	else:
+		sql = "INSERT INTO interval_updates_status(current_message_id, main_channel_id) VALUES (?, ?)"
+	CURSOR.execute(sql, (current_message_id, main_channel_id))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_update_in_progress_channel(main_channel_id):
+	sql = "SELECT current_message_id FROM interval_updates_status WHERE main_channel_id=(?)"
+	CURSOR.execute(sql, (main_channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result
+
+
+@db_thread_lock
+def clear_updates_in_progress():
+	sql = "DELETE FROM interval_updates_status"
+	CURSOR.execute(sql, ())
+	DB_CONNECTION.commit()
+

@@ -11,14 +11,15 @@ import scheduled_messages_utils
 import utils
 
 import messages_export_utils
-from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH, CHANNEL_IDS, CHAT_IDS_TO_IGNORE, DISCUSSION_CHAT_DATA, SUPPORTED_CONTENT_TYPES
+from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH, CHANNEL_IDS, CHAT_IDS_TO_IGNORE, DISCUSSION_CHAT_DATA,\
+	SUPPORTED_CONTENT_TYPES, INTERVAL_UPDATE_START_DELAY
 
 db_utils.initialize_db()
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
 
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
 
-forwarding_utils.BOT_ID = bot.user.id
+config_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
 config_utils.load_users(bot)
 CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
@@ -30,7 +31,7 @@ if APP_API_ID and APP_API_HASH:
 	pyrogram_app = messages_export_utils.init_pyrogram(APP_API_ID, APP_API_HASH, BOT_TOKEN)
 	messages_export_utils.export_comments_from_discussion_chats(pyrogram_app)
 
-interval_updating_utils.start_interval_updating(bot)
+interval_updating_utils.start_interval_updating(bot, INTERVAL_UPDATE_START_DELAY)
 
 channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
