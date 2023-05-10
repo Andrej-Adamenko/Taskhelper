@@ -33,10 +33,10 @@ if APP_API_ID and APP_API_HASH:
 
 interval_updating_utils.start_interval_updating(bot, INTERVAL_UPDATE_START_DELAY)
 
-channel_id_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
+main_channel_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
 
 
-@bot.channel_post_handler(func=channel_id_filter, content_types=SUPPORTED_CONTENT_TYPES)
+@bot.channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_post(post_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
 
@@ -117,44 +117,64 @@ def handle_discussion_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(discussion_message_id, discussion_chat_id)
 
 
-@bot.edited_channel_post_handler(func=channel_id_filter, content_types=SUPPORTED_CONTENT_TYPES)
+@bot.edited_channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_edited_post(post_data: telebot.types.Message):
 	post_link_utils.update_post_link(bot, post_data)
 
 
 @bot.my_chat_member_handler()
 def handle_changed_permissions(message: telebot.types.ChatMemberUpdated):
-	chat_id = message.chat.id
-	if chat_id in CHAT_IDS_TO_IGNORE:
-		return
-
 	has_permissions = message.new_chat_member.can_edit_messages and message.new_chat_member.can_post_messages
-
-	if has_permissions and chat_id in CHANNEL_IDS:
-		return  # channel_id already added to config file
-
-	if not has_permissions and chat_id not in CHANNEL_IDS:
-		return  # channel_id already remove from config file
-
 	if has_permissions:
-		CHANNEL_IDS.append(chat_id)
-		post_link_utils.update_older_messages_question(bot, chat_id)
-		logging.info(f"Channel {chat_id} was added to config")
+		logging.info(f"Bot received permissions for channel {message.chat.id}")
 	else:
-		CHANNEL_IDS.remove(chat_id)
-		logging.info(f"Channel {chat_id} was removed from config")
-
-	config_utils.update_config({"CHANNEL_IDS": CHANNEL_IDS})
+		logging.info(f"Bot permissions for channel {message.chat.id} was removed")
 
 
-@bot.callback_query_handler(func=lambda call: channel_id_filter(call.message))
-def handle_keyboard_callback(call: telebot.types.CallbackQuery):
+@bot.callback_query_handler(func=lambda call: main_channel_filter(call.message))
+def handle_main_channel_keyboard_callback(call: telebot.types.CallbackQuery):
 	if call.data.startswith(forwarding_utils.CALLBACK_PREFIX):
 		forwarding_utils.handle_callback(bot, call)
 	elif call.data.startswith(post_link_utils.CALLBACK_PREFIX):
 		post_link_utils.handle_callback(bot, call)
 	elif call.data.startswith(scheduled_messages_utils.CALLBACK_PREFIX):
 		scheduled_messages_utils.handle_callback(bot, call)
+
+
+@bot.callback_query_handler(func=lambda call: call.message.chat.id in utils.get_all_subchannel_ids())
+def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
+	main_message_data = db_utils.get_main_message_from_copied(call.message.message_id, call.message.chat.id)
+	if main_message_data is None:
+		return
+	main_message_id, main_channel_id = main_message_data
+	subchannel_message_id = call.message.message_id
+	subchannel_id = call.message.chat.id
+	call.message.message_id = main_message_id
+	call.message.chat.id = main_channel_id
+
+	if call.data.startswith(forwarding_utils.CALLBACK_PREFIX):
+		forwarding_utils.handle_callback(bot, call, subchannel_id, subchannel_message_id)
+	if call.data.startswith(scheduled_messages_utils.CALLBACK_PREFIX):
+		scheduled_messages_utils.handle_callback(bot, call, subchannel_id, subchannel_message_id)
+
+
+@bot.callback_query_handler(func=lambda call: call.message.chat.id in utils.get_all_scheduled_storage_ids())
+def handle_scheduled_keyboard_callback(call: telebot.types.CallbackQuery):
+	main_message_data = db_utils.get_main_from_scheduled_message(call.message.message_id, call.message.chat.id)
+	if main_message_data is None:
+		return
+	main_message_id, main_channel_id = main_message_data
+	scheduled_message_id = call.message.message_id
+	scheduled_channel_id = call.message.chat.id
+
+	call.message.message_id = main_message_id
+	call.message.chat.id = main_channel_id
+
+	if call.data.startswith(forwarding_utils.CALLBACK_PREFIX):
+		forwarding_utils.handle_callback(bot, call, scheduled_channel_id, scheduled_message_id)
+	if call.data.startswith(scheduled_messages_utils.CALLBACK_PREFIX):
+		scheduled_messages_utils.handle_callback(bot, call, scheduled_channel_id, scheduled_message_id)
+
 
 
 @bot.message_handler(func=lambda msg: msg.text.startswith("/"), chat_types=["private"])

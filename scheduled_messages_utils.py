@@ -88,25 +88,25 @@ def insert_schedule_message_info(scheduled_info):
 	SCHEDULED_MESSAGES_LIST.append(scheduled_info)
 
 
-def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
+def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
 	callback_type, other_data = utils.parse_callback_str(call.data)
 
 	if callback_type == CB_TYPES.MONTH_CALENDAR:
 		keyboard = generate_days_buttons()
-		utils.edit_message_keyboard(bot, call.message, keyboard)
+		utils.edit_message_keyboard(bot, call.message, keyboard, chat_id=current_channel_id, message_id=current_message_id)
 	elif callback_type == CB_TYPES.SCHEDULE_MESSAGE:
 		schedule_message_event(bot, call.message, other_data)
 	elif callback_type == CB_TYPES.NEXT_MONTH:
-		change_month_event(bot, call.message, other_data, True)
+		change_month_event(bot, call.message, other_data, True, current_channel_id, current_message_id)
 	elif callback_type == CB_TYPES.PREVIOUS_MONTH:
-		change_month_event(bot, call.message, other_data, False)
+		change_month_event(bot, call.message, other_data, False, current_channel_id, current_message_id)
 	elif callback_type == CB_TYPES.SELECT_DAY:
-		select_day_event(bot, call.message, other_data)
+		select_day_event(bot, call.message, other_data, current_channel_id, current_message_id)
 	elif callback_type == CB_TYPES.SELECT_HOUR:
-		select_hour_event(bot, call.message, other_data)
+		select_hour_event(bot, call.message, other_data, current_channel_id, current_message_id)
 
 
-def change_month_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list, forward: bool):
+def change_month_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list, forward: bool, current_channel_id: int = None, current_message_id: int = None):
 	date_str = args[0]
 	current_month, current_year = [int(num) for num in date_str.split(".")]
 	current_month += 1 if forward else -1
@@ -119,19 +119,19 @@ def change_month_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 		current_month = 12
 
 	keyboard = generate_days_buttons([current_month, current_year])
-	utils.edit_message_keyboard(bot, msg_data, keyboard)
+	utils.edit_message_keyboard(bot, msg_data, keyboard, chat_id=current_channel_id, message_id=current_message_id)
 
 
-def select_day_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list):
+def select_day_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list, current_channel_id: int = None, current_message_id: int = None):
 	current_date = args[0]
 	keyboard = generate_hours_buttons(current_date)
-	utils.edit_message_keyboard(bot, msg_data, keyboard)
+	utils.edit_message_keyboard(bot, msg_data, keyboard, chat_id=current_channel_id, message_id=current_message_id)
 
 
-def select_hour_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list):
+def select_hour_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list, current_channel_id: int = None, current_message_id: int = None):
 	current_date, current_hour = args
 	keyboard = generate_minutes_buttons(current_date, current_hour)
-	utils.edit_message_keyboard(bot, msg_data, keyboard)
+	utils.edit_message_keyboard(bot, msg_data, keyboard, chat_id=current_channel_id, message_id=current_message_id)
 
 
 def schedule_message_event(bot: telebot.TeleBot, post_data: telebot.types.Message, args: list):
@@ -348,10 +348,12 @@ def update_scheduled_messages(bot: telebot.TeleBot, scheduled_messages_info: lis
 			copied_message = bot.copy_message(chat_id=scheduled_storage_id, from_chat_id=main_channel_id, message_id=main_message_id)
 			scheduled_message_id = copied_message.message_id
 			db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time)
+			scheduled_messages_info.append([scheduled_message_id, scheduled_storage_id, send_time])
 
 	for msg in scheduled_messages_info:
+		keyboard_markup = forwarding_utils.generate_control_buttons(hashtags, post_data)
 		scheduled_message_id, scheduled_channel_id, _ = msg
 		post_data.message_id = scheduled_message_id
 		post_data.chat.id = scheduled_channel_id
-		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities)
+		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities, reply_markup=keyboard_markup)
 

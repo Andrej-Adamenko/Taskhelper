@@ -157,6 +157,15 @@ def get_copied_message_data(main_message_id, main_channel_id):
 
 
 @db_thread_lock
+def get_main_message_from_copied(copied_message_id, copied_channel_id):
+	sql = "SELECT main_message_id, main_channel_id FROM copied_messages WHERE copied_message_id=(?) and copied_channel_id=(?)"
+	CURSOR.execute(sql, (copied_message_id, copied_channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result
+
+
+@db_thread_lock
 def insert_or_update_last_msg_id(last_message_id, chat_id):
 	if get_last_message_id(chat_id):
 		sql = "UPDATE last_message_ids SET last_message_id=(?) WHERE chat_id=(?)"
@@ -249,6 +258,15 @@ def get_scheduled_messages(main_message_id, main_channel_id):
 	sql = "SELECT scheduled_message_id, scheduled_channel_id, send_time FROM scheduled_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
 	result = CURSOR.fetchall()
+	if result:
+		return result
+
+
+@db_thread_lock
+def get_main_from_scheduled_message(scheduled_message_id, scheduled_channel_id):
+	sql = "SELECT main_message_id, main_channel_id FROM scheduled_messages WHERE scheduled_message_id=(?) and scheduled_channel_id=(?)"
+	CURSOR.execute(sql, (scheduled_message_id, scheduled_channel_id,))
+	result = CURSOR.fetchone()
 	if result:
 		return result
 

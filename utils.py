@@ -115,9 +115,11 @@ def place_buttons_in_rows(buttons: List[telebot.types.InlineKeyboardButton]):
 	return rows
 
 
-def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, keyboard: telebot.types.InlineKeyboardMarkup = None):
-	chat_id = post_data.chat.id
-	message_id = post_data.message_id
+def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
+                          keyboard: telebot.types.InlineKeyboardMarkup = None, chat_id: int = None, message_id: int = None):
+	if chat_id is None and message_id is None:
+		chat_id = post_data.chat.id
+		message_id = post_data.message_id
 
 	if keyboard is None:
 		keyboard = post_data.reply_markup
@@ -160,6 +162,15 @@ def get_all_subchannel_ids():
 				subchannel_ids.append(subchannel_id)
 
 	return subchannel_ids
+
+
+def get_all_scheduled_storage_ids():
+	storage_ids = []
+	for main_channel_id in SCHEDULED_STORAGE_CHAT_IDS:
+		channel_users = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id]
+		for user in channel_users:
+			storage_ids.append(channel_users[user])
+	return storage_ids
 
 
 def get_ignored_chat_ids():

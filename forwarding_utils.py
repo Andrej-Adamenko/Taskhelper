@@ -47,12 +47,12 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	message_id = post_data.message_id
 
 	forwarded_messages = db_utils.get_copied_message_data(message_id, main_channel_id)
-	subchannels_to_ignore = []
+	unchanged_posts = {}
 	for forwarded_message in forwarded_messages:
 		forwarded_msg_id, forwarded_channel_id = forwarded_message
 		forwarded_msg_data = get_message_content_by_id(bot, forwarded_channel_id, forwarded_msg_id)
 		if forwarded_msg_data and utils.is_post_data_equal(forwarded_msg_data, post_data):
-			subchannels_to_ignore.append(forwarded_channel_id)  # ignore unchanged posts
+			unchanged_posts[forwarded_channel_id] = forwarded_msg_id  # ignore unchanged posts
 			continue
 
 		try:
@@ -79,7 +79,9 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		return
 
 	for subchannel_id in subchannel_ids:
-		if subchannel_id in subchannels_to_ignore:
+		if subchannel_id in unchanged_posts:
+			keyboard_markup = generate_control_buttons(hashtags, post_data)
+			utils.edit_message_keyboard(bot, post_data, keyboard_markup, chat_id=subchannel_id, message_id=unchanged_posts[subchannel_id])
 			continue
 
 		try:
@@ -90,6 +92,9 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 				raise E
 			logging.warning(f"Exception during forwarding post to subchannel {hashtags} - {E}")
 			continue
+
+		keyboard_markup = generate_control_buttons(hashtags, post_data)
+		utils.edit_message_keyboard(bot, post_data, keyboard_markup,chat_id=subchannel_id, message_id=copied_message.message_id)
 
 		db_utils.insert_copied_message(message_id, main_channel_id, copied_message.message_id, subchannel_id)
 
@@ -145,7 +150,7 @@ def get_subchannel_ids_from_hashtags(main_channel_id: int, hashtags: List[str]):
 
 def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
-	message_id = post_data.message_id
+	main_message_id = post_data.message_id
 
 	if hashtags[0] == hashtag_utils.OPENED_TAG:
 		state_switch_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CLOSE)
@@ -192,7 +197,7 @@ def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Messa
 	main_channel_id_str = str(main_channel_id)
 	if main_channel_id_str in DISCUSSION_CHAT_DATA and DISCUSSION_CHAT_DATA[main_channel_id_str] is not None:
 		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
-		discussion_message_id = db_utils.get_discussion_message_id(message_id, main_channel_id)
+		discussion_message_id = db_utils.get_discussion_message_id(main_message_id, main_channel_id)
 		if discussion_message_id:
 			discussion_chat_id_str = str(discussion_chat_id)[4:]
 			comments_url = f"tg://privatepost?channel={discussion_chat_id_str}&post={discussion_message_id}&thread={discussion_message_id}"
@@ -339,7 +344,8 @@ def add_control_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 	utils.edit_message_keyboard(bot, post_data, keyboard_markup)
 
 
-def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
+def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
+
 	callback_type, other_data = utils.parse_callback_str(call.data)
 
 	if callback_type == CB_TYPES.CHANGE_SUBCHANNEL:
@@ -352,14 +358,14 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
 	elif callback_type == CB_TYPES.SAVE:
 		forward_and_add_inline_keyboard(bot, call.message, force_forward=True)
 	elif callback_type == CB_TYPES.SHOW_SUBCHANNELS:
-		show_subchannel_buttons(bot, call.message)
+		show_subchannel_buttons(bot, call.message, current_channel_id, current_message_id)
 	elif callback_type == CB_TYPES.SHOW_PRIORITIES:
-		show_priority_buttons(bot, call.message)
+		show_priority_buttons(bot, call.message, current_channel_id, current_message_id)
 	elif callback_type == CB_TYPES.CHANGE_PRIORITY:
 		priority = other_data[0]
 		change_priority_button_event(bot, call, priority)
 	elif callback_type == CB_TYPES.SHOW_CC:
-		show_cc_buttons(bot, call.message)
+		show_cc_buttons(bot, call.message, current_channel_id, current_message_id)
 	elif callback_type == CB_TYPES.TOGGLE_CC:
 		user = other_data[0]
 		toggle_cc_button_event(bot, call, user)
@@ -376,29 +382,29 @@ def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message
 		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, config_utils.BOT_ID)
 
 
-def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
+def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, current_channel_id: int = None, current_message_id: int = None):
 	subchannel_keyboard_markup = generate_subchannel_buttons(post_data)
 	update_show_buttons(post_data, CB_TYPES.SHOW_SUBCHANNELS)
 	post_data.reply_markup.keyboard += subchannel_keyboard_markup.keyboard
 
-	utils.edit_message_keyboard(bot, post_data)
+	utils.edit_message_keyboard(bot, post_data, chat_id=current_channel_id, message_id=current_message_id)
 
 
-def show_priority_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
+def show_priority_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, current_channel_id: int = None, current_message_id: int = None):
 	priority_keyboard_markup = generate_priority_buttons(post_data)
 	update_show_buttons(post_data, CB_TYPES.SHOW_PRIORITIES)
 	post_data.reply_markup.keyboard += priority_keyboard_markup.keyboard
 
-	utils.edit_message_keyboard(bot, post_data)
+	utils.edit_message_keyboard(bot, post_data, chat_id=current_channel_id, message_id=current_message_id)
 
 
-def show_cc_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message):
+def show_cc_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, current_channel_id: int = None, current_message_id: int = None):
 	cc_keyboard_markup = generate_cc_buttons(post_data)
 	update_show_buttons(post_data, CB_TYPES.SHOW_CC)
 	if cc_keyboard_markup:
 		post_data.reply_markup.keyboard += cc_keyboard_markup.keyboard
 
-	utils.edit_message_keyboard(bot, post_data)
+	utils.edit_message_keyboard(bot, post_data, chat_id=current_channel_id, message_id=current_message_id)
 
 
 def update_show_buttons(post_data: telebot.types.Message, current_button_type: str):
@@ -450,7 +456,7 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 
 	comment_text = f"{call.from_user.first_name} "
 	if hashtags[1] != subchannel_user and hashtags[-1] != subchannel_priority:
-		comment_text += f"reassigned the ticket to {{USER}}, and changed the priority to {subchannel_priority}."
+		comment_text += f"reassigned the ticket to {{USER}}, and changed its priority to {subchannel_priority}."
 	elif hashtags[1] != subchannel_user:
 		comment_text += f"reassigned the ticket to {{USER}}."
 	elif hashtags[-1] != subchannel_priority:
