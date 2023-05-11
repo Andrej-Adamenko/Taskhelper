@@ -353,7 +353,6 @@ def update_scheduled_messages(bot: telebot.TeleBot, scheduled_messages_info: lis
 	for msg in scheduled_messages_info:
 		keyboard_markup = forwarding_utils.generate_control_buttons(hashtags, post_data)
 		scheduled_message_id, scheduled_channel_id, _ = msg
-		post_data.message_id = scheduled_message_id
-		post_data.chat.id = scheduled_channel_id
-		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities, reply_markup=keyboard_markup)
+		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities,
+		                           reply_markup=keyboard_markup, chat_id=scheduled_channel_id, message_id=scheduled_message_id)
 

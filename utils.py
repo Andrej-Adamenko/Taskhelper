@@ -64,13 +64,18 @@ def set_post_content(post_data: telebot.types.Message, text: str, entities: tele
 
 
 def edit_message_content(bot: telebot.TeleBot, post_data: telebot.types.Message, **kwargs):
+	if "chat_id" not in kwargs:
+		kwargs["chat_id"] = post_data.chat.id
+	if "message_id" not in kwargs:
+		kwargs["message_id"] = post_data.message_id
+
 	try:
 		if post_data.text is not None:
-			bot.edit_message_text(chat_id=post_data.chat.id, message_id=post_data.message_id, **kwargs)
+			bot.edit_message_text(**kwargs)
 		else:
 			kwargs["caption"] = kwargs.pop("text")
 			kwargs["caption_entities"] = kwargs.pop("entities")
-			bot.edit_message_caption(chat_id=post_data.chat.id, message_id=post_data.message_id, **kwargs)
+			bot.edit_message_caption(**kwargs)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
