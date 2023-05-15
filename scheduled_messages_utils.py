@@ -260,7 +260,10 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 
 	for msg in scheduled_messages:
 		scheduled_message_id, scheduled_channel_id, send_time = msg
-		bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
+		try:
+			bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
+		except Exception as E:
+			logging.error(f"Error during delete message during sending scheduled message {msg}, exception: {E}")
 
 	hashtags[0] = hashtag_utils.OPENED_TAG
 
