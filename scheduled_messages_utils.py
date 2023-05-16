@@ -6,6 +6,7 @@ import time
 
 import pytz
 import telebot
+from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 import config_utils
@@ -260,14 +261,9 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 
 	for msg in scheduled_messages:
 		scheduled_message_id, scheduled_channel_id, send_time = msg
-		try:
-			bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
-		except Exception as E:
-			logging.error(f"Error during delete message during sending scheduled message {msg}, exception: {E}")
+		delete_scheduled_message(bot, scheduled_channel_id, scheduled_message_id)
 
 	hashtags[0] = hashtag_utils.OPENED_TAG
-
-	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
 
 	forwarding_utils.rearrange_hashtags(bot, post_data, hashtags)
 	forwarding_utils.add_control_buttons(bot, post_data, hashtags)
@@ -313,7 +309,13 @@ def schedule_loop_thread(bot: telebot.TeleBot):
 		time.sleep(1)
 
 
-def update_scheduled_messages(bot: telebot.TeleBot, scheduled_messages_info: list, post_data: telebot.types.Message, hashtags: list):
+def update_scheduled_messages(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: list):
+	main_message_id = post_data.message_id
+	main_channel_id = post_data.chat.id
+	scheduled_messages_info = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
+	if scheduled_messages_info is None:
+		return
+
 	_, _, send_time = scheduled_messages_info[0]
 
 	main_message_id = post_data.message_id
@@ -322,8 +324,7 @@ def update_scheduled_messages(bot: telebot.TeleBot, scheduled_messages_info: lis
 	if hashtag_utils.CLOSED_TAG in hashtags:
 		for msg in scheduled_messages_info:
 			scheduled_message_id, scheduled_channel_id, _ = msg
-			bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
-		db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
+			delete_scheduled_message(bot, scheduled_channel_id, scheduled_message_id)
 
 		for msg in SCHEDULED_MESSAGES_LIST:
 			message_id, channel_id, _ = msg
@@ -338,10 +339,10 @@ def update_scheduled_messages(bot: telebot.TeleBot, scheduled_messages_info: lis
 		scheduled_message_id, scheduled_channel_id, _ = msg
 		user_tag = utils.get_key_by_value(storage_channels, scheduled_channel_id)
 		if user_tag not in hashtags:
-			bot.delete_message(chat_id=scheduled_channel_id, message_id=scheduled_message_id)
-			db_utils.delete_scheduled_message(scheduled_message_id, scheduled_channel_id)
+			delete_scheduled_message(bot, scheduled_channel_id, scheduled_message_id)
 			scheduled_messages_info.remove(msg)
 
+	scheduled_messages_info = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
 	hashtag_scheduled_channels = [m[1] for m in scheduled_messages_info]
 	for user_tag in hashtags[1:-1]:
 		if user_tag not in storage_channels:
@@ -358,4 +359,43 @@ def update_scheduled_messages(bot: telebot.TeleBot, scheduled_messages_info: lis
 		scheduled_message_id, scheduled_channel_id, _ = msg
 		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities,
 		                           reply_markup=keyboard_markup, chat_id=scheduled_channel_id, message_id=scheduled_message_id)
+
+
+def delete_scheduled_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	try:
+		utils.delete_message(bot, chat_id=chat_id, message_id=message_id)
+		db_utils.delete_scheduled_message(message_id, chat_id)
+	except ApiTelegramException as E:
+		if E.description.endswith(utils.MSG_CANT_BE_DELETED_ERROR):
+			last_message_id = db_utils.get_last_scheduled_message(chat_id)
+			if last_message_id is None:
+				return
+
+			main_data = db_utils.get_main_from_scheduled_message(message_id, chat_id)
+			if main_data is None:
+				return
+			main_message_id, main_channel_id = main_data
+
+			msg_data = forwarding_utils.get_message_content_by_id(bot, chat_id, last_message_id)
+			if msg_data:
+				msg_data.message_id = main_message_id
+				msg_data.chat.id = main_channel_id
+
+				hashtags, _ = hashtag_utils.extract_hashtags(msg_data, main_channel_id, False)
+				keyboard = forwarding_utils.generate_control_buttons(hashtags, msg_data)
+
+				utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
+				db_utils.delete_scheduled_message(message_id, chat_id)
+				db_utils.update_scheduled_message_id(last_message_id, chat_id, message_id)
+				try:
+					utils.delete_message(bot, chat_id, last_message_id)
+				except ApiTelegramException as E:
+					if E.description.endswith(utils.MSG_CANT_BE_DELETED_ERROR):
+						utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=last_message_id,
+						                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
+			else:
+				db_utils.delete_scheduled_message(last_message_id, chat_id)
+				msg_data = forwarding_utils.get_message_content_by_id(bot, chat_id, message_id)
+				utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=message_id,
+				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 

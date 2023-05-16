@@ -4,7 +4,7 @@ from typing import List
 
 import telebot
 from telebot.apihelper import ApiTelegramException
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEntity
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 import config_utils
 import db_utils
@@ -12,7 +12,7 @@ import hashtag_utils
 import scheduled_messages_utils
 import utils
 
-from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA, DUMP_CHAT_ID
+from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA
 
 CALLBACK_PREFIX = "FWRD"
 
@@ -54,10 +54,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		if forwarded_msg_data and utils.is_post_data_equal(forwarded_msg_data, post_data):
 			unchanged_posts[forwarded_channel_id] = forwarded_msg_id  # ignore unchanged posts
 			continue
-
 		try:
-			bot.delete_message(chat_id=forwarded_channel_id, message_id=forwarded_msg_id)
-			db_utils.delete_copied_message(forwarded_msg_id, forwarded_channel_id)
+			delete_forwarded_message(bot, forwarded_channel_id, forwarded_msg_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				raise E
@@ -65,10 +63,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 				db_utils.delete_copied_message(forwarded_msg_id, forwarded_channel_id)
 			logging.info(f"Exception during delete_message [{forwarded_msg_id}, {forwarded_channel_id}] - {E}")
 
-	scheduled_messages = db_utils.get_scheduled_messages(message_id, main_channel_id)
-	if scheduled_messages:
-		scheduled_messages_utils.update_scheduled_messages(bot, scheduled_messages, post_data, hashtags)
-		return
+	scheduled_messages_utils.update_scheduled_messages(bot, post_data, hashtags)
 
 	if hashtag_utils.OPENED_TAG not in hashtags:
 		return
@@ -97,6 +92,44 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		utils.edit_message_keyboard(bot, post_data, keyboard_markup,chat_id=subchannel_id, message_id=copied_message.message_id)
 
 		db_utils.insert_copied_message(message_id, main_channel_id, copied_message.message_id, subchannel_id)
+
+
+def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	try:
+		utils.delete_message(bot, chat_id=chat_id, message_id=message_id)
+		db_utils.delete_copied_message(message_id, chat_id)
+	except ApiTelegramException as E:
+		if E.description.endswith(utils.MSG_CANT_BE_DELETED_ERROR):
+			last_message_id = db_utils.get_last_copied_message(chat_id)
+			if last_message_id is None:
+				return
+
+			main_data = db_utils.get_main_message_from_copied(message_id, chat_id)
+			if main_data is None:
+				return
+			main_message_id, main_channel_id = main_data
+
+			msg_data = get_message_content_by_id(bot, chat_id, last_message_id)
+			if msg_data:
+				msg_data.message_id = main_message_id
+				msg_data.chat.id = main_channel_id
+
+				hashtags, _ = hashtag_utils.extract_hashtags(msg_data, main_channel_id, False)
+				keyboard = generate_control_buttons(hashtags, msg_data)
+
+				utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
+				db_utils.delete_copied_message(message_id, chat_id)
+				db_utils.update_copied_message_id(last_message_id, chat_id, message_id)
+				try:
+					utils.delete_message(bot, chat_id, last_message_id)
+				except ApiTelegramException as E:
+					if E.description.endswith(utils.MSG_CANT_BE_DELETED_ERROR):
+						utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=last_message_id,
+						                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
+			else:
+				db_utils.delete_copied_message(last_message_id, chat_id)
+				msg_data = get_message_content_by_id(bot, chat_id, message_id)
+				utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=message_id, text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 
 
 def get_subchannel_ids_from_hashtags(main_channel_id: int, hashtags: List[str]):

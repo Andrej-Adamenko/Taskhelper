@@ -33,6 +33,8 @@ SCHEDULED_STORAGE_CHAT_IDS: dict = {}
 TIMEZONE_NAME: str = "UTC"
 USER_DATA: dict = {}
 ADMIN_USERS: list = []
+TO_DELETE_MSG_TEXT = "#to_delete"
+
 BUTTON_TEXTS: dict = {
 	"OPENED_TICKET": "\U0001F7E9",
 	"CLOSED_TICKET": "\U00002705",
@@ -52,7 +54,7 @@ HASHTAGS: dict = {
 	"OPENED": "о",
 	"CLOSED": "х",
 	"SCHEDULED": "з",
-	"PRIORITY": "п",
+	"PRIORITY": "п"
 }
 
 HASHTAGS_BEFORE_UPDATE: typing.Optional[dict] = None

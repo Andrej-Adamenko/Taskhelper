@@ -8,6 +8,8 @@ import config_utils
 from config_utils import MAX_BUTTONS_IN_ROW, DISCUSSION_CHAT_DATA, SUBCHANNEL_DATA, SCHEDULED_STORAGE_CHAT_IDS, USER_DATA
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
+MSG_CANT_BE_DELETED_ERROR = "message can't be deleted"
+MSG_NOT_FOUND_ERROR = "message to delete not found"
 
 
 def create_callback_str(callback_prefix, callback_type, *args):
@@ -68,6 +70,10 @@ def edit_message_content(bot: telebot.TeleBot, post_data: telebot.types.Message,
 		kwargs["chat_id"] = post_data.chat.id
 	if "message_id" not in kwargs:
 		kwargs["message_id"] = post_data.message_id
+	if "text" not in kwargs:
+		kwargs["text"] = post_data.text if post_data.text else post_data.caption
+	if "entities" not in kwargs:
+		kwargs["entities"] = post_data.entities if post_data.entities else post_data.caption_entities
 
 	try:
 		if post_data.text is not None:
@@ -238,3 +244,14 @@ def insert_user_reference(main_channel_id: int, user_tag: str, text: str):
 def is_main_channel_exists(main_channel_id):
 	main_channel_id = int(main_channel_id)
 	return main_channel_id in config_utils.CHANNEL_IDS
+
+
+def delete_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	try:
+		return bot.delete_message(chat_id=chat_id, message_id=message_id)
+	except ApiTelegramException as E:
+		if E.description.endswith(MSG_NOT_FOUND_ERROR):
+			return True
+		else:
+			raise E
+

@@ -166,6 +166,22 @@ def get_main_message_from_copied(copied_message_id, copied_channel_id):
 
 
 @db_thread_lock
+def get_last_copied_message(copied_channel_id):
+	sql = "SELECT max(copied_message_id) FROM copied_messages WHERE copied_channel_id=(?)"
+	CURSOR.execute(sql, (copied_channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def update_copied_message_id(copied_message_id, copied_channel_id, updated_message_id):
+	sql = "UPDATE copied_messages SET copied_message_id=(?) WHERE copied_message_id=(?) AND copied_channel_id=(?)"
+	CURSOR.execute(sql, (updated_message_id, copied_message_id, copied_channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
 def insert_or_update_last_msg_id(last_message_id, chat_id):
 	if get_last_message_id(chat_id):
 		sql = "UPDATE last_message_ids SET last_message_id=(?) WHERE chat_id=(?)"
@@ -254,6 +270,13 @@ def update_scheduled_message(main_message_id, main_channel_id, send_time):
 
 
 @db_thread_lock
+def update_scheduled_message_id(scheduled_message_id, scheduled_channel_id, updated_message_id):
+	sql = "UPDATE scheduled_messages SET scheduled_message_id=(?) WHERE scheduled_message_id=(?) and scheduled_channel_id=(?)"
+	CURSOR.execute(sql, (updated_message_id, scheduled_message_id, scheduled_channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
 def get_scheduled_messages(main_message_id, main_channel_id):
 	sql = "SELECT scheduled_message_id, scheduled_channel_id, send_time FROM scheduled_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
@@ -291,6 +314,15 @@ def get_all_scheduled_messages():
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
 	return result
+
+
+@db_thread_lock
+def get_last_scheduled_message(scheduled_channel_id):
+	sql = "SELECT max(scheduled_message_id) FROM scheduled_messages WHERE scheduled_channel_id=(?)"
+	CURSOR.execute(sql, (scheduled_channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
 
 
 @db_thread_lock
