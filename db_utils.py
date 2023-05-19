@@ -166,8 +166,8 @@ def get_main_message_from_copied(copied_message_id, copied_channel_id):
 
 
 @db_thread_lock
-def get_last_copied_message(copied_channel_id):
-	sql = "SELECT max(copied_message_id) FROM copied_messages WHERE copied_channel_id=(?)"
+def get_oldest_copied_message(copied_channel_id):
+	sql = "SELECT min(copied_message_id) FROM copied_messages WHERE copied_channel_id=(?)"
 	CURSOR.execute(sql, (copied_channel_id,))
 	result = CURSOR.fetchone()
 	if result:
@@ -317,8 +317,8 @@ def get_all_scheduled_messages():
 
 
 @db_thread_lock
-def get_last_scheduled_message(scheduled_channel_id):
-	sql = "SELECT max(scheduled_message_id) FROM scheduled_messages WHERE scheduled_channel_id=(?)"
+def get_oldest_scheduled_message(scheduled_channel_id):
+	sql = "SELECT min(scheduled_message_id) FROM scheduled_messages WHERE scheduled_channel_id=(?)"
 	CURSOR.execute(sql, (scheduled_channel_id,))
 	result = CURSOR.fetchone()
 	if result:

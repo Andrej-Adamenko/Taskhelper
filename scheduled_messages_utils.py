@@ -367,35 +367,44 @@ def delete_scheduled_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 		db_utils.delete_scheduled_message(message_id, chat_id)
 	except ApiTelegramException as E:
 		if E.description.endswith(utils.MSG_CANT_BE_DELETED_ERROR):
-			last_message_id = db_utils.get_last_scheduled_message(chat_id)
-			if last_message_id is None:
-				return
+			oldest_message_data = None
+			oldest_message_id = None
+			while oldest_message_data is None:
+				oldest_message_id = db_utils.get_oldest_scheduled_message(chat_id)
+				if oldest_message_id is None:
+					break
+
+				oldest_message_data = forwarding_utils.get_message_content_by_id(bot, chat_id, oldest_message_id)
+				if oldest_message_data is None:
+					db_utils.delete_scheduled_message(oldest_message_id, chat_id)
+					logging.info(f"Message {[oldest_message_id, chat_id]} doesn't exists, deleted from db")
+					continue
 
 			main_data = db_utils.get_main_from_scheduled_message(message_id, chat_id)
 			if main_data is None:
 				return
 			main_message_id, main_channel_id = main_data
 
-			msg_data = forwarding_utils.get_message_content_by_id(bot, chat_id, last_message_id)
-			if msg_data:
-				msg_data.message_id = main_message_id
-				msg_data.chat.id = main_channel_id
+			msg_to_delete_data = forwarding_utils.get_message_content_by_id(bot, chat_id, message_id)
 
-				hashtags, _ = hashtag_utils.extract_hashtags(msg_data, main_channel_id, False)
-				keyboard = forwarding_utils.generate_control_buttons(hashtags, msg_data)
+			if oldest_message_data:
+				if oldest_message_id != message_id:
+					oldest_message_data.message_id = main_message_id
+					oldest_message_data.chat.id = main_channel_id
 
-				utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
-				db_utils.delete_scheduled_message(message_id, chat_id)
-				db_utils.update_scheduled_message_id(last_message_id, chat_id, message_id)
-				try:
-					utils.delete_message(bot, chat_id, last_message_id)
-				except ApiTelegramException as E:
-					if E.description.endswith(utils.MSG_CANT_BE_DELETED_ERROR):
-						utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=last_message_id,
-						                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
+					hashtags, _ = hashtag_utils.extract_hashtags(oldest_message_data, main_channel_id, False)
+					keyboard = forwarding_utils.generate_control_buttons(hashtags, oldest_message_data)
+					text, entities = utils.get_post_content(oldest_message_data)
+
+					utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=message_id,
+					                           reply_markup=keyboard, text=text, entities=entities)
+					db_utils.delete_scheduled_message(message_id, chat_id)
+					db_utils.update_scheduled_message_id(oldest_message_id, chat_id, message_id)
+
+				utils.edit_message_content(bot, oldest_message_data, chat_id=chat_id, message_id=oldest_message_id,
+				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 			else:
-				db_utils.delete_scheduled_message(last_message_id, chat_id)
-				msg_data = forwarding_utils.get_message_content_by_id(bot, chat_id, message_id)
-				utils.edit_message_content(bot, msg_data, chat_id=chat_id, message_id=message_id,
+				db_utils.delete_scheduled_message(oldest_message_id, chat_id)
+				utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=message_id,
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 

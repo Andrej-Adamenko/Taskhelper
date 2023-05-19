@@ -145,6 +145,7 @@ def handle_main_channel_keyboard_callback(call: telebot.types.CallbackQuery):
 def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 	main_message_data = db_utils.get_main_message_from_copied(call.message.message_id, call.message.chat.id)
 	if main_message_data is None:
+		logging.info(f"Button event in unknown message {[call.message.message_id, call.message.chat.id]}")
 		return
 	main_message_id, main_channel_id = main_message_data
 	subchannel_message_id = call.message.message_id
@@ -162,6 +163,7 @@ def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 def handle_scheduled_keyboard_callback(call: telebot.types.CallbackQuery):
 	main_message_data = db_utils.get_main_from_scheduled_message(call.message.message_id, call.message.chat.id)
 	if main_message_data is None:
+		logging.info(f"Button event in unknown message {[call.message.message_id, call.message.chat.id]}")
 		return
 	main_message_id, main_channel_id = main_message_data
 	scheduled_message_id = call.message.message_id
