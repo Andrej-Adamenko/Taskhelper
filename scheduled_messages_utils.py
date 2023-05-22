@@ -321,7 +321,7 @@ def update_scheduled_messages(bot: telebot.TeleBot, post_data: telebot.types.Mes
 	main_message_id = post_data.message_id
 	main_channel_id = post_data.chat.id
 
-	if hashtag_utils.CLOSED_TAG in hashtags:
+	if hashtag_utils.CLOSED_TAG in hashtags or hashtag_utils.OPENED_TAG in hashtags:
 		for msg in scheduled_messages_info:
 			scheduled_message_id, scheduled_channel_id, _ = msg
 			delete_scheduled_message(bot, scheduled_channel_id, scheduled_message_id)
@@ -400,6 +400,8 @@ def delete_scheduled_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 					                           reply_markup=keyboard, text=text, entities=entities)
 					db_utils.delete_scheduled_message(message_id, chat_id)
 					db_utils.update_scheduled_message_id(oldest_message_id, chat_id, message_id)
+				else:
+					db_utils.delete_scheduled_message(message_id, chat_id)
 
 				utils.edit_message_content(bot, oldest_message_data, chat_id=chat_id, message_id=oldest_message_id,
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)

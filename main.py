@@ -148,10 +148,15 @@ def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 		logging.info(f"Button event in unknown message {[call.message.message_id, call.message.chat.id]}")
 		return
 	main_message_id, main_channel_id = main_message_data
+	msg_data = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+
 	subchannel_message_id = call.message.message_id
 	subchannel_id = call.message.chat.id
+	keyboard = call.message.reply_markup
+	call.message = msg_data
 	call.message.message_id = main_message_id
 	call.message.chat.id = main_channel_id
+	call.message.reply_markup = keyboard
 
 	if call.data.startswith(forwarding_utils.CALLBACK_PREFIX):
 		forwarding_utils.handle_callback(bot, call, subchannel_id, subchannel_message_id)
@@ -166,8 +171,17 @@ def handle_scheduled_keyboard_callback(call: telebot.types.CallbackQuery):
 		logging.info(f"Button event in unknown message {[call.message.message_id, call.message.chat.id]}")
 		return
 	main_message_id, main_channel_id = main_message_data
+
+	msg_data = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+
 	scheduled_message_id = call.message.message_id
 	scheduled_channel_id = call.message.chat.id
+
+	keyboard = call.message.reply_markup
+	call.message = msg_data
+	call.message.message_id = main_message_id
+	call.message.chat.id = main_channel_id
+	call.message.reply_markup = keyboard
 
 	call.message.message_id = main_message_id
 	call.message.chat.id = main_channel_id

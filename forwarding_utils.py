@@ -133,6 +133,8 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 					                           reply_markup=keyboard, text=text, entities=entities)
 					db_utils.delete_copied_message(message_id, chat_id)
 					db_utils.update_copied_message_id(oldest_message_id, chat_id, message_id)
+				else:
+					db_utils.delete_copied_message(message_id, chat_id)
 
 				utils.edit_message_content(bot, oldest_message_data, chat_id=chat_id, message_id=oldest_message_id,
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)

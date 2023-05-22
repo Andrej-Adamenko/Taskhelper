@@ -140,6 +140,8 @@ def get_last_message(bot: telebot.TeleBot, channel_id: int):
 def check_all_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None, start_from_message: int = None):
 	if start_from_message and discussion_chat_id:
 		current_msg_id = db_utils.get_discussion_message_id(start_from_message, main_channel_id)
+		if current_msg_id is None:
+			return
 	elif discussion_chat_id:
 		discussion_chat = bot.get_chat(discussion_chat_id)
 		current_msg_id = discussion_chat.pinned_message.message_id
