@@ -35,6 +35,10 @@ DUMP_CHAT_ID **(MANDATORY)**:
 * chat id for forwarding messages when bot needs to read them
 * example: -1001234123412
 
+ADMIN_USERS **(MANDATORY)**:
+* to use commands in the bot's private chat
+* example: ["@username"]
+
 CHANNEL_IDS:
 * chat ids of main channels where tickets will be created and managed
 * example: [-100123123123, -100456456456]
@@ -114,5 +118,5 @@ There are 5 control buttons:
 2) Reassign ticket to different subchannel
 3) Change ticket's followed users
 4) Change ticket's priority
-5) Go to ticket's comments (appears only if discussion chat is connected to your channel)
-
+5) Make a scheduled message
+6) Go to ticket's comments (appears only if discussion chat is connected to your channel)
