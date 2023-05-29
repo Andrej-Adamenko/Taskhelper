@@ -123,6 +123,7 @@ There are 5 control buttons:
 
 ## User guide
 **Main channel**
+
 Main channel displays all the tickets you have. In the main channel you have several options to manage your tickets and related information. By writing a message in this channel, it is automatically converted into a ticket with the appropriate tags and buttons. The ticket will be redirected to the specified channel, which is determined based on name and priority.
 
 In the main channel you can perform the following actions with the ticket:
@@ -136,6 +137,7 @@ In the main channel you can perform the following actions with the ticket:
 The same steps can be performed in the channel for users and the channel for scheduled messages.
 
 **Chat commands for customization**
+
 If you go into chat with the bot and enter the command "/help", you will get a list of available commands. I will now list these commands for you.
 
 Changes dump chat id:
@@ -201,6 +203,7 @@ Changes storage channel for scheduled messages:
 * Example: /set_hashtag_text opened Op
 
 **Deleting messages from user channels**
+
 When closing a ticket (by pressing the "close ticket" button), if the ticket has been in the channel for less than 48 hours, the ticket will be deleted from that channel.
 
 But if the ticket is more than 48 hours old, the ticket will be deleted from the channel and will go to the very beginning of the channel with the "to_delete" tag, this message can then be deleted manually.
