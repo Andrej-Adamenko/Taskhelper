@@ -122,7 +122,7 @@ There are 5 control buttons:
 6) Go to ticket's comments (appears only if discussion chat is connected to your channel)
 
 ## User guide
-**"Main channel"**
+### ***Main channel***
 
 Main channel displays all the tickets you have. In the main channel you have several options to manage your tickets and related information. By writing a message in this channel, it is automatically converted into a ticket with the appropriate tags and buttons. The ticket will be redirected to the specified channel, which is determined based on name and priority.
 
@@ -136,24 +136,24 @@ In the main channel you can perform the following actions with the ticket:
 
 The same steps can be performed in the channel for users and the channel for scheduled messages.
 
-**"Chat commands for customization"**
+### ***Chat commands for customization***
 
 If you go into chat with the bot and enter the command "/help", you will get a list of available commands. I will now list these commands for you.
 
 Changes dump chat id:
-* /set_dump_chat_id <CHAT_ID>
+* /set_dump_chat_id (CHAT_ID)
 * Example: /set_dump_chat_id -1001234123412
 
 Changes delay between interval checks:
-* /set_interval_check_time <MINUTES>
+* /set_interval_check_time (MINUTES)
 * Example: /set_interval_check_time 60
 
 Add main channel:
-* /add_main_channel <CHANNEL_ID>
+* /add_main_channel (CHANNEL_ID)
 * Example: /add_main_channel -100987987987
 
 Remove main channel:
-* /remove_main_channel <CHANNEL_ID>
+* /remove_main_channel (CHANNEL_ID)
 * Example: /remove_main_channel  -100987987987
 
 Enables auto forwarding tickets found during scanning:
@@ -163,46 +163,46 @@ Disables auto forwarding tickets found during scanning:
 * /disable_auto_forwarding
 
 Changes timezone identifier:
-* /set_timezone <TIMEZONE> 
+* /set_timezone (TIMEZONE) 
 * Example: /set_timezone Europe/Kiev
 
 Add subchannel to main channel with specified tag and priority:
-* /set_subchannel <MAIN_CHANNEL_ID> <TAG> <PRIORITY> <SUBCHANNEL_ID>
+* /set_subchannel (MAIN_CHANNEL_ID) (TAG) (PRIORITY) (SUBCHANNEL_ID)
 * Example: /set_subchannel -100987987987 aa 1 -100123321123
 
 Removes all subchannels with specified tag in main channel:
-* /remove_subchannel_tag <MAIN_CHANNEL_ID> <TAG>
+* /remove_subchannel_tag (MAIN_CHANNEL_ID) (TAG)
 * Example: /remove_subchannel_tag -100987987987 aa
 
 Add or change username or user id of the tag:
-* /set_user_tag <MAIN_CHANNEL_ID> <TAG> <USERNAME_OR_USER_ID>
+* /set_user_tag (MAIN_CHANNEL_ID) (TAG) (USERNAME_OR_USER_ID)
 * Example with username: /set_user_tag -100987987987 aa @username
 * Example with user id: /set_user_tag -100987987987 aa 321123321
 
 Remove user assigned to specified tag:
-* /remove_user_tag <MAIN_CHANNEL_ID> <TAG>
+* /remove_user_tag (MAIN_CHANNEL_ID) (TAG)
 * Example with username: /remove_user_tag -100987987987 aa
 
 Changes default subchannel:
-* /set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY>
+* /set_default_subchannel (MAIN_CHANNEL_ID) (DEFAULT_USER_TAG) (DEFAULT_PRIORITY)
 * Example: /set_user_tag -100987987987 aa 1
 
 Changes storage channel for scheduled messages:
-* /set_storage_channel <MAIN_CHANNEL_ID> <STORAGE_CHANNEL_ID> <TAG>
+* /set_storage_channel (MAIN_CHANNEL_ID) (STORAGE_CHANNEL_ID) (TAG)
 * Example: /set_storage_channel -100987987987 -100432423423 aa
 
 Changes storage channel for scheduled messages:
-* /set_button_text <BUTTON_NAME> <NEW_VALUE>
+* /set_button_text (BUTTON_NAME) (NEW_VALUE)
 * Available buttons: opened, closed, assigned, cc, schedule, check, priority
 * Example: /set_button_text opened 🟩
 * /set_button_text priority - 1 2 3
 
 Changes storage channel for scheduled messages:
-* /set_hashtag_text <HASHTAG_NAME> <NEW_VALUE>
+* /set_hashtag_text (HASHTAG_NAME) (NEW_VALUE)
 * Available hashtags: opened, closed, scheduled, priority
 * Example: /set_hashtag_text opened Op
 
-**"Deleting messages from user channels"**
+### ***Deleting messages from user channels***
 
 When closing a ticket (by pressing the "close ticket" button), if the ticket has been in the channel for less than 48 hours, the ticket will be deleted from that channel.
 
