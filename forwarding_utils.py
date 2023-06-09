@@ -501,12 +501,15 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 	original_post_data = copy.deepcopy(post_data)
 	hashtags, post_data = hashtag_utils.extract_hashtags(post_data, main_channel_id)
 
+	is_user_tag_changed = hashtags[1] != subchannel_user
+	is_priority_tag_changed = hashtags[-1] != (hashtag_utils.PRIORITY_TAG + subchannel_priority)
+
 	comment_text = f"{call.from_user.first_name} "
-	if hashtags[1] != subchannel_user and hashtags[-1] != subchannel_priority:
+	if is_user_tag_changed and is_priority_tag_changed:
 		comment_text += f"reassigned the ticket to {{USER}}, and changed its priority to {subchannel_priority}."
-	elif hashtags[1] != subchannel_user:
+	elif is_user_tag_changed:
 		comment_text += f"reassigned the ticket to {{USER}}."
-	elif hashtags[-1] != subchannel_priority:
+	elif is_priority_tag_changed:
 		comment_text += f"changed ticket's priority to {subchannel_priority}."
 
 	if comment_text:
