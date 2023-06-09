@@ -114,6 +114,7 @@ def handle_main_channel_change(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 		config_utils.CHANNEL_IDS.remove(channel_id)
 		bot.send_message(chat_id=msg_data.chat.id, text="Main channel was successfully removed.")
 
+	config_utils.load_discussion_chat_ids(bot)
 	config_utils.update_config({"CHANNEL_IDS": config_utils.CHANNEL_IDS})
 
 

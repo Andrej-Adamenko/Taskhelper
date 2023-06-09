@@ -130,8 +130,8 @@ def get_last_message(bot: telebot.TeleBot, channel_id: int):
 	if last_message_id is None:
 		msg_text = "(This is service message for obtaining last message id, bot will delete it in a moment)"
 		last_message = bot.send_message(chat_id=channel_id, text=msg_text)
+		bot.delete_message(chat_id=channel_id, message_id=last_message.message_id)
 		last_message_id = last_message.message_id - 1
-		bot.delete_message(chat_id=channel_id, message_id=last_message_id)
 		db_utils.insert_or_update_last_msg_id(last_message_id, channel_id)
 
 	return last_message_id
