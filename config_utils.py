@@ -106,8 +106,8 @@ def load_users(bot: telebot.TeleBot):
 	for main_channel_id in USER_DATA:
 		for user_tag in USER_DATA[main_channel_id]:
 			user_id = USER_DATA[main_channel_id][user_tag]
-			if type(user_id) != int:
-				continue
+			if (type(user_id) == str and user_id.startswith("@")) or type(user_id) == telebot.types.Chat:
+				continue  # skip usernames and already loaded users
 			try:
 				user_info = bot.get_chat(user_id)
 			except Exception as E:

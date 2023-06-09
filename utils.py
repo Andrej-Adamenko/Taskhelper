@@ -225,20 +225,21 @@ def insert_user_reference(main_channel_id: int, user_tag: str, text: str):
 		return text, None
 
 	user = user_tags[user_tag]
-	if type(user) == str:
-		text = text[:placeholder_position] + user + text[placeholder_position:]
-		return text, None
-	elif user.username:
-		user_reference_text = f"@{user.username}"
-		text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
-		return text, None
+	if type(user) == telebot.types.Chat:
+		if user.username:
+			user_reference_text = f"@{user.username}"
+			text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
+			return text, None
+		else:
+			user_reference_text = user.first_name
+			text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
+			mentioned_user = {"id": user.id, "first_name": user.first_name, "last_name": user.last_name}
+			entity = telebot.types.MessageEntity(offset=placeholder_position, length=len(user_reference_text),
+			                                     type="text_mention", user=mentioned_user)
+			return text, [entity]
 	else:
-		user_reference_text = user.first_name
-		text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
-		mentioned_user = {"id": user.id, "first_name": user.first_name, "last_name": user.last_name}
-		entity = telebot.types.MessageEntity(offset=placeholder_position, length=len(user_reference_text),
-		                                     type="text_mention", user=mentioned_user)
-		return text, [entity]
+		text = text[:placeholder_position] + str(user) + text[placeholder_position:]
+		return text, None
 
 
 def is_main_channel_exists(main_channel_id):
