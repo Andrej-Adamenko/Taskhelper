@@ -48,6 +48,7 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 			message_id, channel_id, _ = msg
 			if message_id == main_message_id and channel_id == main_channel_id:
 				msg[2] = send_time
+		SCHEDULED_MESSAGES_LIST.sort(key=scheduled_message_comparison_func)
 
 		hashtags, message = hashtag_utils.extract_hashtags(message, main_channel_id, True)
 		hashtags[0] = hashtag_utils.SCHEDULED_TAG + " " + dt.strftime(DATE_FORMAT)
@@ -80,13 +81,8 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 
 
 def insert_schedule_message_info(scheduled_info):
-	send_time = scheduled_info[2]
-	for i in range(len(SCHEDULED_MESSAGES_LIST)):
-		current_send_time = SCHEDULED_MESSAGES_LIST[i][2]
-		if send_time < current_send_time:
-			SCHEDULED_MESSAGES_LIST.insert(i, scheduled_info)
-			return
 	SCHEDULED_MESSAGES_LIST.append(scheduled_info)
+	SCHEDULED_MESSAGES_LIST.sort(key=scheduled_message_comparison_func)
 
 
 def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
