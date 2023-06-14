@@ -177,7 +177,18 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 		if main_channel_id not in config_utils.USER_DATA:
 			config_utils.USER_DATA[main_channel_id] = {}
 
+		tag_already_exists = tag in config_utils.USER_DATA[main_channel_id]
+
 		config_utils.USER_DATA[main_channel_id][tag] = user
+		config_utils.load_users(bot)
+
+		if tag_already_exists:
+			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA[main_channel_id]
+			if discussion_channel_id:
+				comment_text = f"User tag #{tag} was reassigned to {{USER}}."
+				text, entities = utils.insert_user_reference(main_channel_id, tag, comment_text)
+				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was successfully updated.")
 	elif msg_data.text.startswith("/remove_user_tag"):
 		try:
@@ -199,7 +210,6 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 		del config_utils.USER_DATA[main_channel_id][tag]
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was removed updated.")
 
-	config_utils.load_users(bot)
 	user_data = copy.deepcopy(config_utils.USER_DATA)
 	for channel_id in user_data:
 		for tag in user_data[channel_id]:
