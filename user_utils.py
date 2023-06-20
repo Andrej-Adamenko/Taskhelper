@@ -32,8 +32,9 @@ def load_users(bot: telebot.TeleBot):
 	user_data = db_utils.get_all_users()
 	for user in user_data:
 		main_channel_id, user_id, user_tag = user
+		main_channel_id = str(main_channel_id)
 		if main_channel_id not in USER_DATA:
-			USER_DATA[main_channel_id] = {}
+			USER_DATA[str(main_channel_id)] = {}
 
 		USER_DATA[main_channel_id][user_tag] = user_id
 		try:

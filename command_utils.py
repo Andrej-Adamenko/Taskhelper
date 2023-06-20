@@ -69,7 +69,7 @@ def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, a
 	help_text += "/remove_user_tag <MAIN_CHANNEL_ID> <TAG> — remove user assigned to specified tag\n"
 	help_text += "Example with username: /remove_user_tag -100987987987 aa\n\n"
 	help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — changes default subchannel\n"
-	help_text += "Example: /set_user_tag -100987987987 aa 1\n\n"
+	help_text += "Example: /set_default_subchannel -100987987987 aa 1\n\n"
 	help_text += "/set_storage_channel <MAIN_CHANNEL_ID> <STORAGE_CHANNEL_ID> <TAG> — changes storage channel for scheduled messages\n"
 	help_text += "Example: /set_storage_channel -100987987987 -100432423423 aa\n\n"
 	help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — changes storage channel for scheduled messages\n"
@@ -149,15 +149,21 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
 
-		if db_utils.is_user_tag_exists(main_channel_id, tag):
-			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA[main_channel_id]
-			if discussion_channel_id:
-				comment_text = f"User tag #{tag} was reassigned to {{USER}}."
-				text, entities = user_utils.insert_user_reference(main_channel_id, tag, comment_text)
-				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+		is_tag_already_exists = db_utils.is_user_tag_exists(main_channel_id, tag)
 
 		db_utils.insert_or_update_user(main_channel_id, tag, user)
 		user_utils.load_users(bot)
+
+		if main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
+			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA[main_channel_id]
+			if is_tag_already_exists:
+				comment_text = f"User tag #{tag} was reassigned to {{USER}}."
+				text, entities = user_utils.insert_user_reference(main_channel_id, tag, comment_text)
+				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+			else:
+				comment_text = f"User tag #{tag} was added, assigned user is {{USER}}."
+				text, entities = user_utils.insert_user_reference(main_channel_id, tag, comment_text)
+				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
 
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was successfully updated.")
 	elif msg_data.text.startswith("/remove_user_tag"):
@@ -171,9 +177,19 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
 
+		if not db_utils.is_user_tag_exists(main_channel_id, tag):
+			bot.send_message(chat_id=msg_data.chat.id, text="This user tag doesn't exists.")
+			return
+
 		db_utils.delete_user_by_tag(main_channel_id, tag)
-		bot.send_message(chat_id=msg_data.chat.id, text="User tag was removed updated.")
 		user_utils.load_users(bot)
+
+		if main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
+			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA[main_channel_id]
+			comment_text = f"User tag #{tag} was deleted."
+			bot.send_message(chat_id=discussion_channel_id, text=comment_text)
+
+		bot.send_message(chat_id=msg_data.chat.id, text="User tag was removed.")
 
 
 def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
