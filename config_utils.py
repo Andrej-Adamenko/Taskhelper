@@ -5,6 +5,9 @@ import sys
 import typing
 
 import telebot
+from telebot.apihelper import ApiTelegramException
+
+import db_utils
 
 CONFIG_FILE = "config.json"
 
@@ -16,8 +19,6 @@ MANDATORY_KEYS = ["BOT_TOKEN", "ADMIN_USERS"]
 
 BOT_TOKEN: str = ""
 DUMP_CHAT_ID: str = ""
-CHANNEL_IDS: list = []
-SUBCHANNEL_DATA: dict = {}
 DISCUSSION_CHAT_DATA: dict = {}
 DEFAULT_USER_DATA: dict = {}
 UPDATE_INTERVAL: int = 60
@@ -28,10 +29,9 @@ DELAY_AFTER_ONE_SCAN: int = 4
 SUPPORTED_CONTENT_TYPES: list = ["audio", "photo", "voice", "video", "document", "text"]
 APP_API_ID: int = 0
 APP_API_HASH: str = ""
-EXPORTED_DISCUSSION_CHATS: list = []
+EXPORTED_CHATS: list = []
 SCHEDULED_STORAGE_CHAT_IDS: dict = {}
 TIMEZONE_NAME: str = "UTC"
-USER_DATA: dict = {}
 ADMIN_USERS: list = []
 TO_DELETE_MSG_TEXT = "#to_delete"
 
@@ -77,8 +77,13 @@ for key in config_json:
 
 
 def load_discussion_chat_ids(bot: telebot.TeleBot):
-	for channel_id in CHANNEL_IDS:
-		channel_data = bot.get_chat(channel_id)
+	main_channel_ids = db_utils.get_main_channel_ids()
+	for channel_id in main_channel_ids:
+		try:
+			channel_data = bot.get_chat(channel_id)
+		except ApiTelegramException:
+			logging.error(f"Can't load discussion chat data for {channel_id}")
+			continue
 		DISCUSSION_CHAT_DATA[str(channel_id)] = channel_data.linked_chat_id
 
 
@@ -100,19 +105,3 @@ def update_config(updated_config_data):
 
 	with open(CONFIG_FILE, "w", encoding="utf-8") as f:
 		json.dump(current_config, f, indent=4, ensure_ascii=False)
-
-
-def load_users(bot: telebot.TeleBot):
-	for main_channel_id in USER_DATA:
-		for user_tag in USER_DATA[main_channel_id]:
-			user_id = USER_DATA[main_channel_id][user_tag]
-			if (type(user_id) == str and user_id.startswith("@")) or type(user_id) == telebot.types.Chat:
-				continue  # skip usernames and already loaded users
-			try:
-				user_info = bot.get_chat(user_id)
-			except Exception as E:
-				logging.error(f"Error during loading info about user {user_id}, {E}")
-				continue
-			if user_info:
-				USER_DATA[main_channel_id][user_tag] = user_info
-

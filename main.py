@@ -1,6 +1,7 @@
 import logging
 import telebot
 
+import channel_manager
 import command_utils
 import config_utils
 import forwarding_utils
@@ -8,10 +9,11 @@ import interval_updating_utils
 import post_link_utils
 import db_utils
 import scheduled_messages_utils
+import user_utils
 import utils
 
 import messages_export_utils
-from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH, CHANNEL_IDS, CHAT_IDS_TO_IGNORE, DISCUSSION_CHAT_DATA,\
+from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH, DISCUSSION_CHAT_DATA,\
 	SUPPORTED_CONTENT_TYPES, INTERVAL_UPDATE_START_DELAY
 
 db_utils.initialize_db()
@@ -21,8 +23,9 @@ bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
 
 config_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
-config_utils.load_users(bot)
-CHAT_IDS_TO_IGNORE += utils.get_ignored_chat_ids()
+user_utils.load_users(bot)
+
+utils.check_last_messages(bot)
 
 command_utils.initialize_bot_commands(bot)
 scheduled_messages_utils.start_scheduled_thread(bot)
@@ -30,15 +33,20 @@ scheduled_messages_utils.start_scheduled_thread(bot)
 if APP_API_ID and APP_API_HASH:
 	pyrogram_app = messages_export_utils.init_pyrogram(APP_API_ID, APP_API_HASH, BOT_TOKEN)
 	messages_export_utils.export_comments_from_discussion_chats(pyrogram_app)
+	messages_export_utils.export_main_channels(pyrogram_app)
 
 interval_updating_utils.start_interval_updating(bot, INTERVAL_UPDATE_START_DELAY)
 
-main_channel_filter = lambda message_data: message_data.chat.id in CHANNEL_IDS
+main_channel_filter = lambda message_data: db_utils.is_main_channel_exists(message_data.chat.id)
+subchannel_filter = lambda message_data: db_utils.is_individual_channel_exists(message_data.chat.id)
 
 
 @bot.channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_post(post_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
+
+	user_id = user_utils.find_user_by_signature(post_data.author_signature, post_data.chat.id)
+	db_utils.insert_main_channel_message(post_data.chat.id, post_data.message_id, user_id)
 
 	main_channel_id_str = str(post_data.chat.id)
 	if DISCUSSION_CHAT_DATA[main_channel_id_str] is None:
@@ -71,23 +79,6 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	msg_data.message_id = main_message_id
 	edited_post = post_link_utils.add_link_to_new_post(bot, msg_data)
 	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, use_default_user=True, force_forward=True)
-
-
-@bot.channel_post_handler(func=lambda post_data: post_data.chat.id in utils.get_all_subchannel_ids(),
-					 content_types=SUPPORTED_CONTENT_TYPES)
-def handle_subchannel_message(post_data: telebot.types.Message):
-	if post_data.forward_from_chat is None:
-		return
-
-	if post_data.forward_from_chat.id not in CHANNEL_IDS:
-		return
-
-	main_channel_id = post_data.forward_from_chat.id
-	message_id = post_data.forward_from_message_id
-	forwarded_message_id = post_data.message_id
-	subchannel_id = post_data.chat.id
-
-	db_utils.insert_copied_message(message_id, main_channel_id, forwarded_message_id, subchannel_id)
 
 
 @bot.message_handler(func=lambda msg_data: msg_data.chat.id in DISCUSSION_CHAT_DATA.values(),
@@ -123,12 +114,14 @@ def handle_edited_post(post_data: telebot.types.Message):
 
 
 @bot.my_chat_member_handler()
-def handle_changed_permissions(message: telebot.types.ChatMemberUpdated):
-	has_permissions = message.new_chat_member.can_edit_messages and message.new_chat_member.can_post_messages
+def handle_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
+	has_permissions = member_update.new_chat_member.can_edit_messages and member_update.new_chat_member.can_post_messages
 	if has_permissions:
-		logging.info(f"Bot received permissions for channel {message.chat.id}")
+		logging.info(f"Bot received permissions for channel {member_update.chat.id}")
+		if member_update.old_chat_member.status in ["left", "kicked"]:
+			channel_manager.send_settings_keyboard(bot, member_update.chat.id)
 	else:
-		logging.info(f"Bot permissions for channel {message.chat.id} was removed")
+		logging.info(f"Bot permissions for channel {member_update.chat.id} was removed")
 
 
 @bot.callback_query_handler(func=lambda call: main_channel_filter(call.message))
@@ -141,8 +134,12 @@ def handle_main_channel_keyboard_callback(call: telebot.types.CallbackQuery):
 		scheduled_messages_utils.handle_callback(bot, call)
 
 
-@bot.callback_query_handler(func=lambda call: call.message.chat.id in utils.get_all_subchannel_ids())
+@bot.callback_query_handler(func=lambda call: subchannel_filter(call.message))
 def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
+	if call.data.startswith(channel_manager.CALLBACK_PREFIX):
+		channel_manager.handle_callback(bot, call)
+		return
+
 	main_message_data = db_utils.get_main_message_from_copied(call.message.message_id, call.message.chat.id)
 	if main_message_data is None:
 		logging.info(f"Button event in unknown message {[call.message.message_id, call.message.chat.id]}")
@@ -164,37 +161,14 @@ def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 		scheduled_messages_utils.handle_callback(bot, call, subchannel_id, subchannel_message_id)
 
 
-@bot.callback_query_handler(func=lambda call: call.message.chat.id in utils.get_all_scheduled_storage_ids())
-def handle_scheduled_keyboard_callback(call: telebot.types.CallbackQuery):
-	main_message_data = db_utils.get_main_from_scheduled_message(call.message.message_id, call.message.chat.id)
-	if main_message_data is None:
-		logging.info(f"Button event in unknown message {[call.message.message_id, call.message.chat.id]}")
-		return
-	main_message_id, main_channel_id = main_message_data
-
-	msg_data = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
-
-	scheduled_message_id = call.message.message_id
-	scheduled_channel_id = call.message.chat.id
-
-	keyboard = call.message.reply_markup
-	call.message = msg_data
-	call.message.message_id = main_message_id
-	call.message.chat.id = main_channel_id
-	call.message.reply_markup = keyboard
-
-	call.message.message_id = main_message_id
-	call.message.chat.id = main_channel_id
-
-	if call.data.startswith(forwarding_utils.CALLBACK_PREFIX):
-		forwarding_utils.handle_callback(bot, call, scheduled_channel_id, scheduled_message_id)
-	if call.data.startswith(scheduled_messages_utils.CALLBACK_PREFIX):
-		scheduled_messages_utils.handle_callback(bot, call, scheduled_channel_id, scheduled_message_id)
-
+@bot.callback_query_handler(func=lambda call: True)
+def handle_individual_channel_keyboard_callback(call: telebot.types.CallbackQuery):
+	if call.data.startswith(channel_manager.CALLBACK_PREFIX):
+		channel_manager.handle_callback(bot, call)
 
 
 @bot.message_handler(func=lambda msg: msg.text.startswith("/"), chat_types=["private"])
-def handle_bot_command(msg_data: telebot.types.Message):
+def handle_admin_bot_command(msg_data: telebot.types.Message):
 	user_id = msg_data.from_user.id
 	username = msg_data.from_user.username
 	if username:
@@ -202,6 +176,11 @@ def handle_bot_command(msg_data: telebot.types.Message):
 	if user_id not in config_utils.ADMIN_USERS and username not in config_utils.ADMIN_USERS:
 		return
 	command_utils.handle_command(bot, msg_data)
+
+
+@bot.channel_post_handler(func=lambda msg: msg.text.startswith("/"))
+def handle_channel_bot_command(msg_data: telebot.types.Message):
+	command_utils.handle_channel_command(bot, msg_data)
 
 
 bot.infinity_polling()

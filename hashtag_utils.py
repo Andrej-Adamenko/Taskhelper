@@ -5,14 +5,17 @@ import telebot
 from telebot.types import MessageEntity
 
 import config_utils
+import db_utils
 import post_link_utils
 import utils
-from config_utils import DEFAULT_USER_DATA, SUBCHANNEL_DATA, HASHTAGS
+from config_utils import DEFAULT_USER_DATA, HASHTAGS
 
 PRIORITY_TAG = HASHTAGS["PRIORITY"]
 OPENED_TAG = HASHTAGS["OPENED"]
 CLOSED_TAG = HASHTAGS["CLOSED"]
 SCHEDULED_TAG = HASHTAGS["SCHEDULED"]
+
+POSSIBLE_PRIORITIES = ["1", "2", "3"]
 
 
 def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
@@ -22,8 +25,6 @@ def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity],
 
 	if entities is None:
 		return None, None, None
-
-	main_channel_id_str = str(main_channel_id)
 
 	for entity_index in reversed(range(len(entities))):
 		entity = entities[entity_index]
@@ -37,11 +38,9 @@ def find_hashtag_indexes(text: str, entities: List[telebot.types.MessageEntity],
 				status_tag_index = entity_index
 				continue
 
-			if main_channel_id_str in SUBCHANNEL_DATA:
-				main_channel_users = SUBCHANNEL_DATA[main_channel_id_str]
-				if tag in main_channel_users:
-					user_tag_indexes.insert(0, entity_index)
-					continue
+			if db_utils.is_user_tag_exists(main_channel_id, tag):
+				user_tag_indexes.insert(0, entity_index)
+				continue
 
 			if config_utils.HASHTAGS_BEFORE_UPDATE and check_old_priority_tag(tag):
 				priority_tag_index = entity_index
@@ -79,6 +78,14 @@ def insert_default_user_hashtags(main_channel_id: int, hashtags: List[str]):
 	return hashtags
 
 
+def get_default_subchannel_priority(main_channel_id, user_tag):
+	main_channel_id_str = str(main_channel_id)
+	if main_channel_id_str in DEFAULT_USER_DATA:
+		user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
+		if user == user_tag:
+			return priority
+
+
 def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity], hashtag: str, position: int):
 	hashtag_text = hashtag
 	if len(text) > position:
@@ -93,7 +100,9 @@ def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity
 		if entity.offset >= position:
 			entity.offset += len(hashtag_text)
 
-	hashtag_entity = MessageEntity(type="hashtag", offset=position, length=len(hashtag))
+	entity_length = hashtag.find(" ") if " " in hashtag else len(hashtag)
+
+	hashtag_entity = MessageEntity(type="hashtag", offset=position, length=entity_length)
 	entities.append(hashtag_entity)
 	entities.sort(key=lambda e: e.offset)
 

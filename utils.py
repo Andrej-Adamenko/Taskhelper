@@ -5,7 +5,8 @@ import telebot.types
 from telebot.apihelper import ApiTelegramException
 
 import config_utils
-from config_utils import MAX_BUTTONS_IN_ROW, DISCUSSION_CHAT_DATA, SUBCHANNEL_DATA, SCHEDULED_STORAGE_CHAT_IDS, USER_DATA
+import db_utils
+from config_utils import MAX_BUTTONS_IN_ROW
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 MSG_CANT_BE_DELETED_ERROR = "message can't be deleted"
@@ -162,39 +163,6 @@ def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity],
 	return text, entities
 
 
-def get_all_subchannel_ids():
-	subchannel_ids = []
-	for main_channel_id in SUBCHANNEL_DATA:
-		channel_users = SUBCHANNEL_DATA[main_channel_id]
-		for user in channel_users:
-			user_priorities = channel_users[user]
-			for priority in user_priorities:
-				subchannel_id = user_priorities[priority]
-				subchannel_ids.append(subchannel_id)
-
-	return subchannel_ids
-
-
-def get_all_scheduled_storage_ids():
-	storage_ids = []
-	for main_channel_id in SCHEDULED_STORAGE_CHAT_IDS:
-		channel_users = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id]
-		for user in channel_users:
-			storage_ids.append(channel_users[user])
-	return storage_ids
-
-
-def get_ignored_chat_ids():
-	ignored_chat_ids = [config_utils.DUMP_CHAT_ID]
-	ignored_chat_ids += list(DISCUSSION_CHAT_DATA.values())
-	for main_channel_id in SCHEDULED_STORAGE_CHAT_IDS:
-		for tag in SCHEDULED_STORAGE_CHAT_IDS[main_channel_id]:
-			ignored_chat_ids.append(SCHEDULED_STORAGE_CHAT_IDS[main_channel_id][tag])
-	ignored_chat_ids += get_all_subchannel_ids()
-
-	return ignored_chat_ids
-
-
 def get_key_by_value(d: dict, value: object):
 	key_list = list(d.keys())
 	val_list = list(d.values())
@@ -207,46 +175,6 @@ def get_key_by_value(d: dict, value: object):
 	return key_list[position]
 
 
-def insert_user_reference(main_channel_id: int, user_tag: str, text: str):
-	placeholder_text = "{USER}"
-	placeholder_position = text.find(placeholder_text)
-	if placeholder_position < 0:
-		return text, None
-
-	text = text[:placeholder_position] + text[placeholder_position + len(placeholder_text):]
-
-	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str not in USER_DATA:
-		text = text[:placeholder_position] + user_tag + text[placeholder_position:]
-		return text, None
-	user_tags = USER_DATA[main_channel_id_str]
-	if user_tag not in user_tags:
-		text = text[:placeholder_position] + user_tag + text[placeholder_position:]
-		return text, None
-
-	user = user_tags[user_tag]
-	if type(user) == telebot.types.Chat:
-		if user.username:
-			user_reference_text = f"@{user.username}"
-			text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
-			return text, None
-		else:
-			user_reference_text = user.first_name
-			text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
-			mentioned_user = {"id": user.id, "first_name": user.first_name, "last_name": user.last_name}
-			entity = telebot.types.MessageEntity(offset=placeholder_position, length=len(user_reference_text),
-			                                     type="text_mention", user=mentioned_user)
-			return text, [entity]
-	else:
-		text = text[:placeholder_position] + str(user) + text[placeholder_position:]
-		return text, None
-
-
-def is_main_channel_exists(main_channel_id):
-	main_channel_id = int(main_channel_id)
-	return main_channel_id in config_utils.CHANNEL_IDS
-
-
 def delete_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	try:
 		return bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -256,3 +184,34 @@ def delete_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
 		else:
 			raise E
 
+
+def get_last_message(bot: telebot.TeleBot, channel_id: int):
+	last_message_id = db_utils.get_last_message_id(channel_id)
+	if last_message_id is None:
+		msg_text = "(This is service message for obtaining last message id, bot will delete it in a moment)"
+		try:
+			last_message = bot.send_message(chat_id=channel_id, text=msg_text)
+			bot.delete_message(chat_id=channel_id, message_id=last_message.message_id)
+		except Exception as E:
+			logging.error(f"Error during retrieving last message id in {channel_id} - {E}")
+			return
+		last_message_id = last_message.message_id - 1
+		db_utils.insert_or_update_last_msg_id(last_message_id, channel_id)
+
+	return last_message_id
+
+
+def check_last_messages(bot: telebot.TeleBot):
+	channels_to_check = set()
+
+	main_channel_ids = db_utils.get_main_channel_ids()
+	if main_channel_ids:
+		channels_to_check.update(main_channel_ids)
+
+	for main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
+		discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA[main_channel_id]
+		if discussion_channel_id:
+			channels_to_check.add(discussion_channel_id)
+
+	for channel_id in channels_to_check:
+		get_last_message(bot, channel_id)

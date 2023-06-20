@@ -11,7 +11,7 @@ import forwarding_utils
 import post_link_utils
 import threading
 
-from config_utils import DISCUSSION_CHAT_DATA, CHANNEL_IDS, DELAY_AFTER_ONE_SCAN
+from config_utils import DISCUSSION_CHAT_DATA, DELAY_AFTER_ONE_SCAN
 
 UPDATE_STARTED_MSG_TEXT = "Started updating older posts. When update is complete this message will be deleted."
 
@@ -106,7 +106,8 @@ def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 		finished_channels = db_utils.get_finished_update_channels()
 		finished_channels = [c[0] for c in finished_channels]
 
-		for main_channel_id in CHANNEL_IDS:
+		main_channel_ids = db_utils.get_main_channel_ids()
+		for main_channel_id in main_channel_ids:
 			if main_channel_id in finished_channels:
 				continue
 			main_channel_id_str = str(main_channel_id)
@@ -125,18 +126,6 @@ def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 		last_update_time = time.time()
 
 
-def get_last_message(bot: telebot.TeleBot, channel_id: int):
-	last_message_id = db_utils.get_last_message_id(channel_id)
-	if last_message_id is None:
-		msg_text = "(This is service message for obtaining last message id, bot will delete it in a moment)"
-		last_message = bot.send_message(chat_id=channel_id, text=msg_text)
-		bot.delete_message(chat_id=channel_id, message_id=last_message.message_id)
-		last_message_id = last_message.message_id - 1
-		db_utils.insert_or_update_last_msg_id(last_message_id, channel_id)
-
-	return last_message_id
-
-
 def check_all_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None, start_from_message: int = None):
 	if start_from_message and discussion_chat_id:
 		current_msg_id = db_utils.get_discussion_message_id(start_from_message, main_channel_id)
@@ -146,7 +135,7 @@ def check_all_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_ch
 		discussion_chat = bot.get_chat(discussion_chat_id)
 		current_msg_id = discussion_chat.pinned_message.message_id
 	else:
-		current_msg_id = get_last_message(bot, main_channel_id)
+		current_msg_id = utils.get_last_message(bot, main_channel_id)
 
 	last_updated_message_id = current_msg_id
 

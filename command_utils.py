@@ -3,10 +3,13 @@ import copy
 import pytz
 import telebot
 
+import channel_manager
 import config_utils
 import db_utils
+import forwarding_utils
 import hashtag_utils
 import interval_updating_utils
+import user_utils
 import utils
 
 
@@ -16,6 +19,27 @@ def initialize_bot_commands(bot: telebot.TeleBot):
 		command_text, description, _ = command
 		commands.append(telebot.types.BotCommand(command_text, description))
 	bot.set_my_commands(commands, telebot.types.BotCommandScopeAllPrivateChats())
+
+
+def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message):
+	command_parts = msg_data.text.split(" ")
+	command_parts = [p for p in command_parts if p]
+	command = command_parts[0]
+	arguments = command_parts[1:]
+
+	if command == "/show_settings":
+		forwarding_utils.delete_forwarded_message(bot, msg_data.chat.id, msg_data.message_id)
+		channel_manager.send_settings_keyboard(bot, msg_data.chat.id)
+	elif command == "/set_user_tag":
+		if not db_utils.is_individual_channel_exists(msg_data.chat.id):
+			bot.send_message(chat_id=msg_data.chat.id, text="First you need to select the settings for this channel.")
+			return
+		if len(arguments) != 1:
+			bot.send_message(chat_id=msg_data.chat.id, text="You should specify user tag without spaces.")
+			return
+		user_tag = arguments[0]
+		db_utils.update_individual_channel_tag(msg_data.chat.id, user_tag)
+		bot.send_message(chat_id=msg_data.chat.id, text="This channel's user tag has been successfully changed.")
 
 
 def handle_command(bot: telebot.TeleBot, msg_data: telebot.types.Message):
@@ -39,10 +63,6 @@ def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, a
 
 	help_text += "/set_timezone <TIMEZONE> — changes timezone identifier\n"
 	help_text += "Example: /set_timezone Europe/Kiev\n\n"
-	help_text += "/set_subchannel <MAIN_CHANNEL_ID> <TAG> <PRIORITY> <SUBCHANNEL_ID> — add subchannel to main channel with specified tag and priority\n"
-	help_text += "Example: /set_subchannel -100987987987 aa 1 -100123321123\n\n"
-	help_text += "/remove_subchannel_tag <MAIN_CHANNEL_ID> <TAG> — removes all subchannels with specified tag in main channel\n"
-	help_text += "Example: /remove_subchannel_tag -100987987987 aa\n\n"
 	help_text += "/set_user_tag <MAIN_CHANNEL_ID> <TAG> <USERNAME_OR_USER_ID> — add or change username or user id of the tag\n"
 	help_text += "Example with username: /set_user_tag -100987987987 aa @username\n"
 	help_text += "Example with user id: /set_user_tag -100987987987 aa 321123321\n\n"
@@ -102,64 +122,19 @@ def handle_main_channel_change(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 		return
 
 	if msg_data.text.startswith("/add_main_channel"):
-		if channel_id in config_utils.CHANNEL_IDS:
+		if db_utils.is_main_channel_exists(channel_id):
 			bot.send_message(chat_id=msg_data.chat.id, text="This channel already added.")
 			return
-		config_utils.CHANNEL_IDS.append(channel_id)
+		db_utils.insert_main_channel(channel_id)
 		bot.send_message(chat_id=msg_data.chat.id, text="Main channel was successfully added.")
 	elif msg_data.text.startswith("/remove_main_channel"):
-		if channel_id not in config_utils.CHANNEL_IDS:
+		if not db_utils.is_main_channel_exists(channel_id):
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
-		config_utils.CHANNEL_IDS.remove(channel_id)
+		db_utils.delete_main_channel(channel_id)
 		bot.send_message(chat_id=msg_data.chat.id, text="Main channel was successfully removed.")
 
 	config_utils.load_discussion_chat_ids(bot)
-	config_utils.update_config({"CHANNEL_IDS": config_utils.CHANNEL_IDS})
-
-
-def handle_subchannel_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
-	if msg_data.text.startswith("/set_subchannel"):
-		try:
-			main_channel_id, tag, priority, subchannel_id = arguments.split(" ")
-			subchannel_id = int(subchannel_id)
-		except ValueError:
-			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
-			return
-
-		if not utils.is_main_channel_exists(main_channel_id):
-			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
-			return
-
-		if main_channel_id not in config_utils.SUBCHANNEL_DATA:
-			config_utils.SUBCHANNEL_DATA[main_channel_id] = {}
-		if tag not in config_utils.SUBCHANNEL_DATA[main_channel_id]:
-			config_utils.SUBCHANNEL_DATA[main_channel_id][tag] = {}
-
-		config_utils.SUBCHANNEL_DATA[main_channel_id][tag][priority] = subchannel_id
-		bot.send_message(chat_id=msg_data.chat.id, text="Subchannel data was successfully updated.")
-	elif msg_data.text.startswith("/remove_subchannel_tag"):
-		try:
-			main_channel_id, tag = arguments.split(" ")
-			main_channel_id = int(main_channel_id)
-		except ValueError:
-			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
-			return
-
-		if not utils.is_main_channel_exists(main_channel_id):
-			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
-			return
-
-		if main_channel_id not in config_utils.SUBCHANNEL_DATA:
-			bot.send_message(chat_id=msg_data.chat.id, text="Main channel not found in subchannel data.")
-			return
-		if tag not in config_utils.SUBCHANNEL_DATA[main_channel_id]:
-			bot.send_message(chat_id=msg_data.chat.id, text="Tag not found in subchannel data.")
-			return
-		del config_utils.SUBCHANNEL_DATA[main_channel_id][tag]
-		bot.send_message(chat_id=msg_data.chat.id, text="Subchannel data was successfully updated.")
-
-	config_utils.update_config({"SUBCHANNEL_DATA": config_utils.SUBCHANNEL_DATA})
 
 
 def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
@@ -170,24 +145,19 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
 			return
 
-		if not utils.is_main_channel_exists(main_channel_id):
+		if not db_utils.is_main_channel_exists(main_channel_id):
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
 
-		if main_channel_id not in config_utils.USER_DATA:
-			config_utils.USER_DATA[main_channel_id] = {}
-
-		tag_already_exists = tag in config_utils.USER_DATA[main_channel_id]
-
-		config_utils.USER_DATA[main_channel_id][tag] = user
-		config_utils.load_users(bot)
-
-		if tag_already_exists:
+		if db_utils.is_user_tag_exists(main_channel_id, tag):
 			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA[main_channel_id]
 			if discussion_channel_id:
 				comment_text = f"User tag #{tag} was reassigned to {{USER}}."
-				text, entities = utils.insert_user_reference(main_channel_id, tag, comment_text)
+				text, entities = user_utils.insert_user_reference(main_channel_id, tag, comment_text)
 				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+
+		db_utils.insert_or_update_user(main_channel_id, tag, user)
+		user_utils.load_users(bot)
 
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was successfully updated.")
 	elif msg_data.text.startswith("/remove_user_tag"):
@@ -197,25 +167,13 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
 			return
 
-		if not utils.is_main_channel_exists(main_channel_id):
+		if not db_utils.is_main_channel_exists(main_channel_id):
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
 
-		if main_channel_id not in config_utils.USER_DATA:
-			bot.send_message(chat_id=msg_data.chat.id, text="Main channel not found in user data.")
-			return
-		if tag not in config_utils.USER_DATA[main_channel_id]:
-			bot.send_message(chat_id=msg_data.chat.id, text="Tag not found in user data.")
-			return
-		del config_utils.USER_DATA[main_channel_id][tag]
+		db_utils.delete_user_by_tag(main_channel_id, tag)
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was removed updated.")
-
-	user_data = copy.deepcopy(config_utils.USER_DATA)
-	for channel_id in user_data:
-		for tag in user_data[channel_id]:
-			if type(user_data[channel_id][tag]) == telebot.types.Chat:
-				user_data[channel_id][tag] = user_data[channel_id][tag].id
-	config_utils.update_config({"USER_DATA": user_data})
+		user_utils.load_users(bot)
 
 
 def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
@@ -225,7 +183,7 @@ def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.
 		bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
 		return
 
-	if not utils.is_main_channel_exists(main_channel_id):
+	if not db_utils.is_main_channel_exists(main_channel_id):
 		bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 		return
 
@@ -243,7 +201,7 @@ def handle_set_storage_channel(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 		bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
 		return
 
-	if not utils.is_main_channel_exists(main_channel_id):
+	if not db_utils.is_main_channel_exists(main_channel_id):
 		bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 		return
 
@@ -341,7 +299,6 @@ def handle_change_hashtag_text(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 	config_utils.update_config({"HASHTAGS_BEFORE_UPDATE": config_utils.HASHTAGS_BEFORE_UPDATE})
 
 
-
 COMMAND_LIST = [
 	["/help", "Command explanations", handle_help_command],
 	["/set_dump_chat_id", "Set dump chat id", handle_set_dump_chat_id],
@@ -349,8 +306,6 @@ COMMAND_LIST = [
 	["/set_timezone", "Set timezone", handle_set_timezone],
 	["/add_main_channel", "Add main channel", handle_main_channel_change],
 	["/remove_main_channel", "Remove main channel", handle_main_channel_change],
-	["/set_subchannel", "Add subchannel", handle_subchannel_change],
-	["/remove_subchannel_tag", "Remove subchannel", handle_subchannel_change],
 	["/set_user_tag", "Add user id", handle_user_change],
 	["/remove_user_tag", "Remove user id", handle_user_change],
 	["/set_default_subchannel", "Set default subchannel", handle_set_default_subchannel],

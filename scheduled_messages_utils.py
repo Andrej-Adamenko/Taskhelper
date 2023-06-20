@@ -14,7 +14,7 @@ import db_utils
 import forwarding_utils
 import hashtag_utils
 import utils
-from config_utils import SCHEDULED_STORAGE_CHAT_IDS, TIMEZONE_NAME
+from config_utils import TIMEZONE_NAME
 
 CALLBACK_PREFIX = "SCH"
 
@@ -36,8 +36,7 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 	main_message_id = message.message_id
 	main_channel_id = message.chat.id
 
-	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str not in SCHEDULED_STORAGE_CHAT_IDS:
+	if not db_utils.is_main_channel_exists(main_channel_id):
 		return
 
 	scheduled_messages = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
@@ -65,13 +64,7 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 	hashtags[0] = hashtag_utils.SCHEDULED_TAG + " " + dt.strftime(DATE_FORMAT)
 	forwarding_utils.rearrange_hashtags(bot, message, hashtags)
 
-	for user_tag in hashtags[1:-1]:
-		if user_tag not in SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str]:
-			continue
-		scheduled_storage_id = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str][user_tag]
-		copied_message = bot.copy_message(chat_id=scheduled_storage_id, from_chat_id=main_channel_id, message_id=main_message_id)
-		scheduled_message_id = copied_message.message_id
-		db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time)
+	db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
 
 	forwarding_utils.add_control_buttons(bot, message, hashtags)
 	forwarding_utils.forward_to_subchannel(bot, message, hashtags)
@@ -248,17 +241,6 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 
 	hashtags, post_data = hashtag_utils.extract_hashtags(message, main_channel_id)
 
-	scheduled_messages = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
-	if not scheduled_messages:
-		SCHEDULED_MESSAGES_LIST.remove(scheduled_message_info)
-		forwarding_utils.add_control_buttons(bot, post_data, hashtags)
-		forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
-		return
-
-	for msg in scheduled_messages:
-		scheduled_message_id, scheduled_channel_id, send_time = msg
-		delete_scheduled_message(bot, scheduled_channel_id, scheduled_message_id)
-
 	hashtags[0] = hashtag_utils.OPENED_TAG
 
 	forwarding_utils.rearrange_hashtags(bot, post_data, hashtags)
@@ -266,6 +248,7 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 	forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
 
 	SCHEDULED_MESSAGES_LIST.remove(scheduled_message_info)
+	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
 
 
 def scheduled_message_comparison_func(msg):
@@ -303,106 +286,4 @@ def schedule_loop_thread(bot: telebot.TeleBot):
 			except Exception as E:
 				logging.error(f"Exception during sending scheduled message: {E}")
 		time.sleep(1)
-
-
-def update_scheduled_messages(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: list):
-	main_message_id = post_data.message_id
-	main_channel_id = post_data.chat.id
-	scheduled_messages_info = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
-	if scheduled_messages_info is None:
-		return
-
-	_, _, send_time = scheduled_messages_info[0]
-
-	main_message_id = post_data.message_id
-	main_channel_id = post_data.chat.id
-
-	if hashtag_utils.CLOSED_TAG in hashtags or hashtag_utils.OPENED_TAG in hashtags:
-		for msg in scheduled_messages_info:
-			scheduled_message_id, scheduled_channel_id, _ = msg
-			delete_scheduled_message(bot, scheduled_channel_id, scheduled_message_id)
-
-		for msg in SCHEDULED_MESSAGES_LIST:
-			message_id, channel_id, _ = msg
-			if message_id == main_message_id and channel_id == main_channel_id:
-				msg[2] = send_time
-		return
-
-	main_channel_id_str = str(main_channel_id)
-	storage_channels = SCHEDULED_STORAGE_CHAT_IDS[main_channel_id_str]
-
-	for msg in scheduled_messages_info:
-		scheduled_message_id, scheduled_channel_id, _ = msg
-		user_tag = utils.get_key_by_value(storage_channels, scheduled_channel_id)
-		if user_tag not in hashtags:
-			delete_scheduled_message(bot, scheduled_channel_id, scheduled_message_id)
-			scheduled_messages_info.remove(msg)
-
-	scheduled_messages_info = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
-	hashtag_scheduled_channels = [m[1] for m in scheduled_messages_info]
-	for user_tag in hashtags[1:-1]:
-		if user_tag not in storage_channels:
-			continue
-		scheduled_storage_id = storage_channels[user_tag]
-		if scheduled_storage_id not in hashtag_scheduled_channels:
-			copied_message = bot.copy_message(chat_id=scheduled_storage_id, from_chat_id=main_channel_id, message_id=main_message_id)
-			scheduled_message_id = copied_message.message_id
-			db_utils.insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time)
-			scheduled_messages_info.append([scheduled_message_id, scheduled_storage_id, send_time])
-
-	for msg in scheduled_messages_info:
-		keyboard_markup = forwarding_utils.generate_control_buttons(hashtags, post_data)
-		scheduled_message_id, scheduled_channel_id, _ = msg
-		utils.edit_message_content(bot, post_data, text=post_data.text, entities=post_data.entities,
-		                           reply_markup=keyboard_markup, chat_id=scheduled_channel_id, message_id=scheduled_message_id)
-
-
-def delete_scheduled_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
-	try:
-		utils.delete_message(bot, chat_id=chat_id, message_id=message_id)
-		db_utils.delete_scheduled_message(message_id, chat_id)
-	except ApiTelegramException as E:
-		if E.description.endswith(utils.MSG_CANT_BE_DELETED_ERROR):
-			oldest_message_data = None
-			oldest_message_id = None
-			while oldest_message_data is None:
-				oldest_message_id = db_utils.get_oldest_scheduled_message(chat_id)
-				if oldest_message_id is None:
-					break
-
-				oldest_message_data = forwarding_utils.get_message_content_by_id(bot, chat_id, oldest_message_id)
-				if oldest_message_data is None:
-					db_utils.delete_scheduled_message(oldest_message_id, chat_id)
-					logging.info(f"Message {[oldest_message_id, chat_id]} doesn't exists, deleted from db")
-					continue
-
-			main_data = db_utils.get_main_from_scheduled_message(message_id, chat_id)
-			if main_data is None:
-				return
-			main_message_id, main_channel_id = main_data
-
-			msg_to_delete_data = forwarding_utils.get_message_content_by_id(bot, chat_id, message_id)
-
-			if oldest_message_data:
-				if oldest_message_id != message_id:
-					oldest_message_data.message_id = main_message_id
-					oldest_message_data.chat.id = main_channel_id
-
-					hashtags, _ = hashtag_utils.extract_hashtags(oldest_message_data, main_channel_id, False)
-					keyboard = forwarding_utils.generate_control_buttons(hashtags, oldest_message_data)
-					text, entities = utils.get_post_content(oldest_message_data)
-
-					utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=message_id,
-					                           reply_markup=keyboard, text=text, entities=entities)
-					db_utils.delete_scheduled_message(message_id, chat_id)
-					db_utils.update_scheduled_message_id(oldest_message_id, chat_id, message_id)
-				else:
-					db_utils.delete_scheduled_message(message_id, chat_id)
-
-				utils.edit_message_content(bot, oldest_message_data, chat_id=chat_id, message_id=oldest_message_id,
-				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
-			else:
-				db_utils.delete_scheduled_message(oldest_message_id, chat_id)
-				utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=message_id,
-				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 

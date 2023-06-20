@@ -102,6 +102,51 @@ def create_tables():
 
 		CURSOR.execute(interval_updates_status_table_sql)
 
+	if not is_table_exists("individual_channels"):
+		individual_channels_table_sql = '''
+			CREATE TABLE "individual_channels" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_channel_id"	INT NOT NULL,
+				"channel_id"        INT NOT NULL,
+				"priorities"        TEXT,
+				"user_tag"          TEXT,
+				"types"             TEXT
+			); '''
+
+		CURSOR.execute(individual_channels_table_sql)
+
+	if not is_table_exists("users"):
+		users_table_sql = '''
+			CREATE TABLE "users" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_channel_id"	INT NOT NULL,
+				"user_id"           INT NOT NULL,
+				"initial_value"     TEXT NOT NULL,
+				"user_tag"          TEXT NOT NULL		
+			); '''
+
+		CURSOR.execute(users_table_sql)
+
+	if not is_table_exists("main_channels"):
+		main_channels_table_sql = '''
+			CREATE TABLE "main_channels" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"channel_id"    INT NOT NULL
+			); '''
+
+		CURSOR.execute(main_channels_table_sql)
+
+	if not is_table_exists("main_messages"):
+		main_messages_table_sql = '''
+			CREATE TABLE "main_messages" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_channel_id"   INT NOT NULL,
+				"main_message_id"   INT NOT NULL,
+				"sender_id"         INT
+			); '''
+
+		CURSOR.execute(main_messages_table_sql)
+
 	DB_CONNECTION.commit()
 
 
@@ -367,3 +412,200 @@ def clear_updates_in_progress():
 	CURSOR.execute(sql, ())
 	DB_CONNECTION.commit()
 
+
+@db_thread_lock
+def insert_or_update_individual_channel(main_channel_id, channel_id, priorities, channel_types):
+	if get_individual_channel(channel_id):
+		sql = '''
+			UPDATE individual_channels
+			SET main_channel_id=(?), priorities=(?), types=(?)
+			WHERE channel_id=(?) 
+		'''
+	else:
+		sql = '''
+			INSERT INTO individual_channels
+			(main_channel_id, priorities, types, channel_id)
+			VALUES (?, ?, ?, ?)
+		'''
+	CURSOR.execute(sql, (main_channel_id, priorities, channel_types, channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_individual_channel(channel_id):
+	sql = "SELECT main_channel_id, user_tag, priorities, types FROM individual_channels WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchone()
+	return result
+
+
+@db_thread_lock
+def get_individual_channel_user_tag(channel_id):
+	sql = "SELECT user_tag FROM individual_channels WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def is_individual_channel_exists(channel_id):
+	sql = "SELECT id FROM individual_channels WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def get_main_channel_ids():
+	sql = "SELECT channel_id FROM main_channels"
+	CURSOR.execute(sql, ())
+	result = CURSOR.fetchall()
+	if result:
+		return [row[0] for row in result]
+
+
+@db_thread_lock
+def is_main_channel_exists(main_channel_id):
+	sql = "SELECT id FROM main_channels WHERE channel_id=(?)"
+	CURSOR.execute(sql, (main_channel_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def insert_main_channel(main_channel_id):
+	sql = "INSERT INTO main_channels(channel_id) VALUES (?)"
+	CURSOR.execute(sql, (main_channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def delete_main_channel(main_channel_id):
+	sql = "DELETE FROM main_channels WHERE channel_id=(?)"
+	CURSOR.execute(sql, (main_channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_main_channel_from_user(user_id):
+	sql = "SELECT main_channel_id FROM users WHERE user_id=(?)"
+	CURSOR.execute(sql, (user_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def get_main_channel_user_tags(main_channel_id):
+	sql = "SELECT user_tag FROM users WHERE main_channel_id=(?)"
+	CURSOR.execute(sql, (main_channel_id,))
+	result = CURSOR.fetchall()
+	if result:
+		return [row[0] for row in result]
+
+
+@db_thread_lock
+def insert_or_update_user(main_channel_id, user_tag, user_id):
+	if is_user_tag_exists(main_channel_id, user_tag):
+		sql = "UPDATE users SET user_id=(?) WHERE main_channel_id=(?) AND user_tag=(?)"
+	else:
+		sql = "INSERT INTO users(user_id, main_channel_id, user_tag) VALUES (?, ?, ?)"
+
+	CURSOR.execute(sql, (user_id, main_channel_id, user_tag,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def delete_user_by_tag(main_channel_id, user_tag):
+	sql = "DELETE FROM users WHERE main_channel_id=(?) AND user_tag=(?)"
+	CURSOR.execute(sql, (main_channel_id, user_tag,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_main_message_sender(main_channel_id, main_message_id):
+	sql = "SELECT sender_id FROM main_messages WHERE main_channel_id=(?) AND main_message_id=(?)"
+	CURSOR.execute(sql, (main_channel_id, main_message_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def get_individual_channel_id_by_tag(main_channel_id, user_tag, priority, channel_type):
+	sql = '''
+		SELECT channel_id FROM individual_channels WHERE main_channel_id=(?) AND user_tag=(?)
+		AND types LIKE '%' || ? || '%'
+		AND priorities LIKE '%' || ? || '%'
+	'''
+	CURSOR.execute(sql, (main_channel_id, user_tag, channel_type, priority,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def get_individual_channel_id_by_user_id(main_channel_id, user_id, priority, channel_type):
+	sql = '''
+		SELECT channel_id FROM individual_channels WHERE
+		main_channel_id=(?) AND user_tag=(SELECT user_tag FROM users WHERE user_id=(?))
+		AND types LIKE '%' || ? || '%'
+		AND priorities LIKE '%' || ? || '%'
+	'''
+	CURSOR.execute(sql, (main_channel_id, user_id, channel_type, priority,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def insert_main_channel_message(main_channel_id, main_message_id, sender_id):
+	if not is_main_message_exists(main_channel_id, main_message_id):
+		sql = '''
+			INSERT INTO main_messages
+			(main_channel_id, main_message_id, sender_id)
+			VALUES (?, ?, ?)
+		'''
+		CURSOR.execute(sql, (main_channel_id, main_message_id, sender_id,))
+		DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_main_message_sender(main_channel_id, main_message_id):
+	sql = "SELECT sender_id FROM main_messages WHERE main_channel_id=(?) AND main_message_id=(?)"
+	CURSOR.execute(sql, (main_channel_id, main_message_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def is_main_message_exists(main_channel_id, main_message_id):
+	sql = "SELECT id FROM main_messages WHERE main_channel_id=(?) AND main_message_id=(?)"
+	CURSOR.execute(sql, (main_channel_id, main_message_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def update_individual_channel_tag(channel_id, user_tag):
+	sql = "UPDATE individual_channels SET user_tag=(?) WHERE channel_id=(?)"
+	CURSOR.execute(sql, (user_tag, channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def is_user_tag_exists(main_channel_id, user_tag):
+	sql = "SELECT id FROM users WHERE main_channel_id=(?) AND user_tag=(?)"
+	CURSOR.execute(sql, (main_channel_id, user_tag,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def get_all_users():
+	sql = "SELECT main_channel_id, user_id, user_tag FROM users"
+	CURSOR.execute(sql, ())
+	result = CURSOR.fetchall()
+	return result

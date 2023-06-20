@@ -6,13 +6,15 @@ import telebot
 from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+import channel_manager
 import config_utils
 import db_utils
 import hashtag_utils
 import scheduled_messages_utils
+import user_utils
 import utils
 
-from config_utils import SUBCHANNEL_DATA, DISCUSSION_CHAT_DATA, DEFAULT_USER_DATA
+from config_utils import DISCUSSION_CHAT_DATA
 
 CALLBACK_PREFIX = "FWRD"
 
@@ -42,7 +44,7 @@ def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: in
 	return forwarded_message
 
 
-def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str]):
+def get_unchanged_posts(bot: telebot.TeleBot, post_data: telebot.types.Message, subchannel_ids: List[int]):
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
 
@@ -51,7 +53,9 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	for forwarded_message in forwarded_messages:
 		forwarded_msg_id, forwarded_channel_id = forwarded_message
 		forwarded_msg_data = get_message_content_by_id(bot, forwarded_channel_id, forwarded_msg_id)
-		if forwarded_msg_data and utils.is_post_data_equal(forwarded_msg_data, post_data):
+
+		in_subchannels = forwarded_channel_id in subchannel_ids
+		if forwarded_msg_data and utils.is_post_data_equal(forwarded_msg_data, post_data) and in_subchannels:
 			unchanged_posts[forwarded_channel_id] = forwarded_msg_id  # ignore unchanged posts
 			continue
 		try:
@@ -62,15 +66,22 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			elif E.description.endswith("message to delete not found"):
 				db_utils.delete_copied_message(forwarded_msg_id, forwarded_channel_id)
 			logging.info(f"Exception during delete_message [{forwarded_msg_id}, {forwarded_channel_id}] - {E}")
+	return unchanged_posts
 
-	scheduled_messages_utils.update_scheduled_messages(bot, post_data, hashtags)
 
-	if hashtag_utils.OPENED_TAG not in hashtags:
+def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtags: List[str]):
+	main_channel_id = post_data.chat.id
+	message_id = post_data.message_id
+
+	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, message_id, hashtags)
+
+	unchanged_posts = get_unchanged_posts(bot, post_data, list(subchannel_ids))
+
+	if hashtags[0] == hashtag_utils.CLOSED_TAG:
 		return
 
-	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, hashtags)
 	if not subchannel_ids:
-		logging.warning(f"Subchannel not found in config file {hashtags}, {main_channel_id}")
+		logging.warning(f"Subchannels not found {hashtags}, {main_channel_id}")
 		return
 
 	for subchannel_id in subchannel_ids:
@@ -113,8 +124,9 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 					logging.info(f"Message {[oldest_message_id, chat_id]} doesn't exists, deleted from db")
 					continue
 
-			main_data = db_utils.get_main_message_from_copied(message_id, chat_id)
+			main_data = db_utils.get_main_message_from_copied(oldest_message_id, chat_id)
 			if main_data is None:
+				bot.edit_message_text(text=config_utils.TO_DELETE_MSG_TEXT, chat_id=chat_id, message_id=message_id)
 				return
 			main_message_id, main_channel_id = main_data
 
@@ -144,53 +156,106 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 
 
-def get_subchannel_ids_from_hashtags(main_channel_id: int, hashtags: List[str]):
-	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str not in SUBCHANNEL_DATA:
-		return
+def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int, hashtags: List[str]):
+	subchannel_ids = set()
+	status_hashtag = hashtags[0] or ""
+	if status_hashtag == hashtag_utils.OPENED_TAG:
+		assigned_user_subchannel = get_assigned_user_channel_from_hashtags(main_channel_id, hashtags)
+		if assigned_user_subchannel:
+			subchannel_ids.add(assigned_user_subchannel)
 
-	priority = None
-	user_priority_list = None
-	found_user = None
+		followed_users_subchannels = get_followed_user_channels_from_hashtags(main_channel_id, hashtags)
+		if followed_users_subchannels:
+			subchannel_ids.update(followed_users_subchannels)
+	elif status_hashtag.startswith(hashtag_utils.SCHEDULED_TAG):
+		scheduled_users_subchannels = get_scheduled_subchannels_from_hashtags(main_channel_id, hashtags)
+		if scheduled_users_subchannels:
+			subchannel_ids.update(scheduled_users_subchannels)
 
-	subchannel_users = SUBCHANNEL_DATA[main_channel_id_str]
+	creator_subchannel = get_creator_channel_id(main_channel_id, main_message_id, hashtags)
+	if creator_subchannel:
+		subchannel_ids.add(creator_subchannel)
 
+	return subchannel_ids
+
+
+def get_assigned_user_channel_from_hashtags(main_channel_id: int, hashtags: List[str]):
 	user_tag = hashtags[1]
-	if user_tag in subchannel_users:
-		user_priority_list = subchannel_users[user_tag]
-		found_user = user_tag
-
-	if not user_priority_list:
+	priority = hashtags[-1]
+	if not user_tag or not priority:
 		return
+	priority = priority[len(hashtag_utils.PRIORITY_TAG):]
+	if len(priority) == 0:
+		priority = hashtag_utils.get_default_subchannel_priority(main_channel_id, user_tag)
+		if not priority:
+			return
 
-	for hashtag in hashtags:
-		if hashtag and hashtag.startswith(hashtag_utils.PRIORITY_TAG):
-			priority = hashtag[len(hashtag_utils.PRIORITY_TAG):]
+	return db_utils.get_individual_channel_id_by_tag(
+		main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.ASSIGNED
+	)
 
-	current_subchannel_id = None
 
-	if priority == "" and main_channel_id_str in DEFAULT_USER_DATA:
-		user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
-		if user == found_user:
-			current_subchannel_id = user_priority_list[priority]
-	elif priority in user_priority_list:
-		current_subchannel_id = user_priority_list[priority]
-	else:
+def get_followed_user_channels_from_hashtags(main_channel_id: int, hashtags: List[str]):
+	user_tags = hashtags[2:-1]
+	priority = hashtags[-1]
+	if not user_tags or not priority:
 		return
+	priority = priority[len(hashtag_utils.PRIORITY_TAG):]
+	if len(priority) == 0:
+		priority = hashtag_utils.get_default_subchannel_priority(main_channel_id, user_tags[0])
+		if not priority:
+			return
 
-	all_subchannel_ids = [current_subchannel_id]
-	for followed_user in hashtags[2:-1]:
-		if followed_user not in subchannel_users:
-			continue
+	channel_ids = []
+	for user_tag in user_tags:
+		channel_id = db_utils.get_individual_channel_id_by_tag(
+			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.FOLLOWED
+		)
 
-		user_subchannels = subchannel_users[followed_user]
-		if priority not in user_subchannels:
-			continue
+		if channel_id:
+			channel_ids.append(channel_id)
 
-		user_subchannel = user_subchannels[priority]
-		all_subchannel_ids.append(user_subchannel)
+	return channel_ids
 
-	return all_subchannel_ids
+
+def get_creator_channel_id(main_channel_id: int, main_message_id: int, hashtags: List[str]):
+	priority = hashtags[-1]
+	user_tag = hashtags[1]
+	user_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
+	if not user_id:
+		return
+	priority = priority[len(hashtag_utils.PRIORITY_TAG):]
+	if len(priority) == 0:
+		priority = hashtag_utils.get_default_subchannel_priority(main_channel_id, user_tag)
+		if not priority:
+			return
+
+	return db_utils.get_individual_channel_id_by_user_id(
+		main_channel_id, user_id, priority, channel_manager.CHANNEL_TYPES.CREATED
+	)
+
+
+def get_scheduled_subchannels_from_hashtags(main_channel_id: int, hashtags: List[str]):
+	user_tags = hashtags[1:-1]
+	priority = hashtags[-1]
+	if not user_tags or not priority:
+		return
+	priority = priority[len(hashtag_utils.PRIORITY_TAG):]
+	if len(priority) == 0:
+		priority = hashtag_utils.get_default_subchannel_priority(main_channel_id, user_tags[0])
+		if not priority:
+			return
+
+	channel_ids = []
+	for user_tag in user_tags:
+		channel_id = db_utils.get_individual_channel_id_by_tag(
+			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.SCHEDULED
+		)
+
+		if channel_id:
+			channel_ids.append(channel_id)
+
+	return channel_ids
 
 
 def generate_control_buttons(hashtags: List[str], post_data: telebot.types.Message):
@@ -291,30 +356,13 @@ def generate_subchannel_buttons(post_data: telebot.types.Message):
 def generate_priority_buttons(post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
 
-	text, entities = utils.get_post_content(post_data)
-
-	available_priorities = ["1", "2", "3"]
-
-	_, user_hashtag_indexes, priority_hashtag_index = hashtag_utils.find_hashtag_indexes(text, entities, main_channel_id)
-	current_user = ""
-	current_priority = ""
-	if user_hashtag_indexes:
-		user_hashtag_index = user_hashtag_indexes[0]
-		entity = entities[user_hashtag_index]
-		current_user = text[entity.offset + 1:entity.offset + entity.length]
-	if priority_hashtag_index is not None:
-		entity = entities[priority_hashtag_index]
-		current_priority = text[entity.offset + 1 + len(hashtag_utils.PRIORITY_TAG):entity.offset + entity.length]
-
-	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str in SUBCHANNEL_DATA:
-		users = SUBCHANNEL_DATA[main_channel_id_str]
-		if current_user in users:
-			available_priorities = list(users[current_user].keys())
+	hashtags, _ = hashtag_utils.extract_hashtags(post_data, main_channel_id, False)
+	current_priority = hashtags[-1]
+	current_priority = current_priority[len(hashtag_utils.PRIORITY_TAG):]
 
 	priority_buttons = []
 
-	for priority in available_priorities:
+	for priority in hashtag_utils.POSSIBLE_PRIORITIES:
 		callback_str = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CHANGE_PRIORITY, priority)
 		btn = InlineKeyboardButton(priority, callback_data=callback_str)
 		if priority == current_priority:
@@ -330,7 +378,6 @@ def generate_priority_buttons(post_data: telebot.types.Message):
 
 def generate_cc_buttons(post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
-	main_channel_id_str = str(main_channel_id)
 
 	text, entities = utils.get_post_content(post_data)
 
@@ -347,16 +394,18 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 
 	current_subchannel_user = user_tags[0]
 
-	if main_channel_id_str not in SUBCHANNEL_DATA:
+	main_channel_user_tags = db_utils.get_main_channel_user_tags(main_channel_id)
+
+	if not main_channel_user_tags:
 		return
 
 	subchannel_buttons = []
-	for user in SUBCHANNEL_DATA[main_channel_id_str]:
-		if user == current_subchannel_user:
+	for user_tag in main_channel_user_tags:
+		if user_tag == current_subchannel_user:
 			continue
-		callback_str = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_CC, user)
-		btn = InlineKeyboardButton("#" + user, callback_data=callback_str)
-		if user in user_tags[1:]:
+		callback_str = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_CC, user_tag)
+		btn = InlineKeyboardButton("#" + user_tag, callback_data=callback_str)
+		if user_tag in user_tags[1:]:
 			btn.text += config_utils.BUTTON_TEXTS["CHECK"]
 
 		subchannel_buttons.append(btn)
@@ -368,18 +417,14 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 
 
 def get_subchannels_forwarding_data(main_channel_id):
-	main_channel_id_str = str(main_channel_id)
-	if main_channel_id_str not in SUBCHANNEL_DATA:
-		return {}
+	user_tags = db_utils.get_main_channel_user_tags(main_channel_id)
+	if not user_tags:
+		return []
 
-	forwarding_data = {}
-
-	channel_users = SUBCHANNEL_DATA[main_channel_id_str]
-	for user in channel_users:
-		user_priorities = channel_users[user]
-		for priority in user_priorities:
-			subchannel_id = user_priorities[priority]
-			forwarding_data[user + " " + priority] = subchannel_id
+	forwarding_data = []
+	for user_tag in user_tags:
+		for priority in hashtag_utils.POSSIBLE_PRIORITIES:
+			forwarding_data.append(f"{user_tag} {priority}")
 
 	return forwarding_data
 
@@ -390,7 +435,6 @@ def add_control_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 
 
 def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
-
 	callback_type, other_data = utils.parse_callback_str(call.data)
 
 	if callback_type == CB_TYPES.CHANGE_SUBCHANNEL:
@@ -513,7 +557,7 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 		comment_text += f"changed ticket's priority to {subchannel_priority}."
 
 	if comment_text:
-		text, entities = utils.insert_user_reference(main_channel_id, subchannel_user, comment_text)
+		text, entities = user_utils.insert_user_reference(main_channel_id, subchannel_user, comment_text)
 		add_comment_to_ticket(bot, post_data, text, entities)
 
 	if subchannel_user in hashtags[1:-1]:
@@ -557,7 +601,7 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 		hashtags.insert(-1, selected_user)
 		comment_text = f"{call.from_user.first_name} added {{USER}} to ticket's followers."
 
-	text, entities = utils.insert_user_reference(main_channel_id, selected_user, comment_text)
+	text, entities = user_utils.insert_user_reference(main_channel_id, selected_user, comment_text)
 	add_comment_to_ticket(bot, post_data, text, entities)
 
 	rearrange_hashtags(bot, post_data, hashtags, original_post_data)
