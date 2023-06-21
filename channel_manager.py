@@ -128,6 +128,9 @@ def toggle_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, cb_da
 
 def save_channel_settings(bot: telebot.TeleBot, call: CallbackQuery):
 	main_channel_id = db_utils.get_main_channel_from_user(call.from_user.id)
+	if not main_channel_id and call.from_user.username:
+		main_channel_id = db_utils.get_main_channel_from_user("@" + call.from_user.username)
+
 	if not main_channel_id:
 		bot.answer_callback_query(callback_query_id=call.id, text="User not found.")
 		return
