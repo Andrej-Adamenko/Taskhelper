@@ -121,7 +121,6 @@ def create_tables():
 				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
 				"main_channel_id"	INT NOT NULL,
 				"user_id"           INT NOT NULL,
-				"initial_value"     TEXT NOT NULL,
 				"user_tag"          TEXT NOT NULL		
 			); '''
 
