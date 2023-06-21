@@ -463,6 +463,8 @@ def get_main_channel_ids():
 	result = CURSOR.fetchall()
 	if result:
 		return [row[0] for row in result]
+	else:
+		return []
 
 
 @db_thread_lock
