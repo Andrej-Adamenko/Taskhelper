@@ -456,26 +456,29 @@ def update_show_buttons(post_data: telebot.types.Message, current_button_type: s
 			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE)
 
 
-def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, is_ticket_open: bool):
+def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, is_ticket_opened: bool):
 	post_data = call.message
 	main_channel_id = post_data.chat.id
 
 	hashtag_data = HashtagData(post_data, main_channel_id)
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
-	state_str = "opened" if is_ticket_open else "closed"
+	state_str = "opened" if is_ticket_opened else "closed"
 	utils.add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} {state_str} the ticket.")
 
-	hashtag_data.set_status_tag(is_ticket_open)
+	hashtag_data.set_status_tag(is_ticket_opened)
 	hashtag_data.set_scheduled_tag(None)
+
+	if not is_ticket_opened:
+		scheduled_messages_utils.cancel_scheduled_message(main_channel_id, post_data.message_id)
 
 	rearrange_hashtags(bot, post_data, hashtag_data)
 	for button in post_data.reply_markup.keyboard[0]:
 		cb_type, _ = utils.parse_callback_str(button.callback_data)
 		if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
-			callback_type = CB_TYPES.CLOSE if is_ticket_open else CB_TYPES.OPEN
+			callback_type = CB_TYPES.CLOSE if is_ticket_opened else CB_TYPES.OPEN
 			button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, callback_type)
-			state_btn_text = config_utils.BUTTON_TEXTS["OPENED_TICKET" if is_ticket_open else "CLOSED_TICKET"]
+			state_btn_text = config_utils.BUTTON_TEXTS["OPENED_TICKET" if is_ticket_opened else "CLOSED_TICKET"]
 			button.text = state_btn_text
 			break
 	add_control_buttons(bot, post_data, hashtag_data)

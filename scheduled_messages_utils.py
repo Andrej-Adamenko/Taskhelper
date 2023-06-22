@@ -266,6 +266,14 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
 
 
+def cancel_scheduled_message(main_channel_id, main_message_id):
+	for scheduled_message in SCHEDULED_MESSAGES_LIST:
+		message_id, channel_id, _ = scheduled_message
+		if message_id == main_message_id and channel_id == main_channel_id:
+			SCHEDULED_MESSAGES_LIST.remove(scheduled_message)
+	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
+
+
 def scheduled_message_comparison_func(msg):
 	send_time = msg[2]
 	return send_time
