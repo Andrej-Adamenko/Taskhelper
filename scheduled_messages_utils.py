@@ -15,6 +15,7 @@ import forwarding_utils
 import hashtag_utils
 import utils
 from config_utils import TIMEZONE_NAME
+from hashtag_data import HashtagData
 
 CALLBACK_PREFIX = "SCH"
 
@@ -49,25 +50,29 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 				msg[2] = send_time
 		SCHEDULED_MESSAGES_LIST.sort(key=scheduled_message_comparison_func)
 
-		hashtags, message = hashtag_utils.extract_hashtags(message, main_channel_id, True)
-		hashtags[0] = hashtag_utils.SCHEDULED_TAG + " " + dt.strftime(DATE_FORMAT)
-		forwarding_utils.rearrange_hashtags(bot, message, hashtags)
+		hashtag_data = HashtagData(message, main_channel_id)
+		message = hashtag_data.get_post_data_without_hashtags()
 
-		forwarding_utils.add_control_buttons(bot, message, hashtags)
-		forwarding_utils.forward_to_subchannel(bot, message, hashtags)
+		hashtag_data.set_scheduled_tag(dt.strftime(DATE_FORMAT))
+		forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
+
+		forwarding_utils.add_control_buttons(bot, message, hashtag_data)
+		forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
 		return
 
 	if send_time <= 0:
 		return
 
-	hashtags, message = hashtag_utils.extract_hashtags(message, main_channel_id, True)
-	hashtags[0] = hashtag_utils.SCHEDULED_TAG + " " + dt.strftime(DATE_FORMAT)
-	forwarding_utils.rearrange_hashtags(bot, message, hashtags)
+	hashtag_data = HashtagData(message, main_channel_id)
+	message = hashtag_data.get_post_data_without_hashtags()
+
+	hashtag_data.set_scheduled_tag(dt.strftime(DATE_FORMAT))
+	forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
 	db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
 
-	forwarding_utils.add_control_buttons(bot, message, hashtags)
-	forwarding_utils.forward_to_subchannel(bot, message, hashtags)
+	forwarding_utils.add_control_buttons(bot, message, hashtag_data)
+	forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
 
 	scheduled_info = [main_message_id, main_channel_id, send_time]
 	insert_schedule_message_info(scheduled_info)
@@ -239,13 +244,14 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 	message.message_id = main_message_id
 	message.chat.id = main_channel_id
 
-	hashtags, post_data = hashtag_utils.extract_hashtags(message, main_channel_id)
+	hashtag_data = HashtagData(message, main_channel_id)
+	post_data = hashtag_data.get_post_data_without_hashtags()
+	hashtag_data.set_status_tag(True)
+	hashtag_data.set_scheduled_tag(None)
 
-	hashtags[0] = hashtag_utils.OPENED_TAG
-
-	forwarding_utils.rearrange_hashtags(bot, post_data, hashtags)
-	forwarding_utils.add_control_buttons(bot, post_data, hashtags)
-	forwarding_utils.forward_to_subchannel(bot, post_data, hashtags)
+	forwarding_utils.rearrange_hashtags(bot, post_data, hashtag_data)
+	forwarding_utils.add_control_buttons(bot, post_data, hashtag_data)
+	forwarding_utils.forward_to_subchannel(bot, post_data, hashtag_data)
 
 	SCHEDULED_MESSAGES_LIST.remove(scheduled_message_info)
 	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)

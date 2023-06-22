@@ -7,7 +7,7 @@ import channel_manager
 import config_utils
 import db_utils
 import forwarding_utils
-import hashtag_utils
+import hashtag_data
 import interval_updating_utils
 import user_utils
 import utils
@@ -280,29 +280,29 @@ def handle_change_hashtag_text(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 		config_utils.HASHTAGS_BEFORE_UPDATE = copy.deepcopy(config_utils.HASHTAGS)
 
 	if tag_name == "opened":
-		if hashtag_utils.OPENED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]:
+		if hashtag_data.OPENED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]:
 			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
 			return
 		config_utils.HASHTAGS["OPENED"] = new_value
-		hashtag_utils.OPENED_TAG = new_value
+		hashtag_data.OPENED_TAG = new_value
 	elif tag_name == "closed":
-		if hashtag_utils.CLOSED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]:
+		if hashtag_data.CLOSED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]:
 			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
 			return
 		config_utils.HASHTAGS["CLOSED"] = new_value
-		hashtag_utils.CLOSED_TAG = new_value
+		hashtag_data.CLOSED_TAG = new_value
 	elif tag_name == "scheduled":
-		if hashtag_utils.SCHEDULED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]:
+		if hashtag_data.SCHEDULED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]:
 			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
 			return
 		config_utils.HASHTAGS["SCHEDULED"] = new_value
-		hashtag_utils.SCHEDULED_TAG = new_value
+		hashtag_data.SCHEDULED_TAG = new_value
 	elif tag_name == "priority":
-		if hashtag_utils.PRIORITY_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]:
+		if hashtag_data.PRIORITY_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]:
 			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
 			return
 		config_utils.HASHTAGS["PRIORITY"] = new_value
-		hashtag_utils.PRIORITY_TAG = new_value
+		hashtag_data.PRIORITY_TAG = new_value
 	else:
 		if config_utils.HASHTAGS_BEFORE_UPDATE == config_utils.HASHTAGS:
 			config_utils.HASHTAGS_BEFORE_UPDATE = None
