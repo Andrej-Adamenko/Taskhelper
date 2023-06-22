@@ -111,6 +111,7 @@ def handle_discussion_message(msg_data: telebot.types.Message):
 @bot.edited_channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_edited_post(post_data: telebot.types.Message):
 	post_link_utils.update_post_link(bot, post_data)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, post_data)
 
 
 @bot.my_chat_member_handler()
