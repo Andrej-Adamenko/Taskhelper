@@ -215,3 +215,17 @@ def check_last_messages(bot: telebot.TeleBot):
 
 	for channel_id in channels_to_check:
 		get_last_message(bot, channel_id)
+
+
+def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message, text: str, entities: list = None):
+	main_message_id = post_data.message_id
+	main_channel_id = post_data.chat.id
+	comment_message_id = db_utils.get_discussion_message_id(main_message_id, main_channel_id)
+	if comment_message_id:
+		main_channel_id_str = str(main_channel_id)
+		discussion_chat_id = config_utils.DISCUSSION_CHAT_DATA[main_channel_id_str]
+		if discussion_chat_id is None:
+			return
+		comment_msg = bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text, entities=entities)
+		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, config_utils.BOT_ID)
+

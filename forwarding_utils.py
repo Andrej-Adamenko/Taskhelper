@@ -416,19 +416,6 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, cur
 		toggle_cc_button_event(bot, call, user)
 
 
-def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message, text: str, entities: list = None):
-	main_message_id = post_data.message_id
-	main_channel_id = post_data.chat.id
-	comment_message_id = db_utils.get_discussion_message_id(main_message_id, main_channel_id)
-	if comment_message_id:
-		main_channel_id_str = str(main_channel_id)
-		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
-		if discussion_chat_id is None:
-			return
-		comment_msg = bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text, entities=entities)
-		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, config_utils.BOT_ID)
-
-
 def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, current_channel_id: int = None, current_message_id: int = None):
 	subchannel_keyboard_markup = generate_subchannel_buttons(post_data)
 	update_show_buttons(post_data, CB_TYPES.SHOW_SUBCHANNELS)
@@ -477,7 +464,7 @@ def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.Callback
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	state_str = "opened" if is_ticket_open else "closed"
-	add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} {state_str} the ticket.")
+	utils.add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} {state_str} the ticket.")
 
 	hashtag_data.set_status_tag(is_ticket_open)
 	hashtag_data.set_scheduled_tag(None)
@@ -518,7 +505,7 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 
 	if comment_text:
 		text, entities = user_utils.insert_user_reference(main_channel_id, subchannel_user, comment_text)
-		add_comment_to_ticket(bot, post_data, text, entities)
+		utils.add_comment_to_ticket(bot, post_data, text, entities)
 
 	hashtag_data.assign_to_user(subchannel_user)
 
@@ -537,7 +524,7 @@ def change_priority_button_event(bot: telebot.TeleBot, call: telebot.types.Callb
 	hashtag_data = HashtagData(post_data, main_channel_id)
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
-	add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} changed ticket's priority to {new_priority}. ")
+	utils.add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} changed ticket's priority to {new_priority}. ")
 	hashtag_data.set_priority(new_priority)
 
 	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
@@ -561,7 +548,7 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 		comment_text = f"{call.from_user.first_name} added {{USER}} to ticket's followers."
 
 	text, entities = user_utils.insert_user_reference(main_channel_id, selected_user, comment_text)
-	add_comment_to_ticket(bot, post_data, text, entities)
+	utils.add_comment_to_ticket(bot, post_data, text, entities)
 
 	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
 	show_cc_buttons(bot, post_data)

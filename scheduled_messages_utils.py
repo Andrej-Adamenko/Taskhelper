@@ -33,12 +33,15 @@ class CB_TYPES:
 	SCHEDULE_MESSAGE = "SCHEDULE"
 
 
-def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_time: int, dt: datetime.datetime):
+def schedule_message(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, send_time: int, dt: datetime.datetime):
+	message = call.message
 	main_message_id = message.message_id
 	main_channel_id = message.chat.id
 
 	if not db_utils.is_main_channel_exists(main_channel_id):
 		return
+
+	date_str = dt.strftime(DATE_FORMAT)
 
 	scheduled_messages = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
 	if scheduled_messages:
@@ -53,11 +56,14 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 		hashtag_data = HashtagData(message, main_channel_id)
 		message = hashtag_data.get_post_data_without_hashtags()
 
-		hashtag_data.set_scheduled_tag(dt.strftime(DATE_FORMAT))
+		hashtag_data.set_scheduled_tag(date_str)
 		forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
 		forwarding_utils.add_control_buttons(bot, message, hashtag_data)
 		forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
+
+		comment_text = f"{call.from_user.first_name} rescheduled the ticket to be sent on {date_str}."
+		utils.add_comment_to_ticket(bot, message, comment_text)
 		return
 
 	if send_time <= 0:
@@ -66,13 +72,16 @@ def schedule_message(bot: telebot.TeleBot, message: telebot.types.Message, send_
 	hashtag_data = HashtagData(message, main_channel_id)
 	message = hashtag_data.get_post_data_without_hashtags()
 
-	hashtag_data.set_scheduled_tag(dt.strftime(DATE_FORMAT))
+	hashtag_data.set_scheduled_tag(date_str)
 	forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
 	db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
 
 	forwarding_utils.add_control_buttons(bot, message, hashtag_data)
 	forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
+
+	comment_text = f"{call.from_user.first_name} scheduled the ticket to be sent on {date_str}."
+	utils.add_comment_to_ticket(bot, message, comment_text)
 
 	scheduled_info = [main_message_id, main_channel_id, send_time]
 	insert_schedule_message_info(scheduled_info)
@@ -90,7 +99,7 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, cur
 		keyboard = generate_days_buttons()
 		utils.edit_message_keyboard(bot, call.message, keyboard, chat_id=current_channel_id, message_id=current_message_id)
 	elif callback_type == CB_TYPES.SCHEDULE_MESSAGE:
-		schedule_message_event(bot, call.message, other_data)
+		schedule_message_event(bot, call, other_data)
 	elif callback_type == CB_TYPES.NEXT_MONTH:
 		change_month_event(bot, call.message, other_data, True, current_channel_id, current_message_id)
 	elif callback_type == CB_TYPES.PREVIOUS_MONTH:
@@ -129,7 +138,7 @@ def select_hour_event(bot: telebot.TeleBot, msg_data: telebot.types.Message, arg
 	utils.edit_message_keyboard(bot, msg_data, keyboard, chat_id=current_channel_id, message_id=current_message_id)
 
 
-def schedule_message_event(bot: telebot.TeleBot, post_data: telebot.types.Message, args: list):
+def schedule_message_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, args: list):
 	date, hour, minute = args
 	format_str = "%d.%m.%Y %H:%M"
 	dt = datetime.datetime.strptime(f"{date} {hour}:{minute}", format_str)
@@ -137,7 +146,7 @@ def schedule_message_event(bot: telebot.TeleBot, post_data: telebot.types.Messag
 	dt = timezone.localize(dt)
 	send_time = int(dt.astimezone(pytz.UTC).timestamp())
 
-	schedule_message(bot, post_data, send_time, dt)
+	schedule_message(bot, call, send_time, dt)
 
 
 def generate_schedule_button():
