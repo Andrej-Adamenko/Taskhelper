@@ -70,8 +70,6 @@ def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, a
 	help_text += "Example with username: /remove_user_tag -100987987987 aa\n\n"
 	help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — changes default subchannel\n"
 	help_text += "Example: /set_default_subchannel -100987987987 aa 1\n\n"
-	help_text += "/set_storage_channel <MAIN_CHANNEL_ID> <STORAGE_CHANNEL_ID> <TAG> — changes storage channel for scheduled messages\n"
-	help_text += "Example: /set_storage_channel -100987987987 -100432423423 aa\n\n"
 	help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — changes storage channel for scheduled messages\n"
 	help_text += "Available buttons: opened, closed, assigned, cc, schedule, check, priority\n"
 	help_text += "Example: /set_button_text opened Op\n\n"
@@ -209,27 +207,6 @@ def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.
 	config_utils.update_config({"DEFAULT_USER_DATA": config_utils.DEFAULT_USER_DATA})
 
 
-def handle_set_storage_channel(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
-	try:
-		main_channel_id, storage_channel_id, tag = arguments.split(" ")
-		storage_channel_id = int(storage_channel_id)
-	except ValueError:
-		bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
-		return
-
-	if not db_utils.is_main_channel_exists(main_channel_id):
-		bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
-		return
-
-	if main_channel_id not in config_utils.SCHEDULED_STORAGE_CHAT_IDS:
-		config_utils.SCHEDULED_STORAGE_CHAT_IDS[main_channel_id] = {}
-
-	config_utils.SCHEDULED_STORAGE_CHAT_IDS[main_channel_id][tag] = storage_channel_id
-
-	bot.send_message(chat_id=msg_data.chat.id, text="Storage for scheduled messages was successfully added.")
-	config_utils.update_config({"SCHEDULED_STORAGE_CHAT_IDS": config_utils.SCHEDULED_STORAGE_CHAT_IDS})
-
-
 def handle_change_auto_forwarding(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
 	if msg_data.text.startswith("/enable"):
 		config_utils.AUTO_FORWARDING_ENABLED = True
@@ -325,7 +302,6 @@ COMMAND_LIST = [
 	["/set_user_tag", "Add user id", handle_user_change],
 	["/remove_user_tag", "Remove user id", handle_user_change],
 	["/set_default_subchannel", "Set default subchannel", handle_set_default_subchannel],
-	["/set_storage_channel", "Set storage channel", handle_set_storage_channel],
 	["/enable_auto_forwarding", "Enables auto forwarding during scanning", handle_change_auto_forwarding],
 	["/disable_auto_forwarding", "Enables auto forwarding during scanning", handle_change_auto_forwarding],
 	["/set_button_text", "Set text of specified button", handle_change_button_text],

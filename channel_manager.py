@@ -60,7 +60,7 @@ def generate_settings_keyboard(channel_id: int):
 		assigned_to_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
 	assigned_to_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.ASSIGNED_SELECTED)
 
-	created_by_btn = InlineKeyboardButton("Reported by you")
+	created_by_btn = InlineKeyboardButton("Reported by this user")
 	if CHANNEL_TYPES.CREATED in types:
 		created_by_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
 	created_by_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CREATED_SELECTED)
