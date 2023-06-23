@@ -146,6 +146,18 @@ def create_tables():
 
 		CURSOR.execute(main_messages_table_sql)
 
+	if not is_table_exists("next_action_comments"):
+		next_action_comments_table_sql = '''
+			CREATE TABLE "next_action_comments" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_channel_id"       INT NOT NULL,
+				"main_message_id"       INT NOT NULL,
+				"previous_comment_text" TEXT,
+				"current_comment_text"  TEXT
+			); '''
+
+		CURSOR.execute(next_action_comments_table_sql)
+
 	DB_CONNECTION.commit()
 
 
@@ -295,6 +307,24 @@ def get_comment_top_parent(discussion_message_id, discussion_chat_id):
 	'''
 
 	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
+	result = CURSOR.fetchone()
+	return result[0]
+
+
+@db_thread_lock
+def get_last_comment(discussion_message_id, discussion_chat_id, ignored_sender_id=0):
+	sql = '''
+		WITH RECURSIVE
+		  reply_messages(comment_id) AS (
+			 SELECT (?)
+			 UNION ALL
+			 SELECT message_id FROM comment_messages, reply_messages WHERE reply_to_message_id = reply_messages.comment_id
+			 AND discussion_chat_id = (?) AND sender_id != (?)
+		  )
+		SELECT MAX(comment_id) FROM reply_messages;
+	'''
+
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id, ignored_sender_id,))
 	result = CURSOR.fetchone()
 	return result[0]
 
@@ -610,3 +640,30 @@ def get_all_users():
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
 	return result
+
+
+@db_thread_lock
+def get_next_action_text(main_message_id, main_channel_id):
+	sql = "SELECT previous_comment_text, current_comment_text FROM next_action_comments WHERE main_channel_id=(?) AND main_message_id=(?)"
+	CURSOR.execute(sql, (main_channel_id, main_message_id,))
+	result = CURSOR.fetchone()
+	return result
+
+
+@db_thread_lock
+def insert_or_update_current_next_action(main_message_id, main_channel_id, comment_text):
+	if get_next_action_text(main_message_id, main_channel_id):
+		sql = "UPDATE next_action_comments SET current_comment_text=(?) WHERE main_message_id=(?) and main_channel_id=(?)"
+	else:
+		sql = "INSERT INTO next_action_comments (current_comment_text, main_message_id, main_channel_id) VALUES (?, ?, ?)"
+
+	CURSOR.execute(sql, (comment_text, main_message_id, main_channel_id, ))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def update_previous_next_action(main_message_id, main_channel_id, comment_text):
+	sql = "UPDATE next_action_comments SET previous_comment_text=(?) WHERE main_message_id=(?) and main_channel_id=(?)"
+	CURSOR.execute(sql, (comment_text, main_message_id, main_channel_id, ))
+	DB_CONNECTION.commit()
+

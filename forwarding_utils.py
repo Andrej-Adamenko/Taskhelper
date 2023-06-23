@@ -7,6 +7,7 @@ from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 import channel_manager
+import comment_utils
 import config_utils
 import db_utils
 import hashtag_utils
@@ -73,9 +74,11 @@ def get_unchanged_posts(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 
 def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData):
 	main_channel_id = post_data.chat.id
-	message_id = post_data.message_id
+	main_message_id = post_data.message_id
 
-	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, message_id, hashtag_data)
+	comment_utils.update_comment(bot, post_data, hashtag_data)
+
+	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, hashtag_data)
 
 	unchanged_posts = get_unchanged_posts(bot, post_data, list(subchannel_ids))
 
@@ -93,8 +96,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			continue
 
 		try:
-			copied_message = bot.copy_message(chat_id=subchannel_id, message_id=message_id, from_chat_id=main_channel_id)
-			logging.info(f"Successfully forwarded post [{message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
+			copied_message = bot.copy_message(chat_id=subchannel_id, message_id=main_message_id, from_chat_id=main_channel_id)
+			logging.info(f"Successfully forwarded post [{main_message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				raise E
@@ -102,9 +105,9 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			continue
 
 		keyboard_markup = generate_control_buttons(hashtag_data, post_data)
-		utils.edit_message_keyboard(bot, post_data, keyboard_markup,chat_id=subchannel_id, message_id=copied_message.message_id)
+		utils.edit_message_keyboard(bot, post_data, keyboard_markup, chat_id=subchannel_id, message_id=copied_message.message_id)
 
-		db_utils.insert_copied_message(message_id, main_channel_id, copied_message.message_id, subchannel_id)
+		db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
 
 
 def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
@@ -593,4 +596,3 @@ def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, h
 			raise E
 		logging.info(f"Exception during rearranging hashtags - {E}")
 		return
-

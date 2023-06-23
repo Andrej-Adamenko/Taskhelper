@@ -3,6 +3,7 @@ import telebot
 
 import channel_manager
 import command_utils
+import comment_utils
 import config_utils
 import forwarding_utils
 import interval_updating_utils
@@ -88,22 +89,7 @@ def handle_discussion_message(msg_data: telebot.types.Message):
 	discussion_chat_id = msg_data.chat.id
 
 	if msg_data.reply_to_message:
-		reply_to_message_id = msg_data.reply_to_message.message_id
-
-		sender_id = msg_data.from_user.id
-		db_utils.insert_comment_message(reply_to_message_id, discussion_message_id, discussion_chat_id, sender_id)
-
-		main_channel_id = utils.get_key_by_value(DISCUSSION_CHAT_DATA, discussion_chat_id)
-		if main_channel_id is None:
-			return
-
-		main_channel_id = int(main_channel_id)
-		top_discussion_message_id = db_utils.get_comment_top_parent(discussion_message_id, discussion_chat_id)
-		if top_discussion_message_id == discussion_message_id:
-			return
-		main_message_id = db_utils.get_main_from_discussion_message(top_discussion_message_id, main_channel_id)
-		if main_message_id:
-			interval_updating_utils.update_older_message(bot, main_channel_id, main_message_id)
+		comment_utils.save_comment(bot, msg_data)
 
 	db_utils.insert_or_update_last_msg_id(discussion_message_id, discussion_chat_id)
 
