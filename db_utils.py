@@ -238,6 +238,29 @@ def update_copied_message_id(copied_message_id, copied_channel_id, updated_messa
 
 
 @db_thread_lock
+def get_main_messages_from_channel(channel_id):
+	sql = "SELECT main_message_id, main_channel_id FROM copied_messages WHERE copied_channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchall()
+	return result
+
+
+@db_thread_lock
+def get_scheduled_messages_from_channel(channel_id, limit):
+	sql = '''
+		SELECT copied_messages.main_message_id, copied_messages.main_channel_id FROM copied_messages
+		INNER JOIN scheduled_messages ON
+		scheduled_messages.main_channel_id = copied_messages.main_channel_id AND
+		scheduled_messages.main_message_id = copied_messages.main_message_id
+		WHERE copied_channel_id=(?) ORDER BY scheduled_messages.send_time
+		LIMIT (?)
+	'''
+	CURSOR.execute(sql, (channel_id, limit,))
+	result = CURSOR.fetchall()
+	return result
+
+
+@db_thread_lock
 def insert_or_update_last_msg_id(last_message_id, chat_id):
 	if get_last_message_id(chat_id):
 		sql = "UPDATE last_message_ids SET last_message_id=(?) WHERE chat_id=(?)"
@@ -397,6 +420,14 @@ def get_oldest_scheduled_message(scheduled_channel_id):
 	result = CURSOR.fetchone()
 	if result:
 		return result[0]
+
+
+@db_thread_lock
+def is_message_scheduled(main_message_id, main_channel_id):
+	sql = "SELECT id FROM scheduled_messages WHERE main_message_id=(?) AND main_channel_id=(?)"
+	CURSOR.execute(sql, (main_message_id, main_channel_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
 
 
 @db_thread_lock

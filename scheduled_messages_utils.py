@@ -310,3 +310,24 @@ def schedule_loop_thread(bot: telebot.TeleBot):
 				logging.error(f"Exception during sending scheduled message: {E}")
 		time.sleep(1)
 
+
+def send_sorted_messages(bot: telebot.TeleBot, channel_id: int, limit: int):
+	scheduled_messages = db_utils.get_scheduled_messages_from_channel(channel_id, limit)
+
+	if not scheduled_messages:
+		bot.send_message(chat_id=channel_id, text="No scheduled tickets were found.")
+		return
+
+	final_message = ""
+	final_entities = []
+	for msg in scheduled_messages:
+		main_message_id, main_channel_id = msg
+		post_data = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+
+		new_entities = utils.offset_entities(post_data.entities, len(final_message))
+		final_entities += new_entities
+		final_message += post_data.text + "\n"
+		time.sleep(0.5)
+
+	if final_message:
+		bot.send_message(chat_id=channel_id, text=final_message, entities=final_entities)

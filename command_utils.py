@@ -9,6 +9,7 @@ import db_utils
 import forwarding_utils
 import hashtag_data
 import interval_updating_utils
+import scheduled_messages_utils
 import user_utils
 import utils
 
@@ -40,6 +41,21 @@ def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message
 		user_tag = arguments[0]
 		db_utils.update_individual_channel_tag(msg_data.chat.id, user_tag)
 		bot.send_message(chat_id=msg_data.chat.id, text="This channel's user tag has been successfully changed.")
+		interval_updating_utils.start_interval_updating(bot)
+	elif command == "/sorted":
+		channel_info = db_utils.get_individual_channel(msg_data.chat.id)
+		if channel_info:
+			main_channel_id, user_tag, priorities, types = channel_info
+			if channel_manager.CHANNEL_TYPES.SCHEDULED not in types:
+				bot.send_message(chat_id=msg_data.chat.id, text="This command only available in channels with scheduled tickets.")
+				return
+
+			try:
+				limit = int(arguments[0])
+			except (ValueError, IndexError):
+				limit = 5
+
+			scheduled_messages_utils.send_sorted_messages(bot, msg_data.chat.id, limit)
 
 
 def handle_command(bot: telebot.TeleBot, msg_data: telebot.types.Message):
