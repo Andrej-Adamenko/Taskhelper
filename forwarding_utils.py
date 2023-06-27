@@ -9,6 +9,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import channel_manager
 import comment_utils
 import config_utils
+import daily_reminder
 import db_utils
 import hashtag_utils
 import scheduled_messages_utils
@@ -77,6 +78,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	main_message_id = post_data.message_id
 
 	comment_utils.update_comment(bot, post_data, hashtag_data)
+	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
 	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, hashtag_data)
 

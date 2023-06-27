@@ -158,6 +158,43 @@ def create_tables():
 
 		CURSOR.execute(next_action_comments_table_sql)
 
+	if not is_table_exists("tickets_data"):
+		tickets_data_table_sql = '''
+			CREATE TABLE "tickets_data" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_channel_id"       INT NOT NULL,
+				"main_message_id"       INT NOT NULL,
+				"is_opened"             int,
+				"user_tags"             TEXT,
+				"priority"              TEXT,
+				"update_time"           INT
+			); '''
+
+		CURSOR.execute(tickets_data_table_sql)
+
+	if not is_table_exists("user_reminder_data"):
+		user_interactions_table_sql = '''
+			CREATE TABLE "user_reminder_data" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_channel_id"           INT NOT NULL,
+				"user_tag"                  TEXT NOT NULL,
+				"last_interaction_time"     INT
+			); '''
+
+		CURSOR.execute(user_interactions_table_sql)
+
+	if not is_table_exists("reminded_tickets"):
+		reminded_tickets_table_sql = '''
+			CREATE TABLE "reminded_tickets" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"main_channel_id"           INT NOT NULL,
+				"main_message_id"           INT NOT NULL,
+				"user_tag"                  TEXT NOT NULL,
+				"reminded_at"               INT NOT NULL
+			); '''
+
+		CURSOR.execute(reminded_tickets_table_sql)
+
 	DB_CONNECTION.commit()
 
 
@@ -528,6 +565,15 @@ def get_main_channel_from_user(user_id):
 
 
 @db_thread_lock
+def get_tag_from_user_id(user_id):
+	sql = "SELECT user_tag FROM users WHERE user_id=(?)"
+	CURSOR.execute(sql, (user_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
 def get_main_channel_user_tags(main_channel_id):
 	sql = "SELECT user_tag FROM users WHERE main_channel_id=(?)"
 	CURSOR.execute(sql, (main_channel_id,))
@@ -666,4 +712,113 @@ def update_previous_next_action(main_message_id, main_channel_id, comment_text):
 	sql = "UPDATE next_action_comments SET previous_comment_text=(?) WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (comment_text, main_message_id, main_channel_id, ))
 	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def insert_or_update_ticket_data(main_message_id, main_channel_id, is_opened, user_tags, priority):
+	if get_ticket_data(main_message_id, main_channel_id):
+		sql = "UPDATE tickets_data SET is_opened=(?), user_tags=(?), priority=(?) WHERE main_message_id=(?) and main_channel_id=(?)"
+	else:
+		sql = "INSERT INTO tickets_data(is_opened, user_tags, priority, main_message_id, main_channel_id) VALUES (?, ?, ?, ?, ?)"
+	is_opened = 1 if is_opened else 0
+	CURSOR.execute(sql, (is_opened, user_tags, priority, main_message_id, main_channel_id, ))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_ticket_data(main_message_id, main_channel_id):
+	sql = "SELECT user_tags, priority, update_time FROM tickets_data WHERE main_message_id=(?) and main_channel_id=(?)"
+	CURSOR.execute(sql, (main_message_id, main_channel_id, ))
+	result = CURSOR.fetchone()
+	return result
+
+
+@db_thread_lock
+def set_ticket_update_time(main_message_id, main_channel_id, update_time):
+	sql = "UPDATE tickets_data SET update_time=(?) WHERE main_message_id=(?) AND main_channel_id=(?)"
+	CURSOR.execute(sql, (update_time, main_message_id, main_channel_id, ))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_user_highest_priority(main_channel_id, user_tag):
+	sql = "SELECT min(priority) FROM tickets_data WHERE user_tags LIKE '%' || ? || '%' AND main_channel_id=(?)"
+	CURSOR.execute(sql, (user_tag, main_channel_id,))
+	result = CURSOR.fetchone()
+	return result[0]
+
+
+@db_thread_lock
+def insert_or_update_last_user_interaction(main_channel_id, user_tag, interaction_time):
+	if is_user_reminder_data_exists(main_channel_id, user_tag):
+		sql = "UPDATE user_reminder_data SET last_interaction_time=(?) WHERE user_tag=(?) AND main_channel_id=(?)"
+	else:
+		sql = "INSERT INTO user_reminder_data(last_interaction_time, user_tag, main_channel_id) VALUES (?, ?, ?)"
+	CURSOR.execute(sql, (interaction_time, user_tag, main_channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_last_interaction_time(main_channel_id, user_tag):
+	sql = "SELECT last_interaction_time FROM user_reminder_data WHERE user_tag=(?) AND main_channel_id=(?)"
+	CURSOR.execute(sql, (user_tag, main_channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def is_user_reminder_data_exists(main_channel_id, user_tag):
+	sql = "SELECT id FROM user_reminder_data WHERE user_tag=(?) AND main_channel_id=(?)"
+	CURSOR.execute(sql, (user_tag, main_channel_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def get_ticket_remind_time(main_message_id, main_channel_id, user_tag):
+	sql = "SELECT reminded_at FROM reminded_tickets WHERE main_message_id=(?) AND main_channel_id=(?) AND user_tag=(?)"
+	CURSOR.execute(sql, (main_message_id, main_channel_id, user_tag,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def insert_or_update_remind_time(main_message_id, main_channel_id, user_tag, remind_time):
+	if get_ticket_remind_time(main_message_id, main_channel_id, user_tag):
+		sql = "UPDATE reminded_tickets SET reminded_at=(?) WHERE user_tag=(?) AND main_channel_id=(?) AND main_message_id=(?)"
+	else:
+		sql = "INSERT INTO reminded_tickets(reminded_at, user_tag, main_channel_id, main_message_id) VALUES (?, ?, ?, ?)"
+	CURSOR.execute(sql, (remind_time, user_tag, main_channel_id, main_message_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_tickets_for_reminding(main_channel_id, user_tag, priority):
+	sql = '''
+		SELECT tickets_data.main_channel_id, tickets_data.main_message_id,
+		tickets_data.update_time, reminded_tickets.reminded_at
+		FROM tickets_data LEFT JOIN reminded_tickets ON
+		tickets_data.main_message_id = reminded_tickets.main_message_id AND
+		tickets_data.main_channel_id = reminded_tickets.main_channel_id
+		WHERE tickets_data.main_channel_id=(?) AND user_tags LIKE ? || '%' AND priority=(?) AND is_opened=1
+	'''
+	CURSOR.execute(sql, (main_channel_id, user_tag, priority))
+	result = CURSOR.fetchall()
+	return result
+
+
+@db_thread_lock
+def find_copied_message_from_main(main_message_id, main_channel_id, user_tag, priority):
+	sql = '''
+		SELECT copied_message_id, copied_channel_id FROM copied_messages WHERE copied_channel_id IN (
+			SELECT channel_id FROM individual_channels WHERE user_tag=(?) AND main_channel_id=(?)
+			AND priorities LIKE '%' || ? || '%'
+		) AND main_message_id=(?) AND main_channel_id=(?)
+	'''
+	CURSOR.execute(sql, (user_tag, main_channel_id, priority, main_message_id, main_channel_id))
+	result = CURSOR.fetchone()
+	return result
+
 

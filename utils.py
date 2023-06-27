@@ -5,6 +5,7 @@ import telebot.types
 from telebot.apihelper import ApiTelegramException
 
 import config_utils
+import daily_reminder
 import db_utils
 from config_utils import MAX_BUTTONS_IN_ROW
 
@@ -228,4 +229,4 @@ def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message
 			return
 		comment_msg = bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text, entities=entities)
 		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, config_utils.BOT_ID)
-
+		daily_reminder.set_ticket_update_time(main_message_id, main_channel_id)

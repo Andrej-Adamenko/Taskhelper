@@ -5,6 +5,7 @@ import channel_manager
 import command_utils
 import comment_utils
 import config_utils
+import daily_reminder
 import forwarding_utils
 import interval_updating_utils
 import post_link_utils
@@ -30,6 +31,8 @@ utils.check_last_messages(bot)
 
 command_utils.initialize_bot_commands(bot)
 scheduled_messages_utils.start_scheduled_thread(bot)
+
+daily_reminder.start_reminder_thread(bot)
 
 if APP_API_ID and APP_API_HASH:
 	pyrogram_app = messages_export_utils.init_pyrogram(APP_API_ID, APP_API_HASH, BOT_TOKEN)

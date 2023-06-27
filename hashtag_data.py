@@ -59,7 +59,10 @@ class HashtagData:
 		return self.user_tags[1:]
 
 	def get_all_users(self):
-		user_tags = [self.get_assigned_user()]
+		assigned_user = self.get_assigned_user()
+		if not assigned_user:
+			return
+		user_tags = [assigned_user]
 		user_tags += self.get_followed_users()
 		return user_tags
 

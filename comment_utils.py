@@ -1,5 +1,8 @@
+import time
+
 import telebot
 
+import daily_reminder
 import db_utils
 import interval_updating_utils
 import utils
@@ -36,6 +39,9 @@ def save_comment(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 
 	if main_message_id:
 		interval_updating_utils.update_older_message(bot, main_channel_id, main_message_id)
+
+	daily_reminder.update_user_last_interaction(main_message_id, main_channel_id, msg_data)
+	daily_reminder.set_ticket_update_time(main_message_id, main_channel_id)
 
 
 def update_comment(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData):

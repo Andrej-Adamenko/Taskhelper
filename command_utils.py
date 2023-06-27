@@ -76,6 +76,8 @@ def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, a
 	help_text += "/set_hashtag_text <HASHTAG_NAME> <NEW_VALUE> — changes storage channel for scheduled messages\n"
 	help_text += "Available hashtags: opened, closed, scheduled, priority\n"
 	help_text += "Example: /set_hashtag_text opened Op\n\n"
+	help_text += "/set_remind_without_interaction <MINUTES> — changes timeout for skipping daily reminder if user is interacted with tickets within this time\n"
+	help_text += "Example: /set_remind_without_interaction 1440\n\n"
 	bot.send_message(chat_id=msg_data.chat.id, text=help_text)
 
 
@@ -292,6 +294,17 @@ def handle_change_hashtag_text(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 	config_utils.update_config({"HASHTAGS_BEFORE_UPDATE": config_utils.HASHTAGS_BEFORE_UPDATE})
 
 
+def handle_change_remind_without_interaction(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
+	try:
+		new_time = int(arguments)
+	except ValueError:
+		bot.send_message(chat_id=msg_data.chat.id, text="You need to specify a number.")
+		return
+	config_utils.REMINDER_TIME_WITHOUT_INTERACTION = new_time
+	bot.send_message(chat_id=msg_data.chat.id, text="Reminder time without interaction successfully changed.")
+	config_utils.update_config({"REMINDER_TIME_WITHOUT_INTERACTION": config_utils.REMINDER_TIME_WITHOUT_INTERACTION})
+
+
 COMMAND_LIST = [
 	["/help", "Command explanations", handle_help_command],
 	["/set_dump_chat_id", "Set dump chat id", handle_set_dump_chat_id],
@@ -306,5 +319,6 @@ COMMAND_LIST = [
 	["/disable_auto_forwarding", "Enables auto forwarding during scanning", handle_change_auto_forwarding],
 	["/set_button_text", "Set text of specified button", handle_change_button_text],
 	["/set_hashtag_text", "Set text of specified hashtag", handle_change_hashtag_text],
+	["/set_remind_without_interaction", "Set time for reminding users", handle_change_remind_without_interaction],
 ]
 
