@@ -103,6 +103,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				raise E
+			if E.error_code == 403 and E.description.endswith(utils.KICKED_FROM_CHANNEL_ERROR):
+				db_utils.delete_individual_channel(subchannel_id)
 			logging.warning(f"Exception during forwarding post to subchannel {hashtag_data.get_hashtag_list()} - {E}")
 			continue
 
@@ -161,6 +163,8 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 				db_utils.delete_copied_message(oldest_message_id, chat_id)
 				utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=message_id,
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
+		elif E.description.endswith(utils.KICKED_FROM_CHANNEL_ERROR):
+			db_utils.delete_copied_message(message_id, chat_id)
 
 
 def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
@@ -170,17 +174,17 @@ def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int,
 		if scheduled_users_subchannels:
 			subchannel_ids.update(scheduled_users_subchannels)
 	elif hashtag_data.is_opened():
-		assigned_user_subchannel = get_assigned_user_channel_from_hashtags(main_channel_id, hashtag_data)
-		if assigned_user_subchannel:
-			subchannel_ids.add(assigned_user_subchannel)
+		assigned_user_subchannels = get_assigned_user_channel_from_hashtags(main_channel_id, hashtag_data)
+		if assigned_user_subchannels:
+			subchannel_ids.update(assigned_user_subchannels)
 
 		followed_users_subchannels = get_followed_user_channels_from_hashtags(main_channel_id, hashtag_data)
 		if followed_users_subchannels:
 			subchannel_ids.update(followed_users_subchannels)
 
-	creator_subchannel = get_creator_channel_id(main_channel_id, main_message_id, hashtag_data)
-	if creator_subchannel:
-		subchannel_ids.add(creator_subchannel)
+	creator_subchannels = get_creator_channel_id(main_channel_id, main_message_id, hashtag_data)
+	if creator_subchannels:
+		subchannel_ids.update(creator_subchannels)
 
 	return subchannel_ids
 
@@ -204,12 +208,12 @@ def get_followed_user_channels_from_hashtags(main_channel_id: int, hashtag_data:
 
 	channel_ids = []
 	for user_tag in user_tags:
-		channel_id = db_utils.get_individual_channel_id_by_tag(
+		user_channel_ids = db_utils.get_individual_channel_id_by_tag(
 			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.FOLLOWED
 		)
 
-		if channel_id:
-			channel_ids.append(channel_id)
+		if user_channel_ids:
+			channel_ids += user_channel_ids
 
 	return channel_ids
 
@@ -233,12 +237,12 @@ def get_scheduled_subchannels_from_hashtags(main_channel_id: int, hashtag_data: 
 
 	channel_ids = []
 	for user_tag in user_tags:
-		channel_id = db_utils.get_individual_channel_id_by_tag(
+		user_channel_ids = db_utils.get_individual_channel_id_by_tag(
 			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.SCHEDULED
 		)
 
-		if channel_id:
-			channel_ids.append(channel_id)
+		if user_channel_ids:
+			channel_ids += user_channel_ids
 
 	return channel_ids
 

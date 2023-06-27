@@ -523,6 +523,13 @@ def is_individual_channel_exists(channel_id):
 
 
 @db_thread_lock
+def delete_individual_channel(channel_id):
+	sql = "DELETE FROM individual_channels WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
 def get_main_channel_ids():
 	sql = "SELECT channel_id FROM main_channels"
 	CURSOR.execute(sql, ())
@@ -617,9 +624,11 @@ def get_individual_channel_id_by_tag(main_channel_id, user_tag, priority, channe
 		AND priorities LIKE '%' || ? || '%'
 	'''
 	CURSOR.execute(sql, (main_channel_id, user_tag, channel_type, priority,))
-	result = CURSOR.fetchone()
+	result = CURSOR.fetchall()
 	if result:
-		return result[0]
+		return [row[0] for row in result]
+	else:
+		return []
 
 
 @db_thread_lock
@@ -631,9 +640,11 @@ def get_individual_channel_id_by_user_id(main_channel_id, user_id, priority, cha
 		AND priorities LIKE '%' || ? || '%'
 	'''
 	CURSOR.execute(sql, (main_channel_id, user_id, channel_type, priority,))
-	result = CURSOR.fetchone()
+	result = CURSOR.fetchall()
 	if result:
-		return result[0]
+		return [row[0] for row in result]
+	else:
+		return []
 
 
 @db_thread_lock

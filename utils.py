@@ -12,6 +12,7 @@ from config_utils import MAX_BUTTONS_IN_ROW
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
 MSG_CANT_BE_DELETED_ERROR = "message can't be deleted"
 MSG_NOT_FOUND_ERROR = "message to delete not found"
+KICKED_FROM_CHANNEL_ERROR = "Forbidden: bot was kicked from the channel chat"
 
 
 def create_callback_str(callback_prefix, callback_type, *args):

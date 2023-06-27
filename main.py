@@ -108,10 +108,12 @@ def handle_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
 	has_permissions = member_update.new_chat_member.can_edit_messages and member_update.new_chat_member.can_post_messages
 	if has_permissions:
 		logging.info(f"Bot received permissions for channel {member_update.chat.id}")
-		if member_update.old_chat_member.status in ["left", "kicked"]:
-			channel_manager.send_settings_keyboard(bot, member_update.chat.id)
 	else:
 		logging.info(f"Bot permissions for channel {member_update.chat.id} was removed")
+
+	if member_update.new_chat_member.status in ["left", "kicked"]:
+		if db_utils.is_individual_channel_exists(member_update.chat.id):
+			db_utils.delete_individual_channel(member_update.chat.id)
 
 
 @bot.callback_query_handler(func=lambda call: main_channel_filter(call.message))
