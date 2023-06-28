@@ -32,6 +32,8 @@ class HashtagData:
 		self.user_tags = user_tags
 		self.priority_tag = priority_tag
 
+		self.other_hashtags = self.extract_other_hashtags(post_data)
+
 	def is_opened(self):
 		return self.status_tag == OPENED_TAG
 
@@ -191,6 +193,21 @@ class HashtagData:
 			priority_tag = self.get_tag_from_entity(entities[priority_tag_index], text)
 
 		return scheduled_tag, status_tag, user_tags, priority_tag
+
+	def extract_other_hashtags(self, post_data: telebot.types.Message):
+		text, entities = utils.get_post_content(post_data)
+		hashtags = []
+		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
+		ignored_indexes = [scheduled_tag_index, status_tag_index, priority_tag_index]
+		ignored_indexes += user_tag_indexes
+
+		for entity_index in range(len(entities)):
+			if entity_index in ignored_indexes or entities[entity_index].type != "hashtag":
+				continue
+
+			entity_text = self.get_tag_from_entity(entities[entity_index], text)
+			hashtags.append("#" + entity_text)
+		return hashtags
 
 	def get_post_data_without_hashtags(self):
 		text, entities = utils.get_post_content(self.post_data)

@@ -40,6 +40,20 @@ def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message
 		user_tag = arguments[0]
 		db_utils.update_individual_channel_tag(msg_data.chat.id, user_tag)
 		bot.send_message(chat_id=msg_data.chat.id, text="This channel's user tag has been successfully changed.")
+	elif command == "/set_channel_hashtag":
+		if len(arguments) != 1:
+			bot.send_message(chat_id=msg_data.chat.id, text="You should specify one hashtag.")
+			return
+		hashtag = arguments[0]
+		if not hashtag.startswith("#"):
+			bot.send_message(chat_id=msg_data.chat.id, text="You should specify hashtag with '#' symbol.")
+			return
+
+		db_utils.insert_or_update_custom_hashtag(msg_data.chat.id, hashtag)
+		bot.send_message(chat_id=msg_data.chat.id, text="Hashtag successfully changed.")
+	elif command == "/remove_channel_hashtag":
+		db_utils.insert_or_update_custom_hashtag(msg_data.chat.id, None)
+		bot.send_message(chat_id=msg_data.chat.id, text="Hashtag successfully removed.")
 
 
 def handle_command(bot: telebot.TeleBot, msg_data: telebot.types.Message):

@@ -195,6 +195,16 @@ def create_tables():
 
 		CURSOR.execute(reminded_tickets_table_sql)
 
+	if not is_table_exists("custom_channel_hashtags"):
+		custom_channel_hashtags_table_sql = '''
+			CREATE TABLE "custom_channel_hashtags" (
+				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+				"channel_id"           INT NOT NULL,
+				"custom_hashtag"       TEXT
+			); '''
+
+		CURSOR.execute(custom_channel_hashtags_table_sql)
+
 	DB_CONNECTION.commit()
 
 
@@ -832,4 +842,30 @@ def find_copied_message_from_main(main_message_id, main_channel_id, user_tag, pr
 	result = CURSOR.fetchone()
 	return result
 
+
+@db_thread_lock
+def get_custom_hashtag(channel_id):
+	sql = "SELECT custom_hashtag FROM custom_channel_hashtags WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
+def is_custom_hashtag_exists(channel_id):
+	sql = "SELECT id FROM custom_channel_hashtags WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def insert_or_update_custom_hashtag(channel_id, custom_hashtag):
+	if is_custom_hashtag_exists(channel_id):
+		sql = "UPDATE custom_channel_hashtags SET custom_hashtag=(?) WHERE channel_id=(?)"
+	else:
+		sql = "INSERT INTO custom_channel_hashtags(custom_hashtag, channel_id) VALUES (?, ?)"
+	CURSOR.execute(sql, (custom_hashtag, channel_id,))
+	DB_CONNECTION.commit()
 

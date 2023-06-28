@@ -170,9 +170,10 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
 	subchannel_ids = set()
 	if hashtag_data.is_scheduled():
-		scheduled_users_subchannels = get_scheduled_subchannels_from_hashtags(main_channel_id, hashtag_data)
-		if scheduled_users_subchannels:
-			subchannel_ids.update(scheduled_users_subchannels)
+		if db_utils.get_scheduled_messages(main_message_id, main_channel_id):
+			scheduled_users_subchannels = get_scheduled_subchannels_from_hashtags(main_channel_id, hashtag_data)
+			if scheduled_users_subchannels:
+				subchannel_ids.update(scheduled_users_subchannels)
 	elif hashtag_data.is_opened():
 		assigned_user_subchannels = get_assigned_user_channel_from_hashtags(main_channel_id, hashtag_data)
 		if assigned_user_subchannels:
@@ -186,7 +187,15 @@ def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int,
 	if creator_subchannels:
 		subchannel_ids.update(creator_subchannels)
 
-	return subchannel_ids
+	result_subchannel_ids = set()
+
+	for subchannel_id in subchannel_ids:
+		custom_hashtag = db_utils.get_custom_hashtag(subchannel_id)
+		if custom_hashtag and custom_hashtag not in hashtag_data.other_hashtags:
+			continue
+		result_subchannel_ids.add(subchannel_id)
+
+	return result_subchannel_ids
 
 
 def get_assigned_user_channel_from_hashtags(main_channel_id: int, hashtag_data: HashtagData):
