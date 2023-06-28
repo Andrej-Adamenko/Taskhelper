@@ -37,8 +37,6 @@ def insert_link_into_post(bot, post_data, link_text, post_url, additional_offset
 
 	utils.set_post_content(post_data, text, entities)
 
-	utils.edit_message_content(bot, post_data, text=text, entities=entities, reply_markup=post_data.reply_markup)
-
 	return post_data
 
 
@@ -63,7 +61,10 @@ def update_post_link(bot: telebot.TeleBot, post_data: telebot.types.Message):
 
 	utils.set_post_content(post_data, text, entities)
 
-	return insert_link_into_post(bot, post_data, link_text, post_url)
+	post_with_link = insert_link_into_post(bot, post_data, link_text, post_url)
+	utils.edit_message_content(bot, post_data, reply_markup=post_data.reply_markup)
+
+	return post_with_link
 
 
 def remove_previous_link(text: str, entities: List[MessageEntity], previous_link: MessageEntity):
