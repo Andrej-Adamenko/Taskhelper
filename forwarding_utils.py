@@ -1,5 +1,7 @@
 import logging
 import copy
+import threading
+import time
 from typing import List
 
 import telebot
@@ -21,6 +23,8 @@ from hashtag_data import HashtagData
 from config_utils import DISCUSSION_CHAT_DATA
 
 CALLBACK_PREFIX = "FWRD"
+
+FORWARDING_LOCK = threading.RLock()
 
 
 class CB_TYPES:
@@ -73,6 +77,19 @@ def get_unchanged_posts(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 	return unchanged_posts
 
 
+def forwarding_thread_lock(func):
+	def inner_function(*args, **kwargs):
+		try:
+			FORWARDING_LOCK.acquire(True)
+			return func(*args, **kwargs)
+		except Exception as E:
+			logging.error(f"Error in {func.__name__} forwarding function, error: {E}")
+		finally:
+			FORWARDING_LOCK.release()
+	return inner_function
+
+
+@forwarding_thread_lock
 def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
