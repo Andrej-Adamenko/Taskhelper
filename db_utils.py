@@ -391,35 +391,20 @@ def update_scheduled_message(main_message_id, main_channel_id, send_time):
 
 
 @db_thread_lock
-def update_scheduled_message_id(scheduled_message_id, scheduled_channel_id, updated_message_id):
-	sql = "UPDATE scheduled_messages SET scheduled_message_id=(?) WHERE scheduled_message_id=(?) and scheduled_channel_id=(?)"
-	CURSOR.execute(sql, (updated_message_id, scheduled_message_id, scheduled_channel_id,))
-	DB_CONNECTION.commit()
-
-
-@db_thread_lock
-def get_scheduled_messages(main_message_id, main_channel_id):
-	sql = "SELECT scheduled_message_id, scheduled_channel_id, send_time FROM scheduled_messages WHERE main_message_id=(?) and main_channel_id=(?)"
+def get_scheduled_message_send_time(main_message_id, main_channel_id):
+	sql = "SELECT send_time FROM scheduled_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
-	result = CURSOR.fetchall()
-	if result:
-		return result
-
-
-@db_thread_lock
-def get_main_from_scheduled_message(scheduled_message_id, scheduled_channel_id):
-	sql = "SELECT main_message_id, main_channel_id FROM scheduled_messages WHERE scheduled_message_id=(?) and scheduled_channel_id=(?)"
-	CURSOR.execute(sql, (scheduled_message_id, scheduled_channel_id,))
 	result = CURSOR.fetchone()
 	if result:
-		return result
+		return result[0]
 
 
 @db_thread_lock
-def delete_scheduled_message(scheduled_message_id, scheduled_channel_id):
-	sql = "DELETE FROM scheduled_messages WHERE scheduled_message_id=(?) AND scheduled_channel_id=(?)"
-	CURSOR.execute(sql, (scheduled_message_id, scheduled_channel_id,))
-	DB_CONNECTION.commit()
+def is_message_scheduled(main_message_id, main_channel_id):
+	sql = "SELECT id FROM scheduled_messages WHERE main_message_id=(?) and main_channel_id=(?)"
+	CURSOR.execute(sql, (main_message_id, main_channel_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
 
 
 @db_thread_lock
@@ -431,19 +416,10 @@ def delete_scheduled_message_main(main_message_id, main_channel_id):
 
 @db_thread_lock
 def get_all_scheduled_messages():
-	sql = "SELECT main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time FROM scheduled_messages"
+	sql = "SELECT main_message_id, main_channel_id, send_time FROM scheduled_messages"
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
 	return result
-
-
-@db_thread_lock
-def get_oldest_scheduled_message(scheduled_channel_id):
-	sql = "SELECT min(scheduled_message_id) FROM scheduled_messages WHERE scheduled_channel_id=(?)"
-	CURSOR.execute(sql, (scheduled_channel_id,))
-	result = CURSOR.fetchone()
-	if result:
-		return result[0]
 
 
 @db_thread_lock

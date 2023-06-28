@@ -170,7 +170,7 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
 	subchannel_ids = set()
 	if hashtag_data.is_scheduled():
-		if db_utils.get_scheduled_messages(main_message_id, main_channel_id):
+		if db_utils.is_message_scheduled(main_message_id, main_channel_id):
 			scheduled_users_subchannels = get_scheduled_subchannels_from_hashtags(main_channel_id, hashtag_data)
 			if scheduled_users_subchannels:
 				subchannel_ids.update(scheduled_users_subchannels)

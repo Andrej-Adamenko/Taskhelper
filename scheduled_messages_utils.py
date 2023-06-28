@@ -43,8 +43,7 @@ def schedule_message(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, se
 
 	date_str = dt.strftime(DATE_FORMAT)
 
-	scheduled_messages = db_utils.get_scheduled_messages(main_message_id, main_channel_id)
-	if scheduled_messages:
+	if db_utils.is_message_scheduled(main_message_id, main_channel_id):
 		db_utils.update_scheduled_message(main_message_id, main_channel_id, send_time)
 
 		for msg in SCHEDULED_MESSAGES_LIST:
@@ -53,14 +52,15 @@ def schedule_message(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, se
 				msg[2] = send_time
 		SCHEDULED_MESSAGES_LIST.sort(key=scheduled_message_comparison_func)
 
-		hashtag_data = HashtagData(message, main_channel_id)
-		message = hashtag_data.get_post_data_without_hashtags()
+		if time.time() < send_time:
+			hashtag_data = HashtagData(message, main_channel_id)
+			message = hashtag_data.get_post_data_without_hashtags()
 
-		hashtag_data.set_scheduled_tag(date_str)
-		forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
+			hashtag_data.set_scheduled_tag(date_str)
+			forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
-		forwarding_utils.add_control_buttons(bot, message, hashtag_data)
-		forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
+			forwarding_utils.add_control_buttons(bot, message, hashtag_data)
+			forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
 
 		comment_text = f"{call.from_user.first_name} rescheduled the ticket to be sent on {date_str}."
 		utils.add_comment_to_ticket(bot, message, comment_text)
@@ -293,7 +293,7 @@ def get_scheduled_messages_for_send():
 def start_scheduled_thread(bot: telebot.TeleBot):
 	scheduled_messages = db_utils.get_all_scheduled_messages()
 	for m in scheduled_messages:
-		main_message_id, main_channel_id, scheduled_message_id, scheduled_storage_id, send_time = m
+		main_message_id, main_channel_id, send_time = m
 		SCHEDULED_MESSAGES_LIST.append([main_message_id, main_channel_id, send_time])
 	SCHEDULED_MESSAGES_LIST.sort(key=scheduled_message_comparison_func)
 
