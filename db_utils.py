@@ -798,10 +798,11 @@ def get_tickets_for_reminding(main_channel_id, user_tag, priority):
 		tickets_data.update_time, reminded_tickets.reminded_at
 		FROM tickets_data LEFT JOIN reminded_tickets ON
 		tickets_data.main_message_id = reminded_tickets.main_message_id AND
-		tickets_data.main_channel_id = reminded_tickets.main_channel_id
+		tickets_data.main_channel_id = reminded_tickets.main_channel_id AND
+		reminded_tickets.user_tag = (?)
 		WHERE tickets_data.main_channel_id=(?) AND user_tags LIKE ? || '%' AND priority=(?) AND is_opened=1
 	'''
-	CURSOR.execute(sql, (main_channel_id, user_tag, priority))
+	CURSOR.execute(sql, (user_tag, main_channel_id, user_tag, priority,))
 	result = CURSOR.fetchall()
 	return result
 

@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 
@@ -34,6 +35,7 @@ def update_user_last_interaction(main_message_id: int, main_channel_id: int, msg
 		_, priority, _ = db_utils.get_ticket_data(main_message_id, main_channel_id)
 		if priority == highest_priority:
 			db_utils.insert_or_update_last_user_interaction(main_channel_id, user_tag, int(time.time()))
+			logging.info(f"Updated {msg_data.from_user.id, user_tag} user last interaction.")
 
 
 def ticket_update_time_comparator(ticket):
@@ -46,8 +48,15 @@ def get_message_for_reminding(main_channel_id: int, user_tag: str, priority: str
 	if not ticket_data:
 		return
 
-	ticket_data.sort(key=ticket_update_time_comparator)
-	main_channel_id, main_message_id, update_time, remind_time = ticket_data[0]
+	filtered_ticket_data = []
+	for ticket in ticket_data:
+		main_channel_id, main_message_id, update_time, remind_time = ticket
+		copied_data = db_utils.find_copied_message_from_main(main_message_id, main_channel_id, user_tag, priority)
+		if copied_data:
+			filtered_ticket_data.append(ticket)
+
+	filtered_ticket_data.sort(key=ticket_update_time_comparator)
+	main_channel_id, main_message_id, update_time, remind_time = filtered_ticket_data[0]
 	return main_message_id
 
 
@@ -69,6 +78,7 @@ def send_daily_reminders(bot: telebot.TeleBot):
 
 		copied_message_data = db_utils.find_copied_message_from_main(message_to_remind, main_channel_id, user_tag, highest_priority)
 		if not copied_message_data:
+			logging.warning(f"Not found forwarded message for reminding {main_channel_id, user_tag, message_to_remind}")
 			continue
 		copied_message_id, copied_channel_id = copied_message_data
 
@@ -76,6 +86,7 @@ def send_daily_reminders(bot: telebot.TeleBot):
 		interval_updating_utils.update_older_message(bot, main_channel_id, message_to_remind)
 
 		db_utils.insert_or_update_remind_time(message_to_remind, main_channel_id, user_tag, int(time.time()))
+		logging.info(f"Sent reminder to {user_id, user_tag}, message: {message_to_remind, main_channel_id}.")
 
 
 def start_reminder_thread(bot: telebot.TeleBot):

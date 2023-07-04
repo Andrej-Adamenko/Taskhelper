@@ -42,7 +42,7 @@ def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message
 		bot.send_message(chat_id=msg_data.chat.id, text="This channel's user tag has been successfully changed.")
 	elif command == "/set_channel_hashtag":
 		if len(arguments) != 1:
-			bot.send_message(chat_id=msg_data.chat.id, text="You should specify one hashtag.")
+			bot.send_message(chat_id=msg_data.chat.id, text="You should specify only one hashtag.")
 			return
 		hashtag = arguments[0]
 		if not hashtag.startswith("#"):
