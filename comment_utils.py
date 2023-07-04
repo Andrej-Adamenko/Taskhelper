@@ -58,8 +58,9 @@ def update_comment(bot: telebot.TeleBot, post_data: telebot.types.Message, hasht
 		if text.endswith(current_comment_with_prefix):
 			return
 
-		if previous_text and text.endswith(previous_text):
-			text = text[:-len(previous_text)]  # remove previous comment
+		if previous_text and previous_text in text:
+			previous_text_index = text.rfind(previous_text)
+			text = text[:previous_text_index] + text[previous_text_index + len(previous_text):]  # remove previous comment
 
 		text += current_comment_with_prefix
 		db_utils.update_previous_next_action(main_message_id, main_channel_id, current_comment_with_prefix)
