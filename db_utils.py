@@ -558,12 +558,12 @@ def get_main_channel_from_user(user_id):
 
 
 @db_thread_lock
-def get_tag_from_user_id(user_id):
+def get_tags_from_user_id(user_id):
 	sql = "SELECT user_tag FROM users WHERE user_id=(?)"
 	CURSOR.execute(sql, (user_id,))
-	result = CURSOR.fetchone()
+	result = CURSOR.fetchall()
 	if result:
-		return result[0]
+		return [row[0] for row in result]
 
 
 @db_thread_lock

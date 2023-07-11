@@ -201,7 +201,7 @@ def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int,
 			subchannel_ids.update(followed_users_subchannels)
 
 	creator_subchannels = get_creator_channel_id(main_channel_id, main_message_id, hashtag_data)
-	if creator_subchannels:
+	if creator_subchannels and hashtag_data.is_opened():
 		subchannel_ids.update(creator_subchannels)
 
 	result_subchannel_ids = set()
