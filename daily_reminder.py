@@ -49,6 +49,7 @@ def ticket_update_time_comparator(ticket):
 def get_message_for_reminding(main_channel_id: int, user_tag: str, priority: str):
 	ticket_data = db_utils.get_tickets_for_reminding(main_channel_id, user_tag, priority)
 	if not ticket_data:
+		logging.info(f"No tickets for reminding were found in {user_tag, priority, main_channel_id}")
 		return
 
 	filtered_ticket_data = []
@@ -57,6 +58,10 @@ def get_message_for_reminding(main_channel_id: int, user_tag: str, priority: str
 		copied_data = db_utils.find_copied_message_from_main(main_message_id, main_channel_id, user_tag, priority)
 		if copied_data:
 			filtered_ticket_data.append(ticket)
+
+	if not filtered_ticket_data:
+		logging.info(f"No forwarded tickets for reminding were found in {user_tag, priority, main_channel_id}")
+		return
 
 	filtered_ticket_data.sort(key=ticket_update_time_comparator)
 	main_channel_id, main_message_id, update_time, remind_time = filtered_ticket_data[0]
