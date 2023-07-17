@@ -117,6 +117,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		try:
 			copied_message = bot.copy_message(chat_id=subchannel_id, message_id=main_message_id, from_chat_id=main_channel_id)
 			logging.info(f"Successfully forwarded post [{main_message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
+			db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				raise E
@@ -127,8 +128,6 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 
 		keyboard_markup = generate_control_buttons(hashtag_data, post_data)
 		utils.edit_message_keyboard(bot, post_data, keyboard_markup, chat_id=subchannel_id, message_id=copied_message.message_id)
-
-		db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
 
 
 def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
