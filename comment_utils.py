@@ -1,6 +1,7 @@
 import time
 
 import telebot
+from telebot.apihelper import ApiTelegramException
 
 import daily_reminder
 import db_utils
@@ -63,10 +64,9 @@ def update_comment(bot: telebot.TeleBot, post_data: telebot.types.Message, hasht
 			text = text[:previous_text_index] + text[previous_text_index + len(previous_text):]  # remove previous comment
 
 		text += current_comment_with_prefix
-		db_utils.update_previous_next_action(main_message_id, main_channel_id, current_comment_with_prefix)
 
 		keyboard_markup = forwarding_utils.generate_control_buttons(hashtag_data, post_data)
 
 		utils.set_post_content(post_data, text, entities)
 		utils.edit_message_content(bot, post_data, reply_markup=keyboard_markup)
-
+		db_utils.update_previous_next_action(main_message_id, main_channel_id, current_comment_with_prefix)
