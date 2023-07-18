@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 from typing import List
 
 import telebot.types
@@ -13,6 +15,43 @@ SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new me
 MSG_CANT_BE_DELETED_ERROR = "message can't be deleted"
 MSG_NOT_FOUND_ERROR = "message to delete not found"
 KICKED_FROM_CHANNEL_ERROR = "Forbidden: bot was kicked from the channel chat"
+
+TIMEOUT_LOCK = threading.RLock()
+
+
+def get_timeout_retry(e: ApiTelegramException):
+	retry_after_text = "retry after "
+	retry_text_pos = e.description.find(retry_after_text)
+	if retry_text_pos < 0:
+		return 0
+	retry_amount_str = e.description[retry_text_pos + len(retry_after_text):]
+	i = 0
+	for num in retry_amount_str:
+		if num in "0123456789":
+			i += 1
+		else:
+			break
+	return int(retry_amount_str[:i])
+
+
+def timeout_error_lock(func):
+	def inner_function(*args, **kwargs):
+		result = None
+		TIMEOUT_LOCK.acquire(True)
+		while True:
+			try:
+				result = func(*args, **kwargs)
+			except ApiTelegramException as E:
+				if E.error_code == 429:
+					timeout = get_timeout_retry(E)
+					logging.exception(f"Too many requests error in {func.__name__}, retry in: {timeout}")
+					time.sleep(timeout)
+					continue
+				raise E
+			break
+		TIMEOUT_LOCK.release()
+		return result
+	return inner_function
 
 
 def create_callback_str(callback_prefix, callback_type, *args):
@@ -68,6 +107,7 @@ def set_post_content(post_data: telebot.types.Message, text: str, entities: tele
 		post_data.caption_entities = entities
 
 
+@timeout_error_lock
 def edit_message_content(bot: telebot.TeleBot, post_data: telebot.types.Message, **kwargs):
 	if "chat_id" not in kwargs:
 		kwargs["chat_id"] = post_data.chat.id
@@ -129,6 +169,7 @@ def place_buttons_in_rows(buttons: List[telebot.types.InlineKeyboardButton]):
 	return rows
 
 
+@timeout_error_lock
 def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
                           keyboard: telebot.types.InlineKeyboardMarkup = None, chat_id: int = None, message_id: int = None):
 	if chat_id is None and message_id is None:
@@ -177,6 +218,7 @@ def get_key_by_value(d: dict, value: object):
 	return key_list[position]
 
 
+@timeout_error_lock
 def delete_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	try:
 		return bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -219,6 +261,7 @@ def check_last_messages(bot: telebot.TeleBot):
 		get_last_message(bot, channel_id)
 
 
+@timeout_error_lock
 def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message, text: str, entities: list = None):
 	main_message_id = post_data.message_id
 	main_channel_id = post_data.chat.id

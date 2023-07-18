@@ -271,6 +271,7 @@ def cancel_scheduled_message(main_channel_id, main_message_id):
 		message_id, channel_id, _ = scheduled_message
 		if message_id == main_message_id and channel_id == main_channel_id:
 			SCHEDULED_MESSAGES_LIST.remove(scheduled_message)
+	SCHEDULED_MESSAGES_LIST.sort(key=scheduled_message_comparison_func)
 	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
 
 

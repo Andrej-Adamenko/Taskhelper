@@ -24,7 +24,7 @@ from config_utils import DISCUSSION_CHAT_DATA
 
 CALLBACK_PREFIX = "FWRD"
 
-FORWARDING_LOCK = threading.RLock()
+_FORWARDING_LOCK = threading.RLock()
 
 
 class CB_TYPES:
@@ -80,12 +80,12 @@ def get_unchanged_posts(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 def forwarding_thread_lock(func):
 	def inner_function(*args, **kwargs):
 		try:
-			FORWARDING_LOCK.acquire(True)
+			_FORWARDING_LOCK.acquire(True)
 			return func(*args, **kwargs)
 		except Exception as E:
-			logging.error(f"Error in {func.__name__} forwarding function, error: {E}")
+			logging.exception(f"Error in {func.__name__} forwarding function, error: {E}")
 		finally:
-			FORWARDING_LOCK.release()
+			_FORWARDING_LOCK.release()
 	return inner_function
 
 
@@ -149,13 +149,14 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 					logging.info(f"Message {[oldest_message_id, chat_id]} doesn't exists, deleted from db")
 					continue
 
-			main_data = db_utils.get_main_message_from_copied(oldest_message_id, chat_id)
-			if main_data is None:
-				bot.edit_message_text(text=config_utils.TO_DELETE_MSG_TEXT, chat_id=chat_id, message_id=message_id)
-				return
-			main_message_id, main_channel_id = main_data
-
 			msg_to_delete_data = get_message_content_by_id(bot, chat_id, message_id)
+
+			oldest_message_main_data = db_utils.get_main_message_from_copied(oldest_message_id, chat_id)
+			if oldest_message_main_data is None:
+				utils.edit_message_content(bot, msg_to_delete_data, text=config_utils.TO_DELETE_MSG_TEXT, chat_id=chat_id,
+				                           message_id=message_id, entities=[])
+				return
+			main_message_id, main_channel_id = oldest_message_main_data
 
 			if oldest_message_data:
 				if oldest_message_id != message_id:
