@@ -29,6 +29,7 @@ def comment_thread_lock(func):
 	return inner_function
 
 
+@comment_thread_lock
 def save_comment(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 	discussion_message_id = msg_data.message_id
 	discussion_chat_id = msg_data.chat.id

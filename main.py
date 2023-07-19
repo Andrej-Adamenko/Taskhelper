@@ -21,7 +21,7 @@ from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH, DISCUSSION_CHAT_DA
 db_utils.initialize_db()
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
 
-bot = telebot.TeleBot(BOT_TOKEN, num_threads=4)
+bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
 
 config_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
