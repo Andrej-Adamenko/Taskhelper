@@ -16,7 +16,7 @@ MSG_CANT_BE_DELETED_ERROR = "message can't be deleted"
 MSG_NOT_FOUND_ERROR = "message to delete not found"
 KICKED_FROM_CHANNEL_ERROR = "Forbidden: bot was kicked from the channel chat"
 
-TIMEOUT_LOCK = threading.RLock()
+_TIMEOUT_LOCK = threading.Lock()
 
 
 def get_timeout_retry(e: ApiTelegramException):
@@ -36,21 +36,17 @@ def get_timeout_retry(e: ApiTelegramException):
 
 def timeout_error_lock(func):
 	def inner_function(*args, **kwargs):
-		result = None
-		TIMEOUT_LOCK.acquire(True)
-		while True:
-			try:
-				result = func(*args, **kwargs)
-			except ApiTelegramException as E:
-				if E.error_code == 429:
-					timeout = get_timeout_retry(E)
-					logging.exception(f"Too many requests error in {func.__name__}, retry in: {timeout}")
-					time.sleep(timeout)
-					continue
-				raise E
-			break
-		TIMEOUT_LOCK.release()
-		return result
+		with _TIMEOUT_LOCK:
+			while True:
+				try:
+					return func(*args, **kwargs)
+				except ApiTelegramException as E:
+					if E.error_code == 429:
+						timeout = get_timeout_retry(E)
+						logging.exception(f"Too many requests error in {func.__name__}, retry in: {timeout}")
+						time.sleep(timeout)
+						continue
+					raise E
 	return inner_function
 
 
@@ -274,3 +270,22 @@ def add_comment_to_ticket(bot: telebot.TeleBot, post_data: telebot.types.Message
 		comment_msg = bot.send_message(chat_id=discussion_chat_id, reply_to_message_id=comment_message_id, text=text, entities=entities)
 		db_utils.insert_comment_message(comment_message_id, comment_msg.id, discussion_chat_id, config_utils.BOT_ID)
 		daily_reminder.set_ticket_update_time(main_message_id, main_channel_id)
+
+
+@timeout_error_lock
+def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	try:
+		forwarded_message = bot.forward_message(chat_id=config_utils.DUMP_CHAT_ID, from_chat_id=chat_id,
+												message_id=message_id)
+		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
+	except ApiTelegramException as E:
+		logging.error(f"Error during getting message content - {E}")
+		return
+
+	return forwarded_message
+
+
+@timeout_error_lock
+def copy_message(bot: telebot.TeleBot, **kwargs):
+	return bot.copy_message(**kwargs)
+

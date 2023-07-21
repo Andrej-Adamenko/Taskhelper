@@ -7,18 +7,16 @@ DB_FILENAME = "taskhelper_data.db"
 DB_CONNECTION = sqlite3.connect(DB_FILENAME, check_same_thread=False)
 CURSOR = DB_CONNECTION.cursor()
 
-DB_LOCK = threading.RLock()
+_DB_LOCK = threading.RLock()
 
 
 def db_thread_lock(func):
 	def inner_function(*args, **kwargs):
-		try:
-			DB_LOCK.acquire(True)
-			return func(*args, **kwargs)
-		except sqlite3.Error as E:
-			logging.error(f"SQLite error in {func.__name__} function, error: {E.args}")
-		finally:
-			DB_LOCK.release()
+		with _DB_LOCK:
+			try:
+				return func(*args, **kwargs)
+			except sqlite3.Error as E:
+				logging.error(f"SQLite error in {func.__name__} function, error: {E.args}")
 	return inner_function
 
 
@@ -801,6 +799,9 @@ def get_tickets_for_reminding(main_channel_id, user_tag, priority):
 		tickets_data.main_channel_id = reminded_tickets.main_channel_id AND
 		reminded_tickets.user_tag = (?)
 		WHERE tickets_data.main_channel_id=(?) AND user_tags LIKE ? || '%' AND priority=(?) AND is_opened=1
+		AND tickets_data.main_message_id NOT IN (
+			SELECT main_message_id FROM scheduled_messages WHERE main_channel_id = tickets_data.main_channel_id
+		)
 	'''
 	CURSOR.execute(sql, (user_tag, main_channel_id, user_tag, priority,))
 	result = CURSOR.fetchall()

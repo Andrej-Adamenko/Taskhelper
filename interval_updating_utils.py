@@ -20,7 +20,7 @@ _UPDATE_STATUS: bool = False
 
 
 def update_older_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int):
-	forwarded_message = forwarding_utils.get_message_content_by_id(bot, main_channel_id, current_msg_id)
+	forwarded_message = utils.get_message_content_by_id(bot, main_channel_id, current_msg_id)
 	if forwarded_message is None:
 		return
 
@@ -43,7 +43,7 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, current_msg
 
 
 def store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int, discussion_chat_id: int):
-	forwarded_message = forwarding_utils.get_message_content_by_id(bot, discussion_chat_id, current_msg_id)
+	forwarded_message = utils.get_message_content_by_id(bot, discussion_chat_id, current_msg_id)
 	if forwarded_message is None:
 		return
 
@@ -56,18 +56,6 @@ def store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, current
 		db_utils.insert_or_update_discussion_message(main_channel_message_id, main_channel_id, current_msg_id)
 
 	return main_channel_message_id
-
-
-def start_updating_older_messages(bot: telebot.TeleBot, main_channel_id: int, message_id: int):
-	main_channel_id_str = str(main_channel_id)
-
-	bot.edit_message_text(chat_id=main_channel_id, message_id=message_id, text=UPDATE_STARTED_MSG_TEXT)
-
-	if main_channel_id_str in DISCUSSION_CHAT_DATA:
-		discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
-		check_all_messages(bot, main_channel_id, discussion_chat_id)
-	else:
-		check_all_messages(bot, main_channel_id)
 
 
 def start_interval_updating(bot: telebot.TeleBot, start_delay: int = 0):

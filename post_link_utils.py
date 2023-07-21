@@ -82,22 +82,5 @@ def remove_previous_link(text: str, entities: List[MessageEntity], previous_link
 	return text, entities
 
 
-def update_older_messages_question(bot: telebot.TeleBot, chat_id: int):
-	buttons = [
-		InlineKeyboardButton("Yes", callback_data=utils.create_callback_str(CALLBACK_PREFIX, "UPD_YES")),
-		InlineKeyboardButton("No", callback_data=utils.create_callback_str(CALLBACK_PREFIX, "UPD_NO"))
-	]
-	keyboard_markup = InlineKeyboardMarkup([buttons])
-
-	bot.send_message(chat_id=chat_id, text=START_UPDATE_QUESTION, reply_markup=keyboard_markup)
-
-
 def handle_callback(bot, call):
-	callback_data = call.data[len(CALLBACK_PREFIX) + 1:]
-	main_channel_id = call.message.chat.id
-
-	if callback_data == "UPD_YES":
-		interval_updating_utils.start_updating_older_messages(bot, main_channel_id, call.message.id)
-	elif callback_data == "UPD_NO":
-		bot.delete_message(chat_id=main_channel_id, message_id=call.message.id)
-
+	pass

@@ -1,6 +1,3 @@
-import logging
-import threading
-
 import telebot
 
 import daily_reminder
@@ -14,22 +11,7 @@ from hashtag_data import HashtagData
 _NEXT_ACTION_COMMENT_PREFIX = ":"
 _NEXT_ACTION_TEXT_PREFIX = "::"
 
-_COMMENT_LOCK = threading.RLock()
 
-
-def comment_thread_lock(func):
-	def inner_function(*args, **kwargs):
-		try:
-			_COMMENT_LOCK.acquire(True)
-			return func(*args, **kwargs)
-		except Exception as E:
-			logging.exception(f"Error in {func.__name__} comment function, error: {E}")
-		finally:
-			_COMMENT_LOCK.release()
-	return inner_function
-
-
-@comment_thread_lock
 def save_comment(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 	discussion_message_id = msg_data.message_id
 	discussion_chat_id = msg_data.chat.id
@@ -60,7 +42,6 @@ def save_comment(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 	daily_reminder.set_ticket_update_time(main_message_id, main_channel_id)
 
 
-@comment_thread_lock
 def update_comment(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id

@@ -137,7 +137,7 @@ def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 		logging.info(f"Button event in unknown message {[call.message.message_id, call.message.chat.id]}")
 		return
 	main_message_id, main_channel_id = main_message_data
-	msg_data = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+	msg_data = utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
 
 	subchannel_message_id = call.message.message_id
 	subchannel_id = call.message.chat.id

@@ -245,8 +245,9 @@ def generate_minutes_buttons(current_date, current_hour):
 
 
 def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
+	logging.info(f"Sending scheduled message {scheduled_message_info}")
 	main_message_id, main_channel_id, send_time = scheduled_message_info
-	message = forwarding_utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+	message = utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
 	if message is None:
 		return
 

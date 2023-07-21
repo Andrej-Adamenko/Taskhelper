@@ -24,7 +24,7 @@ from config_utils import DISCUSSION_CHAT_DATA
 
 CALLBACK_PREFIX = "FWRD"
 
-_FORWARDING_LOCK = threading.RLock()
+_FORWARDING_LOCK = threading.Lock()
 
 
 class CB_TYPES:
@@ -39,19 +39,6 @@ class CB_TYPES:
 	TOGGLE_CC = "TCC"
 
 
-def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
-	try:
-		forwarded_message = bot.forward_message(chat_id=config_utils.DUMP_CHAT_ID, from_chat_id=chat_id,
-												message_id=message_id)
-		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
-	except ApiTelegramException as E:
-		if E.error_code == 429:
-			raise E
-		return
-
-	return forwarded_message
-
-
 def get_unchanged_posts(bot: telebot.TeleBot, post_data: telebot.types.Message, subchannel_ids: List[int]):
 	main_channel_id = post_data.chat.id
 	message_id = post_data.message_id
@@ -60,7 +47,7 @@ def get_unchanged_posts(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 	unchanged_posts = {}
 	for forwarded_message in forwarded_messages:
 		forwarded_msg_id, forwarded_channel_id = forwarded_message
-		forwarded_msg_data = get_message_content_by_id(bot, forwarded_channel_id, forwarded_msg_id)
+		forwarded_msg_data = utils.get_message_content_by_id(bot, forwarded_channel_id, forwarded_msg_id)
 
 		in_subchannels = forwarded_channel_id in subchannel_ids
 		if forwarded_msg_data and utils.is_post_data_equal(forwarded_msg_data, post_data) and in_subchannels:
@@ -79,13 +66,11 @@ def get_unchanged_posts(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 
 def forwarding_thread_lock(func):
 	def inner_function(*args, **kwargs):
-		try:
-			_FORWARDING_LOCK.acquire(True)
-			return func(*args, **kwargs)
-		except Exception as E:
-			logging.exception(f"Error in {func.__name__} forwarding function, error: {E}")
-		finally:
-			_FORWARDING_LOCK.release()
+		with _FORWARDING_LOCK:
+			try:
+				return func(*args, **kwargs)
+			except Exception as E:
+				logging.exception(f"Error in {func.__name__} forwarding function, error: {E}")
 	return inner_function
 
 
@@ -115,7 +100,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			continue
 
 		try:
-			copied_message = bot.copy_message(chat_id=subchannel_id, message_id=main_message_id, from_chat_id=main_channel_id)
+			copied_message = utils.copy_message(bot, chat_id=subchannel_id, message_id=main_message_id,
+			                                    from_chat_id=main_channel_id)
 			logging.info(f"Successfully forwarded post [{main_message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
 			db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
 		except ApiTelegramException as E:
@@ -143,13 +129,13 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 				if oldest_message_id is None:
 					break
 
-				oldest_message_data = get_message_content_by_id(bot, chat_id, oldest_message_id)
+				oldest_message_data = utils.get_message_content_by_id(bot, chat_id, oldest_message_id)
 				if oldest_message_data is None:
 					db_utils.delete_copied_message(oldest_message_id, chat_id)
 					logging.info(f"Message {[oldest_message_id, chat_id]} doesn't exists, deleted from db")
 					continue
 
-			msg_to_delete_data = get_message_content_by_id(bot, chat_id, message_id)
+			msg_to_delete_data = utils.get_message_content_by_id(bot, chat_id, message_id)
 
 			oldest_message_main_data = db_utils.get_main_message_from_copied(oldest_message_id, chat_id)
 			if oldest_message_main_data is None:
