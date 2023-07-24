@@ -202,6 +202,48 @@ Changes storage channel for scheduled messages:
 * Available hashtags: opened, closed, scheduled, priority
 * Example: /set_hashtag_text opened Op
 
+Changes timeout for skipping daily reminder if user is interacted with tickets within this time:
+* /set_remind_without_interaction<MINUTES>
+* Example: /set_remind_without_interaction 1440
+
+### ***Individual channel structure for every user***
+
+Each created channel now has its own unique structure. After adding a bot to a new channel, simply write any message in chat and then type "/start" to bring up the settings menu.
+
+The settings menu gives you the option to select or deselect certain settings from the seven available:
+
+* "Assigned to this user" - displaying the tickets assigned to this user.
+* "Reported by this user" - displays the tickets that were created by this user.
+* "CCed to this user" - enabling this option will display tickets in this channel when the user is added to the ticket copy (CC).
+* "Scheduled to this user" - if this parameter is enabled, the channel will display the pending tickets assigned to this user.
+* "Priority 1/2/3" - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel.
+
+After selecting the desired settings, you should press the "Save" button to save and apply the settings.
+
+If you need to change the channel settings, you can use the command "/show_settings" to call the parameter selection menu again.
+
+### ***Custom hashtags for specific channels***
+
+You can create your own "hashtags" for certain channels.
+
+To do this, go to the user channel and use the command "/set_channel_hashtag" specifying the desired hashtag, for example, "/set_channel_hashtag #test". 
+
+After the hashtag is set, to move a ticket from the main channel to a certain channel, you should specify the corresponding hashtag in the ticket body.
+
+### ***Add last comment to ticket's body***
+
+You can add your own comments to each ticket. 
+
+To do this, go to the comments section for a particular ticket, accessible via button number 6. 
+
+Then, in the input field, write a comment, starting it with ":". For example, ":test_comment". This comment will appear in the body of the ticket after the "::" character.
+
+If you want to change the comment, use the same ":" symbol and write your corrected comment. 
+
+If you try to add text via the "edit" button (by pressing the right key on the ticket), the added text will be included in the main text of the channel.
+
+When you edit a comment and delete a part of it, the edited part will remain and the comment will be moved to the end of the ticket.
+
 ### ***Deleting messages from user channels***
 
 When closing a ticket (by pressing the "close ticket" button), if the ticket has been in the channel for less than 48 hours, the ticket will be deleted from that channel.
@@ -209,3 +251,4 @@ When closing a ticket (by pressing the "close ticket" button), if the ticket has
 But if the ticket is more than 48 hours old, the ticket will be deleted from the channel and will go to the very beginning of the channel with the "to_delete" tag, this message can then be deleted manually.
 
 All closed tickets remain in the main channel and can be reopened.
+
