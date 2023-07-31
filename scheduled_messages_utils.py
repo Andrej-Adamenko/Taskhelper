@@ -57,6 +57,7 @@ def schedule_message(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, se
 			message = hashtag_data.get_post_data_without_hashtags()
 
 			hashtag_data.set_scheduled_tag(date_str)
+			hashtag_data.set_status_tag(None)
 			forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
 			forwarding_utils.add_control_buttons(bot, message, hashtag_data)
@@ -73,6 +74,7 @@ def schedule_message(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, se
 	message = hashtag_data.get_post_data_without_hashtags()
 
 	hashtag_data.set_scheduled_tag(date_str)
+	hashtag_data.set_status_tag(None)
 	forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
 	db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)

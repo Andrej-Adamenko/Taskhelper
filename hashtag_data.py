@@ -1,4 +1,5 @@
 import re
+import typing
 from typing import List
 
 import telebot
@@ -35,7 +36,7 @@ class HashtagData:
 		self.other_hashtags = self.extract_other_hashtags(post_data)
 
 	def is_opened(self):
-		return self.status_tag == OPENED_TAG
+		return self.status_tag == OPENED_TAG or self.is_scheduled()
 
 	def is_closed(self):
 		return self.status_tag == CLOSED_TAG
@@ -77,15 +78,16 @@ class HashtagData:
 	def get_hashtags_for_insertion(self):
 		hashtags = []
 		hashtags.append(self.scheduled_tag)
-		if self.scheduled_tag:
-			self.set_status_tag(True)  # set status tag to opened if ticket is scheduled
 		hashtags.append(self.status_tag)
 		hashtags += self.user_tags
 		hashtags.append(self.priority_tag)
 		return hashtags
 
-	def set_status_tag(self, state: bool):
-		self.status_tag = OPENED_TAG if state else CLOSED_TAG
+	def set_status_tag(self, state: typing.Union[bool, None]):
+		if state is None:
+			self.status_tag = None
+		else:
+			self.status_tag = OPENED_TAG if state else CLOSED_TAG
 
 	def assign_to_user(self, user: str):
 		if user in self.user_tags:
