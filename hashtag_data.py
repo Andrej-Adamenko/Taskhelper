@@ -21,6 +21,8 @@ POSSIBLE_PRIORITIES = ["1", "2", "3"]
 
 
 class HashtagData:
+	SCHEDULED_DATE_FORMAT_REGEX = "^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}"
+
 	def __init__(self, post_data: telebot.types.Message, main_channel_id: int):
 		self.hashtag_indexes = []
 		self.post_data = post_data
@@ -118,6 +120,16 @@ class HashtagData:
 			self.assign_to_user(user)
 			self.set_priority("")
 
+	def check_priority_tag(self, tag, priority_tag):
+		if not tag.startswith(priority_tag):
+			return False
+		return tag == priority_tag or tag[len(priority_tag):] in POSSIBLE_PRIORITIES
+
+	def check_scheduled_tag(self, tag, scheduled_tag):
+		if tag == scheduled_tag or tag.startswith(scheduled_tag + " "):
+			return True
+		return False
+
 	def find_hashtag_indexes(self, text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
 		scheduled_tag_index = None
 		status_tag_index = None
@@ -135,7 +147,7 @@ class HashtagData:
 					scheduled_tag_index = entity_index
 					continue
 
-				if tag.startswith(SCHEDULED_TAG):
+				if self.check_scheduled_tag(tag, SCHEDULED_TAG):
 					scheduled_tag_index = entity_index
 					continue
 
@@ -155,7 +167,7 @@ class HashtagData:
 					priority_tag_index = entity_index
 					continue
 
-				if tag.startswith(PRIORITY_TAG):
+				if self.check_priority_tag(tag, PRIORITY_TAG):
 					priority_tag_index = entity_index
 
 		return scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index
@@ -171,7 +183,7 @@ class HashtagData:
 			if config_utils.HASHTAGS_BEFORE_UPDATE:
 				result = self.replace_old_scheduled_tag(text, entities, scheduled_tag_index)
 				text = result if result else text
-			self.check_scheduled_tag(text, entities, scheduled_tag_index)
+			self.update_scheduled_tag(text, entities, scheduled_tag_index)
 			scheduled_tag = self.get_tag_from_entity(entities[scheduled_tag_index], text)
 
 		status_tag = None
@@ -230,14 +242,14 @@ class HashtagData:
 	def get_tag_from_entity(self, entity: telebot.types.MessageEntity, text: str):
 		return text[entity.offset + 1:entity.offset + entity.length]
 
-	def check_scheduled_tag(self, text: str, entities: List[telebot.types.MessageEntity], status_tag_index: int):
-		status_offset = entities[status_tag_index].offset
-		if text[status_offset + 1:].startswith(SCHEDULED_TAG):
-			text_after_tag = text[status_offset + 1 + len(SCHEDULED_TAG) + 1:]
-			result = re.search("^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}", text_after_tag)
+	def update_scheduled_tag(self, text: str, entities: List[telebot.types.MessageEntity], tag_index: int):
+		scheduled_tag_offset = entities[tag_index].offset
+		if text[scheduled_tag_offset + 1:].startswith(SCHEDULED_TAG):
+			text_after_tag = text[scheduled_tag_offset + 1 + len(SCHEDULED_TAG) + 1:]
+			result = re.search(self.SCHEDULED_DATE_FORMAT_REGEX, text_after_tag)
 			if result is None:
-				return
-			entities[status_tag_index].length += 1 + result.end()
+				return False
+			entities[tag_index].length += 1 + result.end()
 			return True
 		return False
 
@@ -250,12 +262,12 @@ class HashtagData:
 
 	def check_old_scheduled_tag(self, tag: str):
 		old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]
-		if tag.startswith(old_scheduled_tag):
+		if self.check_scheduled_tag(tag, old_scheduled_tag):
 			return True
 		return False
 
 	def check_old_priority_tag(self, tag: str):
-		if tag.startswith(config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]):
+		if self.check_priority_tag(tag, config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]):
 			return True
 		return False
 

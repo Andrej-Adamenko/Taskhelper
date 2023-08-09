@@ -169,7 +169,7 @@ def save_channel_settings(bot: telebot.TeleBot, call: CallbackQuery):
 	if not user_tag:
 		bot.send_message(
 			chat_id=call.message.chat.id,
-			text="Now you need to set user tag for this channel using command \"/set_user_tag {user_tag}\". Also you can change user tag for this channel using same command. After setting user tag bot will automatically start forwarding tickets to this channel accordingly to selected parameters.",
+			text="Now you need to set user tag for this channel using command \"/set_user_tag {user_tag}\". Also you can change user tag for this channel using same command. After setting user tag bot will automatically start forwarding tickets to this channel according to the selected parameters.",
 		)
 
 	interval_updating_utils.start_interval_updating(bot)

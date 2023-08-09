@@ -220,6 +220,10 @@ The settings menu gives you the option to select or deselect certain settings fr
 
 After selecting the desired settings, you should press the "Save" button to save and apply the settings.
 
+After selecting the channel settings you need to set user tag for this channel by sending the following command:
+* "/set_user_tag {user_tag}", instead of "{user_tag}" you should insert your user tag
+* Example: "/set_user_tag ab", in this case "ab" is user tag
+
 If you need to change the channel settings, you can use the command "/show_settings" to call the parameter selection menu again.
 
 ### ***Custom hashtags for specific channels***
