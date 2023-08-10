@@ -34,6 +34,12 @@ def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message
 		if not db_utils.is_individual_channel_exists(msg_data.chat.id):
 			bot.send_message(chat_id=msg_data.chat.id, text="First you need to select the settings for this channel.")
 			return
+
+		_, _, _, types = db_utils.get_individual_channel(msg_data.chat.id)
+		if channel_manager.CHANNEL_TYPES.ALL_USERS in types:
+			bot.send_message(chat_id=msg_data.chat.id, text="You can't set user tag to a channel for all users.")
+			return
+
 		if len(arguments) != 1:
 			bot.send_message(chat_id=msg_data.chat.id, text="You should specify user tag without spaces.")
 			return
