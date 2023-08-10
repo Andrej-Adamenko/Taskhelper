@@ -616,6 +616,21 @@ def get_individual_channel_id_by_tag(main_channel_id, user_tag, priority, channe
 
 
 @db_thread_lock
+def get_individual_channel_id_all_users(main_channel_id, priority, channel_type):
+	sql = '''
+		SELECT channel_id FROM individual_channels WHERE main_channel_id=(?)
+		AND types LIKE '%' || ? || '%'
+		AND priorities LIKE '%' || ? || '%'
+	'''
+	CURSOR.execute(sql, (main_channel_id, channel_type, priority,))
+	result = CURSOR.fetchall()
+	if result:
+		return [row[0] for row in result]
+	else:
+		return []
+
+
+@db_thread_lock
 def get_individual_channel_id_by_user_id(main_channel_id, user_id, priority, channel_type):
 	sql = '''
 		SELECT channel_id FROM individual_channels WHERE

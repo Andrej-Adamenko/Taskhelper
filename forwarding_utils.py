@@ -83,6 +83,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
 	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, hashtag_data)
+	all_users_channel_ids = get_all_users_channels_from_hashtags(main_channel_id, hashtag_data)
+	subchannel_ids.update(all_users_channel_ids)
 
 	unchanged_posts = get_unchanged_posts(bot, post_data, list(subchannel_ids))
 
@@ -139,6 +141,7 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 
 			oldest_message_main_data = db_utils.get_main_message_from_copied(oldest_message_id, chat_id)
 			if oldest_message_main_data is None:
+				# if oldest message not found in main channel then just replace current message text with delete message
 				utils.edit_message_content(bot, msg_to_delete_data, text=config_utils.TO_DELETE_MSG_TEXT, chat_id=chat_id,
 				                           message_id=message_id, entities=[])
 				return
@@ -158,11 +161,13 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 					db_utils.delete_copied_message(message_id, chat_id)
 					db_utils.update_copied_message_id(oldest_message_id, chat_id, message_id)
 				else:
+					# if oldest message is the message that needs to be deleted than just delete it from db
 					db_utils.delete_copied_message(message_id, chat_id)
 
 				utils.edit_message_content(bot, oldest_message_data, chat_id=chat_id, message_id=oldest_message_id,
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 			else:
+				# if no oldest message was found then just replace current ticket text with delete message
 				db_utils.delete_copied_message(oldest_message_id, chat_id)
 				utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=message_id,
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
@@ -199,6 +204,26 @@ def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int,
 		result_subchannel_ids.add(subchannel_id)
 
 	return result_subchannel_ids
+
+
+def get_all_users_channels_from_hashtags(main_channel_id: int, hashtag_data: HashtagData):
+	priority = hashtag_data.get_priority_number_or_default()
+	if not priority:
+		return
+
+	channel_ids = db_utils.get_individual_channel_id_all_users(
+		main_channel_id, priority, channel_manager.CHANNEL_TYPES.ALL_USERS
+	)
+
+	all_users_channel_ids = []
+
+	for channel_id in channel_ids:
+		main_channel_id, user_tag, priorities, types = db_utils.get_individual_channel(channel_id)
+		is_channel_scheduled = channel_manager.CHANNEL_TYPES.SCHEDULED in types
+		if is_channel_scheduled == hashtag_data.is_scheduled():
+			all_users_channel_ids.append(channel_id)
+
+	return all_users_channel_ids
 
 
 def get_assigned_user_channel_from_hashtags(main_channel_id: int, hashtag_data: HashtagData):
