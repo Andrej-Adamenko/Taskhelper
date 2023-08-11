@@ -125,7 +125,7 @@ class HashtagData:
 		priority_tag_index = None
 
 		if entities is None:
-			return None, None, None
+			return None, None, [], None
 
 		for entity_index in reversed(range(len(entities))):
 			entity = entities[entity_index]
@@ -198,6 +198,8 @@ class HashtagData:
 
 	def extract_other_hashtags(self, post_data: telebot.types.Message):
 		text, entities = utils.get_post_content(post_data)
+		if not entities:
+			return []
 		hashtags = []
 		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
 		ignored_indexes = [scheduled_tag_index, status_tag_index, priority_tag_index]
