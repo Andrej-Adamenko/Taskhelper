@@ -83,7 +83,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
 	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, hashtag_data)
-	all_users_channel_ids = get_all_users_channels_from_hashtags(main_channel_id, hashtag_data)
+	all_users_channel_ids = get_all_users_channels_from_hashtags(main_channel_id, main_message_id, hashtag_data)
 	subchannel_ids.update(all_users_channel_ids)
 
 	unchanged_posts = get_unchanged_posts(bot, post_data, list(subchannel_ids))
@@ -206,10 +206,11 @@ def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int,
 	return result_subchannel_ids
 
 
-def get_all_users_channels_from_hashtags(main_channel_id: int, hashtag_data: HashtagData):
+def get_all_users_channels_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
 	priority = hashtag_data.get_priority_number_or_default()
-	if not priority:
-		return
+	required_params = [priority, hashtag_data.is_opened(), hashtag_data.get_assigned_user()]
+	if not all(required_params):
+		return []
 
 	channel_ids = db_utils.get_individual_channel_id_all_users(
 		main_channel_id, priority, channel_manager.CHANNEL_TYPES.ALL_USERS
@@ -219,8 +220,12 @@ def get_all_users_channels_from_hashtags(main_channel_id: int, hashtag_data: Has
 
 	for channel_id in channel_ids:
 		main_channel_id, user_tag, priorities, types = db_utils.get_individual_channel(channel_id)
+
 		is_channel_scheduled = channel_manager.CHANNEL_TYPES.SCHEDULED in types
-		if is_channel_scheduled == hashtag_data.is_scheduled():
+		if hashtag_data.is_scheduled():
+			if db_utils.is_message_scheduled(main_message_id, main_channel_id) and is_channel_scheduled:
+				all_users_channel_ids.append(channel_id)
+		elif not is_channel_scheduled:
 			all_users_channel_ids.append(channel_id)
 
 	return all_users_channel_ids
@@ -604,8 +609,7 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 	forward_to_subchannel(bot, post_data, hashtag_data)
 
 
-def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
-									use_default_user: bool = False, force_forward: bool = False):
+def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, force_forward: bool = False):
 	main_channel_id = post_data.chat.id
 
 	original_post_data = copy.deepcopy(post_data)
@@ -614,7 +618,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 	post_data = hashtag_data.get_post_data_without_hashtags()
 	assigned_user = hashtag_data.get_assigned_user()
 	priority = hashtag_data.get_priority_number()
-	if assigned_user is None and priority is None and use_default_user:
+	if assigned_user is None or priority is None or hashtag_data.is_status_missing():
 		hashtag_data.insert_default_user_and_priority()
 
 	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)

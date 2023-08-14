@@ -37,6 +37,9 @@ class HashtagData:
 
 		self.other_hashtags = self.extract_other_hashtags(post_data)
 
+	def is_status_missing(self):
+		return self.status_tag is None and self.scheduled_tag is None
+
 	def is_opened(self):
 		return self.status_tag == OPENED_TAG or self.is_scheduled()
 
@@ -117,8 +120,10 @@ class HashtagData:
 		if main_channel_id_str in DEFAULT_USER_DATA:
 			self.status_tag = OPENED_TAG if self.status_tag is None else self.status_tag
 			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split(" ")
-			self.assign_to_user(user)
-			self.set_priority("")
+			if not self.get_assigned_user():
+				self.assign_to_user(user)
+			if self.get_priority_number() is None:
+				self.set_priority("")
 
 	def check_priority_tag(self, tag, priority_tag):
 		if not tag.startswith(priority_tag):
