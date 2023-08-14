@@ -102,6 +102,7 @@ def handle_discussion_message(msg_data: telebot.types.Message):
 def handle_edited_post(post_data: telebot.types.Message):
 	post_link_utils.update_post_link(bot, post_data)
 	forwarding_utils.forward_and_add_inline_keyboard(bot, post_data)
+	utils.add_comment_to_ticket(bot, post_data, "A user edited the ticket.")
 
 
 @bot.my_chat_member_handler()
