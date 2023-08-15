@@ -272,19 +272,32 @@ def get_creator_channel_id(main_channel_id: int, main_message_id: int, hashtag_d
 
 
 def get_scheduled_subchannels_from_hashtags(main_channel_id: int, hashtag_data: HashtagData):
-	user_tags = hashtag_data.get_all_users()
+	assigned_user = hashtag_data.get_assigned_user()
 	priority = hashtag_data.get_priority_number_or_default()
-	if not user_tags or not priority:
+	if not assigned_user or not priority:
 		return
 
+	followed_users = hashtag_data.get_followed_users()
+	all_user_tags = hashtag_data.get_all_users()
+
 	channel_ids = []
-	for user_tag in user_tags:
+
+	assigned_user_channel_ids = db_utils.get_individual_channel_id_by_tag(
+		main_channel_id, assigned_user, priority, channel_manager.CHANNEL_TYPES.SCHEDULED_ASSIGNED
+	)
+	channel_ids += assigned_user_channel_ids
+
+	for user_tag in followed_users:
+		user_channel_ids = db_utils.get_individual_channel_id_by_tag(
+			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.SCHEDULED_FOLLOWED
+		)
+		channel_ids += user_channel_ids
+
+	for user_tag in all_user_tags:
 		user_channel_ids = db_utils.get_individual_channel_id_by_tag(
 			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.SCHEDULED
 		)
-
-		if user_channel_ids:
-			channel_ids += user_channel_ids
+		channel_ids += user_channel_ids
 
 	return channel_ids
 
