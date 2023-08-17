@@ -631,7 +631,7 @@ def get_individual_channel_id_all_users(main_channel_id, priority, channel_type)
 
 
 @db_thread_lock
-def get_individual_channel_id_by_user_id(main_channel_id, user_id, priority, channel_type):
+def get_individual_channel_ids_by_user_id(main_channel_id, user_id, priority, channel_type):
 	sql = '''
 		SELECT channel_id FROM individual_channels WHERE
 		main_channel_id=(?) AND user_tag=(SELECT user_tag FROM users WHERE user_id=(?))
