@@ -592,8 +592,9 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 	forward_to_subchannel(bot, post_data, hashtag_data)
 
 
-def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, force_forward: bool = False):
+def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, force_forward: bool = False, new_ticket: bool = False):
 	main_channel_id = post_data.chat.id
+	main_message_id = post_data.message_id
 
 	original_post_data = copy.deepcopy(post_data)
 
@@ -603,6 +604,17 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 	priority = hashtag_data.get_priority_number()
 	if assigned_user is None or priority is None or hashtag_data.is_status_missing():
 		hashtag_data.insert_default_user_and_priority()
+
+	ticket_user_tags = hashtag_data.get_all_users()
+
+	if new_ticket:
+		sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
+		if sender_id:
+			user_tags = db_utils.get_tags_from_user_id(sender_id)
+			for user_tag in user_tags:
+				if user_tag in ticket_user_tags:
+					continue
+				hashtag_data.add_to_followers(user_tag)
 
 	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
 	add_control_buttons(bot, post_data, hashtag_data)

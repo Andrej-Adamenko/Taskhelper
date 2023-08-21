@@ -509,9 +509,11 @@ def get_main_channel_from_user(user_id):
 def get_tags_from_user_id(user_id):
 	sql = "SELECT user_tag FROM users WHERE user_id=(?)"
 	CURSOR.execute(sql, (user_id,))
-	result = CURSOR.fetchall()
+	result = CURSOR.fetchall()  # one user can have multiple tags assigned to him
 	if result:
 		return [row[0] for row in result]
+	else:
+		return []
 
 
 @db_thread_lock
