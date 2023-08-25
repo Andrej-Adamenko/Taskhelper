@@ -29,7 +29,7 @@ def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message
 
 	if command == "/show_settings" or command == "/start":
 		forwarding_utils.delete_forwarded_message(bot, msg_data.chat.id, msg_data.message_id)
-		channel_manager.send_settings_keyboard(bot, msg_data.chat.id)
+		channel_manager.send_settings_keyboard(bot, msg_data)
 	elif command == "/set_user_tag":
 		if not db_utils.is_individual_channel_exists(msg_data.chat.id):
 			bot.send_message(chat_id=msg_data.chat.id, text="First you need to select the settings for this channel.")
@@ -173,6 +173,9 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 
 		db_utils.insert_or_update_user(main_channel_id, tag, user)
 		user_utils.load_users(bot)
+
+		if not is_tag_already_exists:
+			channel_manager.add_new_user_tag_to_channels(main_channel_id, tag)
 
 		if main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
 			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA[main_channel_id]

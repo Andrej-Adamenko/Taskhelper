@@ -1,9 +1,11 @@
+import json
 import logging
 import threading
 import time
 
 import telebot.types
 
+import channel_manager
 import db_utils
 import config_utils
 import forwarding_utils
@@ -42,30 +44,55 @@ def update_user_last_interaction(main_message_id: int, main_channel_id: int, msg
 
 
 def ticket_update_time_comparator(ticket):
-	main_channel_id, main_message_id, update_time, remind_time = ticket
+	_, _, _, _, _, update_time, remind_time = ticket
 	return max(update_time or 0, remind_time or 0)
 
 
-def get_message_for_reminding(main_channel_id: int, user_tag: str, priority: str):
-	ticket_data = db_utils.get_tickets_for_reminding(main_channel_id, user_tag, priority)
+def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str, priority: str):
+	ticket_data = db_utils.get_tickets_for_reminding(main_channel_id, user_id, priority)
 	if not ticket_data:
 		logging.info(f"No tickets for reminding were found in {user_tag, priority, main_channel_id}")
 		return
 
+	channel_ids = db_utils.get_user_individual_channels(main_channel_id, user_id)
+	channel_data = {}
+	for channel_id, settings in channel_ids:
+		channel_data[channel_id] = json.loads(settings)
+
 	filtered_ticket_data = []
 	for ticket in ticket_data:
-		main_channel_id, main_message_id, update_time, remind_time = ticket
-		copied_data = db_utils.find_copied_message_from_main(main_message_id, main_channel_id, user_tag, priority)
-		if copied_data:
-			filtered_ticket_data.append(ticket)
+		copied_channel_id, copied_message_id, main_channel_id, main_message_id, ticket_user_tags, _, _ = ticket
+		if copied_channel_id not in channel_data:
+			continue
+
+		settings = channel_data[copied_channel_id]
+		remind_settings = settings.get(channel_manager.SETTING_TYPES.REMIND)
+		if not remind_settings:
+			continue
+
+		if channel_manager.REMIND_TYPES.ASSIGNED in remind_settings:
+			if ticket_user_tags.startswith(user_tag):
+				filtered_ticket_data.append(ticket)
+				continue
+		if channel_manager.REMIND_TYPES.FOLLOWED in remind_settings:
+			user_tags = ticket_user_tags.split(",")
+			if user_tag in user_tags[1:]:
+				filtered_ticket_data.append(ticket)
+				continue
+		if channel_manager.REMIND_TYPES.REPORTED in remind_settings:
+			sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
+			if sender_id == user_id:
+				filtered_ticket_data.append(ticket)
+				continue
 
 	if not filtered_ticket_data:
 		logging.info(f"No forwarded tickets for reminding were found in {user_tag, priority, main_channel_id}")
 		return
 
 	filtered_ticket_data.sort(key=ticket_update_time_comparator)
-	main_channel_id, main_message_id, update_time, remind_time = filtered_ticket_data[0]
-	return main_message_id
+	copied_channel_id, copied_message_id, main_channel_id, main_message_id, _, _, _ = filtered_ticket_data[0]
+
+	return main_message_id, copied_channel_id, copied_message_id
 
 
 def send_daily_reminders(bot: telebot.TeleBot):
@@ -80,21 +107,16 @@ def send_daily_reminders(bot: telebot.TeleBot):
 		if seconds_since_last_interaction < config_utils.REMINDER_TIME_WITHOUT_INTERACTION * 60:
 			continue
 		highest_priority = db_utils.get_user_highest_priority(main_channel_id, user_tag)
-		message_to_remind = get_message_for_reminding(main_channel_id, user_tag, highest_priority)
+		message_to_remind = get_message_for_reminding(main_channel_id, user_id, user_tag, highest_priority)
 		if not message_to_remind:
 			continue
-
-		copied_message_data = db_utils.find_copied_message_from_main(message_to_remind, main_channel_id, user_tag, highest_priority)
-		if not copied_message_data:
-			logging.warning(f"Not found forwarded message for reminding {main_channel_id, user_tag, message_to_remind}")
-			continue
-		copied_message_id, copied_channel_id = copied_message_data
+		message_id_to_remind, copied_channel_id, copied_message_id = message_to_remind
 
 		forwarding_utils.delete_forwarded_message(bot, copied_channel_id, copied_message_id)
-		interval_updating_utils.update_older_message(bot, main_channel_id, message_to_remind)
+		interval_updating_utils.update_older_message(bot, main_channel_id, message_id_to_remind)
 
-		db_utils.insert_or_update_remind_time(message_to_remind, main_channel_id, user_tag, int(time.time()))
-		logging.info(f"Sent reminder to {user_id, user_tag}, message: {message_to_remind, main_channel_id}.")
+		db_utils.insert_or_update_remind_time(message_id_to_remind, main_channel_id, user_tag, int(time.time()))
+		logging.info(f"Sent reminder to {user_id, user_tag}, message: {message_id_to_remind, main_channel_id}.")
 
 
 def start_reminder_thread(bot: telebot.TeleBot):
