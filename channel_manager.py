@@ -1,8 +1,9 @@
-from typing import List
+import json
+from typing import List, Dict
 
 import telebot
 from telebot.apihelper import ApiTelegramException
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberOwner
 
 import config_utils
 import db_utils
@@ -12,113 +13,118 @@ import interval_updating_utils
 import utils
 
 CALLBACK_PREFIX = "CHNN"
+NEW_USER_TYPE = "+"
 
 
 class CB_TYPES:
 	ASSIGNED_SELECTED = "AS"
-	CREATED_SELECTED = "CR"
+	REPORTED_SELECTED = "CR"
 	FOLLOWED_SELECTED = "FL"
-	SCHEDULED_SELECTED = "SCH"
-	SCHEDULED_ASSIGNED_SELECTED = "SCH_AS"
-	SCHEDULED_FOLLOWED_SELECTED = "SCH_CC"
+	REMIND_SELECTED = "RMN"
 	PRIORITY_SELECTED = "PR"
-	ALL_USERS_SELECTED = "ALL"
+	DEFERRED_SELECTED = "DFR"
+	DUE_SELECTED = "DUE"
 	SAVE = "SV"
+	TOGGLE_USER = "USR"
+	TOGGLE_REMIND_SETTING = "TRM"
+	SAVE_SELECTED_USERS = "SVU"
+	SAVE_REMIND_SETTINGS = "SVR"
 
 
-class CHANNEL_TYPES:
-	ASSIGNED = "1"
-	CREATED = "2"
-	FOLLOWED = "3"
-	SCHEDULED = "4"
-	ALL_USERS = "5"
-	SCHEDULED_ASSIGNED = "6"
-	SCHEDULED_FOLLOWED = "7"
+class SETTING_TYPES:
+	ASSIGNED = "assigned"
+	REPORTED = "reported"
+	FOLLOWED = "cc"
+	DUE = "due"
+	DEFERRED = "deferred"
+	REMIND = "remind"
+
+
+class REMIND_TYPES:
+	ASSIGNED = "assigned"
+	REPORTED = "reported"
+	FOLLOWED = "cced"
 
 
 _TOGGLE_CALLBACKS = [
-	CB_TYPES.ASSIGNED_SELECTED,
-	CB_TYPES.CREATED_SELECTED,
-	CB_TYPES.FOLLOWED_SELECTED,
-	CB_TYPES.SCHEDULED_SELECTED,
-	CB_TYPES.SCHEDULED_ASSIGNED_SELECTED,
-	CB_TYPES.SCHEDULED_FOLLOWED_SELECTED,
+	CB_TYPES.DUE_SELECTED,
+	CB_TYPES.DEFERRED_SELECTED,
 	CB_TYPES.PRIORITY_SELECTED,
-	CB_TYPES.ALL_USERS_SELECTED,
+	CB_TYPES.TOGGLE_USER,
+	CB_TYPES.TOGGLE_REMIND_SETTING,
 ]
 
 _TYPE_SEPARATOR = ","
+_DEFAULT_SETTINGS = {
+	SETTING_TYPES.DUE: True,
+	SETTING_TYPES.DEFERRED: True,
+	SETTING_TYPES.REMIND: [REMIND_TYPES.ASSIGNED],
+}
 
 
-def get_individual_channel_info(channel_id: int):
-	channel_info = db_utils.get_individual_channel(channel_id)
-	if not channel_info:
-		return [], []
-
-	main_channel_id, user_tag, priorities, types = channel_info
-	priorities_list = priorities.split(_TYPE_SEPARATOR)
-	types_list = types.split(_TYPE_SEPARATOR)
-
-	return priorities_list, types_list
+def get_individual_channel_settings(channel_id: int):
+	settings_str, priorities_str = db_utils.get_individual_channel_settings(channel_id)
+	settings = json.loads(settings_str) if settings_str else {}
+	priorities = priorities_str.split(",") if priorities_str else []
+	return settings, priorities
 
 
-def generate_initial_settings_keyboard(channel_id: int):
-	priorities, types = get_individual_channel_info(channel_id)
-	return generate_settings_keyboard(priorities, types)
+def add_user_tags_to_button_text(button: InlineKeyboardButton, channel_type: str, settings: Dict):
+	if channel_type not in settings:
+		return
+
+	user_tags = settings[channel_type]
+	if len(user_tags) < 1:
+		return
+
+	parse_user_tag = lambda u: u if u != NEW_USER_TYPE else "<new user>"
+	user_tags = [parse_user_tag(tag) for tag in user_tags]
+
+	button.text += f" {user_tags[0]}"
+	for user_tag in user_tags[1:]:
+		button.text += f", {user_tag}"
 
 
-def generate_settings_keyboard(priorities: List[str], types: List[str]):
-	if CHANNEL_TYPES.ALL_USERS not in types:
-		assigned_to_btn = InlineKeyboardButton("Assigned to this user")
-		if CHANNEL_TYPES.ASSIGNED in types:
-			assigned_to_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-		assigned_to_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.ASSIGNED_SELECTED)
+def generate_settings_keyboard(channel_id: int):
+	settings, priorities = get_individual_channel_settings(channel_id)
 
-		created_by_btn = InlineKeyboardButton("Reported by this user")
-		if CHANNEL_TYPES.CREATED in types:
-			created_by_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-		created_by_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.CREATED_SELECTED)
+	assigned_to_btn = InlineKeyboardButton("Assigned to:")
+	assigned_to_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.ASSIGNED_SELECTED)
+	add_user_tags_to_button_text(assigned_to_btn, SETTING_TYPES.ASSIGNED, settings)
 
-		followed_by_btn = InlineKeyboardButton("CCed to this user")
-		if CHANNEL_TYPES.FOLLOWED in types:
-			followed_by_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-		followed_by_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.FOLLOWED_SELECTED)
+	reported_by_btn = InlineKeyboardButton("Reported by:")
+	reported_by_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.REPORTED_SELECTED)
+	add_user_tags_to_button_text(reported_by_btn, SETTING_TYPES.REPORTED, settings)
 
-		scheduled_and_assigned_to_btn = InlineKeyboardButton("Scheduled and assigned to this user")
-		if CHANNEL_TYPES.SCHEDULED in types or CHANNEL_TYPES.SCHEDULED_ASSIGNED in types:
-			scheduled_and_assigned_to_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-		scheduled_and_assigned_to_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SCHEDULED_ASSIGNED_SELECTED)
+	followed_by_btn = InlineKeyboardButton("CCed to:")
+	followed_by_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.FOLLOWED_SELECTED)
+	add_user_tags_to_button_text(followed_by_btn, SETTING_TYPES.FOLLOWED, settings)
 
-		scheduled_and_followed_by_btn = InlineKeyboardButton("Scheduled and CCed to this user")
-		if CHANNEL_TYPES.SCHEDULED in types or CHANNEL_TYPES.SCHEDULED_FOLLOWED in types:
-			scheduled_and_followed_by_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-		scheduled_and_followed_by_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SCHEDULED_FOLLOWED_SELECTED)
+	remind_btn = InlineKeyboardButton("Remind me when:")
+	remind_settings = settings.get(SETTING_TYPES.REMIND)
+	if remind_settings:
+		settings_str = ",".join([f" {s}" for s in remind_settings])
+		remind_btn.text += settings_str
+	remind_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.REMIND_SELECTED)
 
-		assigned_to_any_user_btn = InlineKeyboardButton("Assigned to any user")
-		if CHANNEL_TYPES.ALL_USERS in types:
-			assigned_to_any_user_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-		assigned_to_any_user_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.ALL_USERS_SELECTED)
+	due_btn = InlineKeyboardButton("Due")
+	due_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.DUE_SELECTED)
+	is_due = settings[SETTING_TYPES.DUE] if SETTING_TYPES.DUE in settings else False
+	due_btn.text += config_utils.BUTTON_TEXTS["CHECK"] if is_due else ""
 
-		buttons = [
-			assigned_to_btn,
-			created_by_btn,
-			followed_by_btn,
-			scheduled_and_assigned_to_btn,
-			scheduled_and_followed_by_btn,
-			assigned_to_any_user_btn
-		]
-	else:
-		scheduled_to_btn = InlineKeyboardButton("Scheduled to any user")
-		if CHANNEL_TYPES.SCHEDULED in types:
-			scheduled_to_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-		scheduled_to_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SCHEDULED_SELECTED)
+	deferred_btn = InlineKeyboardButton("Deferred")
+	deferred_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.DEFERRED_SELECTED)
+	is_deferred = settings[SETTING_TYPES.DEFERRED] if SETTING_TYPES.DEFERRED in settings else False
+	deferred_btn.text += config_utils.BUTTON_TEXTS["CHECK"] if is_deferred else ""
 
-		assigned_to_any_user_btn = InlineKeyboardButton("Assigned to any user")
-		if CHANNEL_TYPES.ALL_USERS in types:
-			assigned_to_any_user_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-		assigned_to_any_user_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.ALL_USERS_SELECTED)
-
-		buttons = [scheduled_to_btn, assigned_to_any_user_btn]
+	buttons = [
+		assigned_to_btn,
+		reported_by_btn,
+		followed_by_btn,
+		remind_btn,
+		due_btn,
+		deferred_btn,
+	]
 
 	for priority in hashtag_data.POSSIBLE_PRIORITIES:
 		priority_btn = InlineKeyboardButton(f"Priority {priority}")
@@ -130,102 +136,219 @@ def generate_settings_keyboard(priorities: List[str], types: List[str]):
 	save_btn = InlineKeyboardButton(f"Save")
 	save_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE)
 	buttons.append(save_btn)
-	rows = [[btn] for btn in buttons]
 
+	rows = [[btn] for btn in buttons]
 	return InlineKeyboardMarkup(rows)
 
 
-def send_settings_keyboard(bot: telebot.TeleBot, channel_id: int):
-	keyboard = generate_initial_settings_keyboard(channel_id)
+def send_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message):
+	channel_id = msg_data.chat.id
+	channel_admins = bot.get_chat_administrators(channel_id)
+
+	channel_owner = next((user for user in channel_admins if type(user) == ChatMemberOwner), None)
+	user_id = channel_owner.user.id
+	main_channel_id = db_utils.get_main_channel_from_user(user_id)
+	if not main_channel_id:
+		bot.send_message(chat_id=channel_id, text="Can't recognize the user who called this command")
+		return
+
+	settings_str = json.dumps(_DEFAULT_SETTINGS)
+	db_utils.insert_individual_channel(main_channel_id, channel_id, settings_str, user_id)
+
+	keyboard = generate_settings_keyboard(channel_id)
 	text = '''
-		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters were selected press "Save" button. You can call this settings menu using "/show_settings" command. Descriptions of each parameter:
-		1) Assigned to this user - forward tickets that is assigned to the user of this channel, can't be used with "Assigned to any user"
-		2) Reported by this user - forward tickets that is created by the user of this channel, can't be used with "Assigned to any user"
-		3) CCed to this user - forward tickets where the user of this channel in CC, can't be used with "Assigned to any user"
-		4) Scheduled and assigned to this user - forward scheduled tickets that is assigned to this user, can't be used with "Assigned to any user"
-		5) Scheduled and CCed to this user - forward scheduled tickets where this user is in CC, can't be used with "Assigned to any user"
-		6) Assigned to any user - forward every ticket according to selected priorities, incompatible parameters will be hidden if this parameter is selected, if used with "Scheduled to any user" than only scheduled tickets will be forwarded
-		7) Scheduled to any user - forward every scheduled ticket, this option is showed only when "Assigned to any user" is selected
+		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters were selected press "Save" button. You can call this settings menu using "/show_settings" command. If "New user" parameter is selected than new users will be automatically added to the category where it's activated. Descriptions of each parameter:
+		1) Assigned to - forward tickets that is assigned to the selected users
+		2) Reported by - forward tickets that is created by the selected users 
+		3) CCed to - forward tickets where the selected users in CC
+		4) Remind me when - regulates what tickets can be reminded in this channel
+		5) Due - if this option is active regular(NOT scheduled) tickets can be forwarded to this channel
+		6) Deferred - if this option is active scheduled tickets can be forwarded to this channel
 	'''
 	bot.send_message(chat_id=channel_id, text=text, reply_markup=keyboard)
 
 
-def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery):
-	callback_type, other_data = utils.parse_callback_str(call.data)
+def generate_user_keyboard(main_channel_id: int, channel_id: int, setting_type: str):
+	settings, priorities = get_individual_channel_settings(channel_id)
+	active_user_tags = []
+	if setting_type in settings:
+		active_user_tags = settings[setting_type]
 
-	if callback_type in _TOGGLE_CALLBACKS:
-		toggle_button(bot, call, callback_type, other_data)
-	elif callback_type == CB_TYPES.SAVE:
-		save_channel_settings(bot, call)
+	user_tags = db_utils.get_main_channel_user_tags(main_channel_id)
+	buttons = []
+	for user_tag in user_tags:
+		callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_USER, user_tag)
+		button_text = f"#{user_tag}" if user_tag != NEW_USER_TYPE else "New user"
+		user_button = InlineKeyboardButton(button_text, callback_data=callback)
+		if user_tag in active_user_tags:
+			user_button.text += config_utils.BUTTON_TEXTS["CHECK"]
+		buttons.append(user_button)
+
+	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_USER, NEW_USER_TYPE)
+	new_user_button = InlineKeyboardButton(f"New user", callback_data=callback)
+	if NEW_USER_TYPE in active_user_tags:
+		new_user_button.text += config_utils.BUTTON_TEXTS["CHECK"]
+	buttons.append(new_user_button)
+
+	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE_SELECTED_USERS, setting_type)
+	save_button = InlineKeyboardButton(f"Save", callback_data=callback)
+	buttons.append(save_button)
+
+	rows = [[btn] for btn in buttons]
+	return InlineKeyboardMarkup(rows)
 
 
-def find_button(buttons: List[InlineKeyboardButton], cb_type: str, cb_data: str):
+def open_user_selection(bot: telebot.TeleBot, call: CallbackQuery, setting_type: str):
+	user_id = call.from_user.id
+	main_channel_id = db_utils.get_main_channel_from_user(user_id)
+	channel_id = call.message.chat.id
+
+	keyboard = generate_user_keyboard(main_channel_id, channel_id, setting_type)
+	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard)
+
+
+def generate_remind_keyboard(channel_id):
+	settings, priorities = get_individual_channel_settings(channel_id)
+	active_settings = []
+	if SETTING_TYPES.REMIND in settings:
+		active_settings = settings[SETTING_TYPES.REMIND]
+
+	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_REMIND_SETTING, REMIND_TYPES.ASSIGNED)
+	assigned_btn = InlineKeyboardButton(f"Assigned to me", callback_data=callback)
+	if REMIND_TYPES.ASSIGNED in active_settings:
+		assigned_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
+
+	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_REMIND_SETTING, REMIND_TYPES.REPORTED)
+	reported_btn = InlineKeyboardButton(f"Reported by me", callback_data=callback)
+	if REMIND_TYPES.REPORTED in active_settings:
+		reported_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
+
+	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_REMIND_SETTING, REMIND_TYPES.FOLLOWED)
+	followed_btn = InlineKeyboardButton(f"CCed to me", callback_data=callback)
+	if REMIND_TYPES.FOLLOWED in active_settings:
+		followed_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
+
+	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE_REMIND_SETTINGS)
+	save_button = InlineKeyboardButton(f"Save", callback_data=callback)
+
+	buttons = [
+		assigned_btn,
+		reported_btn,
+		followed_btn,
+		save_button,
+	]
+
+	rows = [[btn] for btn in buttons]
+	return InlineKeyboardMarkup(rows)
+
+
+def open_remind_selection(bot: telebot.TeleBot, call: CallbackQuery):
+	channel_id = call.message.chat.id
+
+	keyboard = generate_remind_keyboard(channel_id)
+	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard)
+
+
+def toggle_user_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, cb_data: str):
+	reply_markup = call.message.reply_markup
+	buttons = [btn for row in reply_markup.keyboard for btn in row]
 	for btn in buttons:
 		callback_str = btn.callback_data
 		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
 		if btn_cb_type == cb_type and btn_cb_data == cb_data:
-			return btn
+			if btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
+				btn.text = btn.text[:-len(config_utils.BUTTON_TEXTS["CHECK"])]
+			else:
+				btn.text += config_utils.BUTTON_TEXTS["CHECK"]
+
+	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=reply_markup)
 
 
-def uncheck_buttons(buttons: List[InlineKeyboardButton], buttons_to_uncheck: List[str]):
+def save_user_settings(bot: telebot.TeleBot, call: CallbackQuery, setting_type: str):
+	channel_id = call.message.chat.id
+	settings, priorities = get_individual_channel_settings(channel_id)
+
+	reply_markup = call.message.reply_markup
+	buttons = [btn for row in reply_markup.keyboard for btn in row]
+	selected_user_tags = []
 	for btn in buttons:
 		callback_str = btn.callback_data
 		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
-		if not btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
+
+		if btn_cb_type != CB_TYPES.TOGGLE_USER or not btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
 			continue
-		if btn_cb_type in buttons_to_uncheck:
-			btn.text = btn.text[:-len(config_utils.BUTTON_TEXTS["CHECK"])]
+
+		user_tag, = btn_cb_data
+		selected_user_tags.append(user_tag)
+
+	settings[setting_type] = selected_user_tags
+	settings_str = json.dumps(settings)
+	db_utils.update_individual_channel_settings(channel_id, settings_str)
+
+	keyboard = generate_settings_keyboard(channel_id)
+	bot.edit_message_reply_markup(chat_id=channel_id, message_id=call.message.id, reply_markup=keyboard)
+
+
+def save_remind_settings(bot: telebot.TeleBot, call: CallbackQuery):
+	channel_id = call.message.chat.id
+	settings, priorities = get_individual_channel_settings(channel_id)
+
+	reply_markup = call.message.reply_markup
+	buttons = [btn for row in reply_markup.keyboard for btn in row]
+	selected_remind_settings = []
+	for btn in buttons:
+		callback_str = btn.callback_data
+		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
+
+		if btn_cb_type != CB_TYPES.TOGGLE_REMIND_SETTING or not btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
+			continue
+
+		setting_type, = btn_cb_data
+		selected_remind_settings.append(setting_type)
+
+	settings[SETTING_TYPES.REMIND] = selected_remind_settings
+	settings_str = json.dumps(settings)
+	db_utils.update_individual_channel_settings(channel_id, settings_str)
+
+	keyboard = generate_settings_keyboard(channel_id)
+	bot.edit_message_reply_markup(chat_id=channel_id, message_id=call.message.id, reply_markup=keyboard)
+
+
+def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
+	callback_type, other_data = utils.parse_callback_str(call.data)
+
+	if callback_type == CB_TYPES.ASSIGNED_SELECTED:
+		open_user_selection(bot, call, SETTING_TYPES.ASSIGNED)
+	elif callback_type == CB_TYPES.REPORTED_SELECTED:
+		open_user_selection(bot, call, SETTING_TYPES.REPORTED)
+	elif callback_type == CB_TYPES.FOLLOWED_SELECTED:
+		open_user_selection(bot, call, SETTING_TYPES.FOLLOWED)
+	elif callback_type == CB_TYPES.REMIND_SELECTED:
+		open_remind_selection(bot, call)
+	elif callback_type == CB_TYPES.SAVE_SELECTED_USERS:
+		setting_type, = other_data
+		save_user_settings(bot, call, setting_type)
+	elif callback_type == CB_TYPES.SAVE_REMIND_SETTINGS:
+		save_remind_settings(bot, call)
+	elif callback_type == CB_TYPES.SAVE:
+		save_channel_settings(bot, call)
+	if callback_type in _TOGGLE_CALLBACKS:
+		toggle_button(bot, call, callback_type, other_data)
 
 
 def toggle_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, cb_data: str):
 	reply_markup = call.message.reply_markup
 	buttons = [btn for row in reply_markup.keyboard for btn in row]
-
-	pressed_button = find_button(buttons, cb_type, cb_data)
-	is_button_checked = pressed_button.text.endswith(config_utils.BUTTON_TEXTS["CHECK"])
-
-	if is_button_checked and cb_type == CB_TYPES.ALL_USERS_SELECTED:
-		# uncheck scheduled button when unchecking all users button
-		uncheck_buttons(buttons, [CB_TYPES.SCHEDULED_SELECTED])
-
-	if is_button_checked:
-		pressed_button.text = pressed_button.text[:-len(config_utils.BUTTON_TEXTS["CHECK"])]
-	else:
-		pressed_button.text += config_utils.BUTTON_TEXTS["CHECK"]
-
-	priorities, types = get_channel_types_from_buttons(buttons)
-
-	keyboard = generate_settings_keyboard(priorities, types)
-	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard)
-
-
-def get_channel_types_from_buttons(buttons: List[InlineKeyboardButton]):
-	priorities = []
-	types = []
 	for btn in buttons:
 		callback_str = btn.callback_data
 		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
-		if not btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]) or btn_cb_type not in _TOGGLE_CALLBACKS:
-			continue
+		if btn_cb_type == cb_type and btn_cb_data == cb_data:
+			if btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
+				btn.text = btn.text[:-len(config_utils.BUTTON_TEXTS["CHECK"])]
+			else:
+				btn.text += config_utils.BUTTON_TEXTS["CHECK"]
 
-		if btn_cb_type == CB_TYPES.PRIORITY_SELECTED:
-			priority = btn_cb_data[0]
-			priorities.append(priority)
-		elif btn_cb_type == CB_TYPES.ASSIGNED_SELECTED:
-			types.append(CHANNEL_TYPES.ASSIGNED)
-		elif btn_cb_type == CB_TYPES.FOLLOWED_SELECTED:
-			types.append(CHANNEL_TYPES.FOLLOWED)
-		elif btn_cb_type == CB_TYPES.CREATED_SELECTED:
-			types.append(CHANNEL_TYPES.CREATED)
-		elif btn_cb_type == CB_TYPES.SCHEDULED_SELECTED:
-			types.append(CHANNEL_TYPES.SCHEDULED)
-		elif btn_cb_type == CB_TYPES.SCHEDULED_ASSIGNED_SELECTED:
-			types.append(CHANNEL_TYPES.SCHEDULED_ASSIGNED)
-		elif btn_cb_type == CB_TYPES.SCHEDULED_FOLLOWED_SELECTED:
-			types.append(CHANNEL_TYPES.SCHEDULED_FOLLOWED)
-		elif btn_cb_type == CB_TYPES.ALL_USERS_SELECTED:
-			types.append(CHANNEL_TYPES.ALL_USERS)
-	return priorities, types
+	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=reply_markup)
 
 
 def save_channel_settings(bot: telebot.TeleBot, call: CallbackQuery):
@@ -240,22 +363,56 @@ def save_channel_settings(bot: telebot.TeleBot, call: CallbackQuery):
 	reply_markup = call.message.reply_markup
 	buttons = [btn for row in reply_markup.keyboard for btn in row]
 
-	priorities, types = get_channel_types_from_buttons(buttons)
-	is_all_users_channel = CHANNEL_TYPES.ALL_USERS in types
+	priorities = []
+	new_settings = {
+		SETTING_TYPES.DEFERRED: False,
+		SETTING_TYPES.DUE: False,
+	}
+
+	for btn in buttons:
+		callback_str = btn.callback_data
+		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
+		if not btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]) or btn_cb_type not in _TOGGLE_CALLBACKS:
+			continue
+
+		if btn_cb_type == CB_TYPES.PRIORITY_SELECTED:
+			priority = btn_cb_data[0]
+			priorities.append(priority)
+		elif btn_cb_type == CB_TYPES.DEFERRED_SELECTED:
+			new_settings[SETTING_TYPES.DEFERRED] = True
+		elif btn_cb_type == CB_TYPES.DUE_SELECTED:
+			new_settings[SETTING_TYPES.DUE] = True
 
 	channel_id = call.message.chat.id
-	priorities = _TYPE_SEPARATOR.join(priorities)
-	types = _TYPE_SEPARATOR.join(types)
-	db_utils.insert_or_update_individual_channel(main_channel_id, channel_id, priorities, types)
+	settings, _ = get_individual_channel_settings(channel_id)
+	for setting_name in new_settings:
+		settings[setting_name] = new_settings[setting_name]
 
-	user_tag = db_utils.get_individual_channel_user_tag(channel_id)
+	priorities_str = _TYPE_SEPARATOR.join(priorities)
+	settings_str = json.dumps(settings)
+
+	db_utils.update_individual_channel(channel_id, settings_str, priorities_str)
+
 	forwarding_utils.delete_forwarded_message(bot, call.message.chat.id, call.message.id)
-	if is_all_users_channel:
-		db_utils.update_individual_channel_tag(channel_id, None)
-	elif not user_tag:
-		bot.send_message(
-			chat_id=call.message.chat.id,
-			text="Now you need to set user tag for this channel using command \"/set_user_tag {user_tag}\". Also you can change user tag for this channel using same command. After setting user tag bot will automatically start forwarding tickets to this channel according to the selected parameters.",
-		)
 
 	interval_updating_utils.start_interval_updating(bot)
+
+
+def add_new_user_tag_to_channels(main_channel_id: int, user_tag: str):
+	channel_data = db_utils.get_all_individual_channels(main_channel_id)
+	for channel in channel_data:
+		channel_id, settings = channel
+		settings = json.loads(settings)
+		assigned = settings.get(SETTING_TYPES.ASSIGNED) or []
+		reported = settings.get(SETTING_TYPES.REPORTED) or []
+		followed = settings.get(SETTING_TYPES.FOLLOWED) or []
+
+		if NEW_USER_TYPE in assigned:
+			settings[SETTING_TYPES.ASSIGNED].append(user_tag)
+		if NEW_USER_TYPE in reported:
+			settings[SETTING_TYPES.REPORTED].append(user_tag)
+		if NEW_USER_TYPE in followed:
+			settings[SETTING_TYPES.FOLLOWED].append(user_tag)
+
+		settings_str = json.dumps(settings)
+		db_utils.update_individual_channel_settings(channel_id, settings_str)

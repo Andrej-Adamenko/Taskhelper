@@ -100,18 +100,18 @@ def create_tables():
 
 		CURSOR.execute(interval_updates_status_table_sql)
 
-	if not is_table_exists("individual_channels"):
-		individual_channels_table_sql = '''
-			CREATE TABLE "individual_channels" (
+	if not is_table_exists("individual_channel_settings"):
+		individual_channel_settings_table_sql = '''
+			CREATE TABLE "individual_channel_settings" (
 				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
 				"main_channel_id"	INT NOT NULL,
 				"channel_id"        INT NOT NULL,
 				"priorities"        TEXT,
-				"user_tag"          TEXT,
-				"types"             TEXT
+				"settings"          TEXT,
+				"user_id"           INT
 			); '''
 
-		CURSOR.execute(individual_channels_table_sql)
+		CURSOR.execute(individual_channel_settings_table_sql)
 
 	if not is_table_exists("users"):
 		users_table_sql = '''
@@ -464,56 +464,6 @@ def clear_updates_in_progress():
 
 
 @db_thread_lock
-def insert_or_update_individual_channel(main_channel_id, channel_id, priorities, channel_types):
-	if get_individual_channel(channel_id):
-		sql = '''
-			UPDATE individual_channels
-			SET main_channel_id=(?), priorities=(?), types=(?)
-			WHERE channel_id=(?) 
-		'''
-	else:
-		sql = '''
-			INSERT INTO individual_channels
-			(main_channel_id, priorities, types, channel_id)
-			VALUES (?, ?, ?, ?)
-		'''
-	CURSOR.execute(sql, (main_channel_id, priorities, channel_types, channel_id,))
-	DB_CONNECTION.commit()
-
-
-@db_thread_lock
-def get_individual_channel(channel_id):
-	sql = "SELECT main_channel_id, user_tag, priorities, types FROM individual_channels WHERE channel_id=(?)"
-	CURSOR.execute(sql, (channel_id,))
-	result = CURSOR.fetchone()
-	return result
-
-
-@db_thread_lock
-def get_individual_channel_user_tag(channel_id):
-	sql = "SELECT user_tag FROM individual_channels WHERE channel_id=(?)"
-	CURSOR.execute(sql, (channel_id,))
-	result = CURSOR.fetchone()
-	if result:
-		return result[0]
-
-
-@db_thread_lock
-def is_individual_channel_exists(channel_id):
-	sql = "SELECT id FROM individual_channels WHERE channel_id=(?)"
-	CURSOR.execute(sql, (channel_id,))
-	result = CURSOR.fetchone()
-	return bool(result)
-
-
-@db_thread_lock
-def delete_individual_channel(channel_id):
-	sql = "DELETE FROM individual_channels WHERE channel_id=(?)"
-	CURSOR.execute(sql, (channel_id,))
-	DB_CONNECTION.commit()
-
-
-@db_thread_lock
 def get_main_channel_ids():
 	sql = "SELECT channel_id FROM main_channels"
 	CURSOR.execute(sql, ())
@@ -601,52 +551,6 @@ def get_main_message_sender(main_channel_id, main_message_id):
 
 
 @db_thread_lock
-def get_individual_channel_id_by_tag(main_channel_id, user_tag, priority, channel_type):
-	sql = '''
-		SELECT channel_id FROM individual_channels WHERE main_channel_id=(?) AND user_tag=(?)
-		AND types LIKE '%' || ? || '%'
-		AND priorities LIKE '%' || ? || '%'
-	'''
-	CURSOR.execute(sql, (main_channel_id, user_tag, channel_type, priority,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-	else:
-		return []
-
-
-@db_thread_lock
-def get_individual_channel_id_all_users(main_channel_id, priority, channel_type):
-	sql = '''
-		SELECT channel_id FROM individual_channels WHERE main_channel_id=(?)
-		AND types LIKE '%' || ? || '%'
-		AND priorities LIKE '%' || ? || '%'
-	'''
-	CURSOR.execute(sql, (main_channel_id, channel_type, priority,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-	else:
-		return []
-
-
-@db_thread_lock
-def get_individual_channel_id_by_user_id(main_channel_id, user_id, priority, channel_type):
-	sql = '''
-		SELECT channel_id FROM individual_channels WHERE
-		main_channel_id=(?) AND user_tag=(SELECT user_tag FROM users WHERE user_id=(?))
-		AND types LIKE '%' || ? || '%'
-		AND priorities LIKE '%' || ? || '%'
-	'''
-	CURSOR.execute(sql, (main_channel_id, user_id, channel_type, priority,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-	else:
-		return []
-
-
-@db_thread_lock
 def insert_main_channel_message(main_channel_id, main_message_id, sender_id):
 	if not is_main_message_exists(main_channel_id, main_message_id):
 		sql = '''
@@ -673,13 +577,6 @@ def is_main_message_exists(main_channel_id, main_message_id):
 	CURSOR.execute(sql, (main_channel_id, main_message_id,))
 	result = CURSOR.fetchone()
 	return bool(result)
-
-
-@db_thread_lock
-def update_individual_channel_tag(channel_id, user_tag):
-	sql = "UPDATE individual_channels SET user_tag=(?) WHERE channel_id=(?)"
-	CURSOR.execute(sql, (user_tag, channel_id,))
-	DB_CONNECTION.commit()
 
 
 @db_thread_lock
@@ -805,38 +702,6 @@ def insert_or_update_remind_time(main_message_id, main_channel_id, user_tag, rem
 
 
 @db_thread_lock
-def get_tickets_for_reminding(main_channel_id, user_tag, priority):
-	sql = '''
-		SELECT tickets_data.main_channel_id, tickets_data.main_message_id,
-		tickets_data.update_time, reminded_tickets.reminded_at
-		FROM tickets_data LEFT JOIN reminded_tickets ON
-		tickets_data.main_message_id = reminded_tickets.main_message_id AND
-		tickets_data.main_channel_id = reminded_tickets.main_channel_id AND
-		reminded_tickets.user_tag = (?)
-		WHERE tickets_data.main_channel_id=(?) AND user_tags LIKE ? || '%' AND priority=(?) AND is_opened=1
-		AND tickets_data.main_message_id NOT IN (
-			SELECT main_message_id FROM scheduled_messages WHERE main_channel_id = tickets_data.main_channel_id
-		)
-	'''
-	CURSOR.execute(sql, (user_tag, main_channel_id, user_tag, priority,))
-	result = CURSOR.fetchall()
-	return result
-
-
-@db_thread_lock
-def find_copied_message_from_main(main_message_id, main_channel_id, user_tag, priority):
-	sql = '''
-		SELECT copied_message_id, copied_channel_id FROM copied_messages WHERE copied_channel_id IN (
-			SELECT channel_id FROM individual_channels WHERE user_tag=(?) AND main_channel_id=(?)
-			AND priorities LIKE '%' || ? || '%'
-		) AND main_message_id=(?) AND main_channel_id=(?)
-	'''
-	CURSOR.execute(sql, (user_tag, main_channel_id, priority, main_message_id, main_channel_id))
-	result = CURSOR.fetchone()
-	return result
-
-
-@db_thread_lock
 def get_custom_hashtag(channel_id):
 	sql = "SELECT custom_hashtag FROM custom_channel_hashtags WHERE channel_id=(?)"
 	CURSOR.execute(sql, (channel_id,))
@@ -862,3 +727,128 @@ def insert_or_update_custom_hashtag(channel_id, custom_hashtag):
 	CURSOR.execute(sql, (custom_hashtag, channel_id,))
 	DB_CONNECTION.commit()
 
+
+@db_thread_lock
+def is_individual_channel_exists(channel_id):
+	sql = "SELECT id FROM individual_channel_settings WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def get_individual_channel_settings(channel_id):
+	sql = "SELECT settings, priorities FROM individual_channel_settings WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchone()
+	return result
+
+
+@db_thread_lock
+def insert_individual_channel(main_channel_id, channel_id, settings, user_id):
+	if is_individual_channel_exists(channel_id):
+		return
+	sql = "INSERT INTO individual_channel_settings (main_channel_id, channel_id, settings, user_id) VALUES (?, ?, ?, ?)"
+	CURSOR.execute(sql, (main_channel_id, channel_id, settings, user_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def update_individual_channel_settings(channel_id, settings):
+	sql = "UPDATE individual_channel_settings SET settings=(?) WHERE channel_id=(?)"
+	CURSOR.execute(sql, (settings, channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def update_individual_channel(channel_id, settings, priority):
+	sql = "UPDATE individual_channel_settings SET settings=(?), priorities=(?) WHERE channel_id=(?)"
+	CURSOR.execute(sql, (settings, priority, channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def delete_individual_channel(channel_id):
+	sql = "DELETE FROM individual_channel_settings WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_individual_channels_by_priority(main_channel_id, priority):
+	sql = '''
+		SELECT channel_id, settings FROM individual_channel_settings WHERE main_channel_id=(?) AND
+		priorities LIKE '%' || ? || '%'
+	'''
+	CURSOR.execute(sql, (main_channel_id, priority,))
+	result = CURSOR.fetchall()
+	if result:
+		return result
+	else:
+		return []
+
+
+@db_thread_lock
+def update_individual_channel_user(channel_id, user_id):
+	sql = "UPDATE individual_channel_settings SET user_id=(?) WHERE channel_id=(?)"
+	CURSOR.execute(sql, (user_id, channel_id,))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def get_user_individual_channels(main_channel_id, user_id):
+	sql = "SELECT channel_id, settings FROM individual_channel_settings WHERE main_channel_id=(?) AND user_id=(?)"
+	CURSOR.execute(sql, (main_channel_id, user_id,))
+	result = CURSOR.fetchall()
+	if result:
+		return result
+	else:
+		return []
+
+
+@db_thread_lock
+def get_tickets_for_reminding(main_channel_id, user_id, priority):
+	sql = '''
+		SELECT copied_messages.copied_channel_id, copied_messages.copied_message_id, copied_messages.main_channel_id,
+		copied_messages.main_message_id, tickets_data.user_tags, tickets_data.update_time, reminded_tickets.reminded_at
+		FROM copied_messages LEFT JOIN tickets_data ON
+		tickets_data.main_channel_id = copied_messages.main_channel_id AND
+		tickets_data.main_message_id = copied_messages.main_message_id
+		LEFT JOIN reminded_tickets ON
+		reminded_tickets.main_channel_id = copied_messages.main_channel_id AND
+		reminded_tickets.main_message_id = copied_messages.main_message_id AND
+		reminded_tickets.user_tag IN (SELECT user_tag FROM users WHERE user_id = (?) AND main_channel_id = (?))
+		WHERE copied_channel_id IN (
+			SELECT channel_id FROM individual_channel_settings WHERE user_id = (?) AND main_channel_id = (?)
+		) AND copied_messages.main_message_id NOT IN (
+			SELECT main_message_id FROM scheduled_messages WHERE main_channel_id = copied_messages.main_channel_id
+		) AND tickets_data.priority=(?) AND tickets_data.is_opened=1;
+	'''
+
+	CURSOR.execute(sql, (user_id, main_channel_id, user_id, main_channel_id, priority,))
+	result = CURSOR.fetchall()
+	return result
+
+
+@db_thread_lock
+def find_copied_message_from_main(main_message_id, main_channel_id, user_id, priority):
+	sql = '''
+		SELECT copied_message_id, copied_channel_id FROM copied_messages WHERE copied_channel_id IN (
+			SELECT channel_id FROM individual_channel_settings WHERE user_id=(?) AND main_channel_id=(?)
+			AND priorities LIKE '%' || ? || '%'
+		) AND main_message_id=(?) AND main_channel_id=(?)
+	'''
+	CURSOR.execute(sql, (user_id, main_channel_id, priority, main_message_id, main_channel_id))
+	result = CURSOR.fetchone()
+	return result
+
+
+@db_thread_lock
+def get_all_individual_channels(main_channel_id):
+	sql = "SELECT channel_id, settings FROM individual_channel_settings WHERE main_channel_id=(?)"
+	CURSOR.execute(sql, (main_channel_id,))
+	result = CURSOR.fetchall()
+	if result:
+		return result
+	else:
+		return []

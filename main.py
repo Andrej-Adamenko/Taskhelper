@@ -104,7 +104,7 @@ def handle_edited_post(post_data: telebot.types.Message):
 
 
 @bot.my_chat_member_handler()
-def handle_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
+def handle_bot_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
 	has_permissions = member_update.new_chat_member.can_edit_messages and member_update.new_chat_member.can_post_messages
 	if has_permissions:
 		logging.info(f"Bot received permissions for channel {member_update.chat.id}")
@@ -175,4 +175,23 @@ def handle_channel_bot_command(msg_data: telebot.types.Message):
 	command_utils.handle_channel_command(bot, msg_data)
 
 
-bot.infinity_polling()
+@bot.chat_member_handler()
+def handle_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
+	if member_update.new_chat_member.status == "creator":
+		chat_id = member_update.chat.id
+		if db_utils.is_individual_channel_exists(chat_id):
+			user_id = member_update.new_chat_member.user.id
+			db_utils.update_individual_channel_user(chat_id, user_id)
+
+
+bot.infinity_polling(allowed_updates=[
+	"message",
+	"edited_message",
+	"channel_post",
+	"edited_channel_post",
+	"inline_query",
+	"chosen_inline_result",
+	"callback_query",
+	"my_chat_member",
+	"chat_member"
+])

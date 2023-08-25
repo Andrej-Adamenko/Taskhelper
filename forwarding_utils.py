@@ -1,3 +1,4 @@
+import json
 import logging
 import copy
 import threading
@@ -83,8 +84,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
 	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, hashtag_data)
-	all_users_channel_ids = get_all_users_channels_from_hashtags(main_channel_id, main_message_id, hashtag_data)
-	subchannel_ids.update(all_users_channel_ids)
+#	all_users_channel_ids = get_all_users_channels_from_hashtags(main_channel_id, main_message_id, hashtag_data)
+#	subchannel_ids.update(all_users_channel_ids)
 
 	unchanged_posts = get_unchanged_posts(bot, post_data, list(subchannel_ids))
 
@@ -175,24 +176,45 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 			db_utils.delete_copied_message(message_id, chat_id)
 
 
+def deferred_filter(channel):
+	channel_id, settings = channel
+	if not settings:
+		return False
+	if channel_manager.SETTING_TYPES.DEFERRED not in settings:
+		return False
+	return settings[channel_manager.SETTING_TYPES.DEFERRED]
+
+
+def due_filter(channel):
+	channel_id, settings = channel
+	if not settings:
+		return False
+	if channel_manager.SETTING_TYPES.DUE not in settings:
+		return False
+	return settings[channel_manager.SETTING_TYPES.DUE]
+
+
 def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
 	subchannel_ids = set()
-	if hashtag_data.is_scheduled():
-		if db_utils.is_message_scheduled(main_message_id, main_channel_id):
-			scheduled_users_subchannels = get_scheduled_subchannels_from_hashtags(main_channel_id, hashtag_data)
-			if scheduled_users_subchannels:
-				subchannel_ids.update(scheduled_users_subchannels)
-	elif hashtag_data.is_opened():
-		assigned_user_subchannels = get_assigned_user_channel_from_hashtags(main_channel_id, hashtag_data)
-		if assigned_user_subchannels:
-			subchannel_ids.update(assigned_user_subchannels)
+	priority = hashtag_data.get_priority_number_or_default()
+	channel_data = db_utils.get_individual_channels_by_priority(main_channel_id, priority)
+	channel_data = [[channel_id, json.loads(settings)] for channel_id, settings in channel_data]
 
-		followed_users_subchannels = get_followed_user_channels_from_hashtags(main_channel_id, hashtag_data)
-		if followed_users_subchannels:
-			subchannel_ids.update(followed_users_subchannels)
+	if hashtag_data.is_scheduled() and db_utils.is_message_scheduled(main_message_id, main_channel_id):
+		channel_data = list(filter(deferred_filter, channel_data))
+	else:
+		channel_data = list(filter(due_filter, channel_data))
 
-	creator_subchannels = get_creator_channel_id(main_channel_id, main_message_id, hashtag_data)
-	if creator_subchannels and hashtag_data.is_opened():
+	assigned_user_subchannels = filter_assigned_user_channels(channel_data, hashtag_data)
+	if assigned_user_subchannels:
+		subchannel_ids.update(assigned_user_subchannels)
+
+	followed_user_subchannels = filter_followed_user_channels(channel_data, hashtag_data)
+	if followed_user_subchannels:
+		subchannel_ids.update(followed_user_subchannels)
+
+	creator_subchannels = filter_creator_channels(channel_data, main_channel_id, main_message_id)
+	if creator_subchannels:
 		subchannel_ids.update(creator_subchannels)
 
 	result_subchannel_ids = set()
@@ -206,100 +228,50 @@ def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int,
 	return result_subchannel_ids
 
 
-def get_all_users_channels_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
-	priority = hashtag_data.get_priority_number_or_default()
-	required_params = [priority, hashtag_data.is_opened(), hashtag_data.get_assigned_user()]
-	if not all(required_params):
-		return []
-
-	channel_ids = db_utils.get_individual_channel_id_all_users(
-		main_channel_id, priority, channel_manager.CHANNEL_TYPES.ALL_USERS
-	)
-
-	all_users_channel_ids = []
-
-	for channel_id in channel_ids:
-		main_channel_id, user_tag, priorities, types = db_utils.get_individual_channel(channel_id)
-
-		is_channel_scheduled = channel_manager.CHANNEL_TYPES.SCHEDULED in types
-		if hashtag_data.is_scheduled():
-			if db_utils.is_message_scheduled(main_message_id, main_channel_id) and is_channel_scheduled:
-				all_users_channel_ids.append(channel_id)
-		elif not is_channel_scheduled:
-			all_users_channel_ids.append(channel_id)
-
-	return all_users_channel_ids
-
-
-def get_assigned_user_channel_from_hashtags(main_channel_id: int, hashtag_data: HashtagData):
+def filter_assigned_user_channels(channel_data: List, hashtag_data: HashtagData):
 	user_tag = hashtag_data.get_assigned_user()
-	priority = hashtag_data.get_priority_number_or_default()
-	if not user_tag or not priority:
+	if not user_tag:
 		return
 
-	return db_utils.get_individual_channel_id_by_tag(
-		main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.ASSIGNED
-	)
+	result_channels = []
+	for channel in channel_data:
+		channel_id, settings = channel
+		assigned_users = settings.get(channel_manager.SETTING_TYPES.ASSIGNED) or []
+		if user_tag in assigned_users:
+			result_channels.append(channel_id)
+
+	return result_channels
 
 
-def get_followed_user_channels_from_hashtags(main_channel_id: int, hashtag_data: HashtagData):
+def filter_followed_user_channels(channel_data: List, hashtag_data: HashtagData):
 	user_tags = hashtag_data.get_followed_users()
-	priority = hashtag_data.get_priority_number_or_default()
-	if not user_tags or not priority:
+	if not user_tags:
 		return
 
-	channel_ids = []
-	for user_tag in user_tags:
-		user_channel_ids = db_utils.get_individual_channel_id_by_tag(
-			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.FOLLOWED
-		)
+	result_channels = []
+	for channel in channel_data:
+		channel_id, settings = channel
+		followed_users = settings.get(channel_manager.SETTING_TYPES.FOLLOWED) or []
+		for followed_user_tag in user_tags:
+			if followed_user_tag in followed_users:
+				result_channels.append(channel_id)
 
-		if user_channel_ids:
-			channel_ids += user_channel_ids
-
-	return channel_ids
-
-
-def get_creator_channel_id(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
-	priority = hashtag_data.get_priority_number_or_default()
-	user_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
-	if not user_id:
-		return
-
-	return db_utils.get_individual_channel_id_by_user_id(
-		main_channel_id, user_id, priority, channel_manager.CHANNEL_TYPES.CREATED
-	)
+	return result_channels
 
 
-def get_scheduled_subchannels_from_hashtags(main_channel_id: int, hashtag_data: HashtagData):
-	assigned_user = hashtag_data.get_assigned_user()
-	priority = hashtag_data.get_priority_number_or_default()
-	if not assigned_user or not priority:
-		return
+def filter_creator_channels(channel_data: List, main_channel_id: int, main_message_id: int):
+	sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
+	user_tags = db_utils.get_tags_from_user_id(sender_id) or []
 
-	followed_users = hashtag_data.get_followed_users()
-	all_user_tags = hashtag_data.get_all_users()
+	result_channels = []
+	for channel in channel_data:
+		channel_id, settings = channel
+		creator_users = settings.get(channel_manager.SETTING_TYPES.REPORTED) or []
+		for creator_user_tag in user_tags:
+			if creator_user_tag in creator_users:
+				result_channels.append(channel_id)
 
-	channel_ids = []
-
-	assigned_user_channel_ids = db_utils.get_individual_channel_id_by_tag(
-		main_channel_id, assigned_user, priority, channel_manager.CHANNEL_TYPES.SCHEDULED_ASSIGNED
-	)
-	channel_ids += assigned_user_channel_ids
-
-	for user_tag in followed_users:
-		user_channel_ids = db_utils.get_individual_channel_id_by_tag(
-			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.SCHEDULED_FOLLOWED
-		)
-		channel_ids += user_channel_ids
-
-	for user_tag in all_user_tags:
-		user_channel_ids = db_utils.get_individual_channel_id_by_tag(
-			main_channel_id, user_tag, priority, channel_manager.CHANNEL_TYPES.SCHEDULED
-		)
-		channel_ids += user_channel_ids
-
-	return channel_ids
+	return result_channels
 
 
 def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types.Message):
