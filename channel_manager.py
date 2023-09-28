@@ -336,17 +336,33 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		toggle_button(bot, call, callback_type, other_data)
 
 
+def is_button_checked(buttons: List[InlineKeyboardButton], target_cb_type: str):
+	for btn in buttons:
+		btn_cb_type, btn_cb_data = utils.parse_callback_str(btn.callback_data)
+		if btn_cb_type == target_cb_type:
+			return btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"])
+
+
 def toggle_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, cb_data: str):
 	reply_markup = call.message.reply_markup
 	buttons = [btn for row in reply_markup.keyboard for btn in row]
+	is_deferred_checked = is_button_checked(buttons, CB_TYPES.DEFERRED_SELECTED)
+	is_due_checked = is_button_checked(buttons, CB_TYPES.DUE_SELECTED)
+
 	for btn in buttons:
 		callback_str = btn.callback_data
 		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
-		if btn_cb_type == cb_type and btn_cb_data == cb_data:
-			if btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
-				btn.text = btn.text[:-len(config_utils.BUTTON_TEXTS["CHECK"])]
-			else:
-				btn.text += config_utils.BUTTON_TEXTS["CHECK"]
+
+		if btn_cb_type != cb_type or btn_cb_data != cb_data:
+			continue
+
+		if btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
+			if (cb_type == CB_TYPES.DUE_SELECTED and not is_deferred_checked) or (cb_type == CB_TYPES.DEFERRED_SELECTED and not is_due_checked):
+				bot.answer_callback_query(callback_query_id=call.id, text="At least one of the Due and Deferred buttons should be selected")
+				return
+			btn.text = btn.text[:-len(config_utils.BUTTON_TEXTS["CHECK"])]
+		else:
+			btn.text += config_utils.BUTTON_TEXTS["CHECK"]
 
 	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=reply_markup)
 
