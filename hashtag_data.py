@@ -314,6 +314,4 @@ class HashtagData:
 		main_channel_id_str = str(self.main_channel_id)
 		if main_channel_id_str in DEFAULT_USER_DATA:
 			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
-			if user == self.get_assigned_user():
-				return priority
-
+			return priority
