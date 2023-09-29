@@ -532,7 +532,7 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	is_user_tag_changed = hashtag_data.get_assigned_user() != subchannel_user
-	is_priority_tag_changed = hashtag_data.get_priority_number != subchannel_priority
+	is_priority_tag_changed = hashtag_data.get_priority_number() != subchannel_priority
 
 	comment_text = f"{call.from_user.first_name} "
 	if is_user_tag_changed and is_priority_tag_changed:

@@ -118,7 +118,7 @@ class HashtagData:
 	def insert_default_user_and_priority(self):
 		main_channel_id_str = str(self.main_channel_id)
 		if main_channel_id_str in DEFAULT_USER_DATA:
-			self.status_tag = OPENED_TAG if self.status_tag is None else self.status_tag
+			self.status_tag = OPENED_TAG if self.is_status_missing() else self.status_tag
 			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split(" ")
 			if not self.get_assigned_user():
 				self.assign_to_user(user)

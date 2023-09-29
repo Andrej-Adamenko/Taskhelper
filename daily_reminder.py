@@ -18,7 +18,7 @@ _DAILY_CHECK_INTERVAL = 60 * 60 * 24
 def update_ticket_data(main_message_id: int, main_channel_id: int, hashtag_data: HashtagData):
 	user_tags = hashtag_data.get_all_users()
 	user_tags = ",".join(user_tags) if user_tags else None
-	priority = hashtag_data.get_priority_number()
+	priority = hashtag_data.get_priority_number_or_default()
 	is_ticket_opened = hashtag_data.is_opened()
 	db_utils.insert_or_update_ticket_data(main_message_id, main_channel_id, is_ticket_opened, user_tags, priority)
 
