@@ -54,7 +54,7 @@ def handle_post(post_data: telebot.types.Message):
 
 	main_channel_id_str = str(post_data.chat.id)
 	if DISCUSSION_CHAT_DATA[main_channel_id_str] is None:
-		edited_post = post_link_utils.add_link_to_new_post(bot, post_data)
+		edited_post = post_link_utils.add_link_to_new_post(post_data)
 		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, force_forward=True)
 
 
@@ -81,7 +81,8 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 
 	msg_data.chat.id = main_channel_id
 	msg_data.message_id = main_message_id
-	edited_post = post_link_utils.add_link_to_new_post(bot, msg_data)
+
+	edited_post = post_link_utils.add_link_to_new_post(msg_data)
 	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, force_forward=True)
 
 
