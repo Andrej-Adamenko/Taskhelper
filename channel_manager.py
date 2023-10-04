@@ -29,7 +29,7 @@ class CB_TYPES:
 	TOGGLE_REMIND_SETTING = "TRM"
 	SAVE_SELECTED_USERS = "SVU"
 	SAVE_REMIND_SETTINGS = "SVR"
-
+	NOP = "NOP"  # No operation
 
 class SETTING_TYPES:
 	ASSIGNED = "assigned"
@@ -39,6 +39,12 @@ class SETTING_TYPES:
 	DEFERRED = "deferred"
 	REMIND = "remind"
 
+MENU_TITLES = {
+	SETTING_TYPES.ASSIGNED: "Assigned to:",
+	SETTING_TYPES.REPORTED: "Reported by:",
+	SETTING_TYPES.FOLLOWED: "CCed to:",
+	SETTING_TYPES.REMIND: "Remind me when:",
+}
 
 class REMIND_TYPES:
 	ASSIGNED = "assigned"
@@ -77,7 +83,7 @@ def add_user_tags_to_button_text(button: InlineKeyboardButton, channel_type: str
 	if len(user_tags) < 1:
 		return
 
-	parse_user_tag = lambda u: u if u != NEW_USER_TYPE else "<new user>"
+	parse_user_tag = lambda u: u if u != NEW_USER_TYPE else "<new users>"
 	user_tags = [parse_user_tag(tag) for tag in user_tags]
 
 	button.text += f" {user_tags[0]}"
@@ -157,13 +163,13 @@ def send_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message
 
 	keyboard = generate_settings_keyboard(channel_id)
 	text = '''
-		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters were selected press "Save" button. You can call this settings menu using "/show_settings" command. If "New user" parameter is selected than new users will be automatically added to the category where it's activated. Descriptions of each parameter:
-		1) Assigned to - forward tickets that is assigned to the selected users
-		2) Reported by - forward tickets that is created by the selected users 
-		3) CCed to - forward tickets where the selected users in CC
+		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. You can call this settings menu using "/show_settings" command. If "New users" parameter is selected than new users will be automatically added to the category where it's activated. Descriptions of each parameter:
+		1) Assigned to - include tickets that is assigned to the selected users
+		2) Reported by - include tickets that is created by the selected users
+		3) CCed to - include tickets where the selected users in CC
 		4) Remind me when - regulates what tickets can be reminded in this channel
-		5) Due - if this option is active regular(NOT scheduled) tickets can be forwarded to this channel
-		6) Deferred - if this option is active scheduled tickets can be forwarded to this channel
+		5) Due - if this option is enabled, regular(NOT scheduled) tickets will be included in this channel
+		6) Deferred - if this option is enabled, scheduled tickets will be included in this channel
 	'''
 	bot.send_message(chat_id=channel_id, text=text, reply_markup=keyboard)
 
@@ -175,17 +181,20 @@ def generate_user_keyboard(main_channel_id: int, channel_id: int, setting_type: 
 		active_user_tags = settings[setting_type]
 
 	user_tags = db_utils.get_main_channel_user_tags(main_channel_id)
-	buttons = []
+
+	nop_callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.NOP)
+	text_button = InlineKeyboardButton(MENU_TITLES[setting_type], callback_data=nop_callback)
+	buttons = [text_button]
 	for user_tag in user_tags:
 		callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_USER, user_tag)
-		button_text = f"#{user_tag}" if user_tag != NEW_USER_TYPE else "New user"
+		button_text = f"#{user_tag}" if user_tag != NEW_USER_TYPE else "New users"
 		user_button = InlineKeyboardButton(button_text, callback_data=callback)
 		if user_tag in active_user_tags:
 			user_button.text += config_utils.BUTTON_TEXTS["CHECK"]
 		buttons.append(user_button)
 
 	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_USER, NEW_USER_TYPE)
-	new_user_button = InlineKeyboardButton(f"New user", callback_data=callback)
+	new_user_button = InlineKeyboardButton(f"New users", callback_data=callback)
 	if NEW_USER_TYPE in active_user_tags:
 		new_user_button.text += config_utils.BUTTON_TEXTS["CHECK"]
 	buttons.append(new_user_button)
@@ -231,7 +240,11 @@ def generate_remind_keyboard(channel_id):
 	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE_REMIND_SETTINGS)
 	save_button = InlineKeyboardButton(f"Save", callback_data=callback)
 
+	nop_callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.NOP)
+	text_button = InlineKeyboardButton(MENU_TITLES[SETTING_TYPES.REMIND], callback_data=nop_callback)
+
 	buttons = [
+		text_button,
 		assigned_btn,
 		reported_btn,
 		followed_btn,
@@ -332,7 +345,9 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		save_remind_settings(bot, call)
 	elif callback_type == CB_TYPES.SAVE:
 		save_channel_settings(bot, call)
-	if callback_type in _TOGGLE_CALLBACKS:
+	elif callback_type == CB_TYPES.NOP:
+		bot.answer_callback_query(call.id)
+	elif callback_type in _TOGGLE_CALLBACKS:
 		toggle_button(bot, call, callback_type, other_data)
 
 
