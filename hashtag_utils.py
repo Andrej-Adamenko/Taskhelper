@@ -35,9 +35,11 @@ def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str]):
 
 	hashtags_start_position = 0
 	if entities and entities[0].type == "text_link" and entities[0].offset == 0:
-		hashtags_start_position += entities[0].length + len(post_link_utils.LINK_ENDING)
-		if hashtags_start_position > len(text):
-			text += " "
+		link_str = post_link_utils.get_link_text(post_data) + post_link_utils.LINK_ENDING
+		if text.startswith(link_str):
+			hashtags_start_position += len(link_str)
+			if hashtags_start_position > len(text):
+				text += " "
 
 	for hashtag in hashtags[::-1]:
 		if hashtag is None:
