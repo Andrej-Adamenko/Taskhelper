@@ -101,7 +101,11 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			continue
 
 		try:
-			copied_message = utils.copy_message(bot, chat_id=subchannel_id, message_id=main_message_id,
+			if post_data.text is None:
+				text, entities = utils.get_post_content(post_data)
+				copied_message = bot.send_message(chat_id=subchannel_id, text=text, entities=entities)
+			else:
+				copied_message = utils.copy_message(bot, chat_id=subchannel_id, message_id=main_message_id,
 			                                    from_chat_id=main_channel_id)
 			logging.info(f"Successfully forwarded post [{main_message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
 			db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
