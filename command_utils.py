@@ -5,6 +5,7 @@ import telebot
 
 import channel_manager
 import config_utils
+import core_api
 import db_utils
 import forwarding_utils
 import hashtag_data
@@ -30,22 +31,6 @@ def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message
 	if command == "/show_settings" or command == "/start":
 		forwarding_utils.delete_forwarded_message(bot, msg_data.chat.id, msg_data.message_id)
 		channel_manager.send_settings_keyboard(bot, msg_data)
-	elif command == "/set_user_tag":
-		if not db_utils.is_individual_channel_exists(msg_data.chat.id):
-			bot.send_message(chat_id=msg_data.chat.id, text="First you need to select the settings for this channel.")
-			return
-
-		_, _, _, types = db_utils.get_individual_channel(msg_data.chat.id)
-		if channel_manager.CHANNEL_TYPES.ALL_USERS in types:
-			bot.send_message(chat_id=msg_data.chat.id, text="You can't set user tag to a channel for all users.")
-			return
-
-		if len(arguments) != 1:
-			bot.send_message(chat_id=msg_data.chat.id, text="You should specify user tag without spaces.")
-			return
-		user_tag = arguments[0]
-		db_utils.update_individual_channel_tag(msg_data.chat.id, user_tag)
-		bot.send_message(chat_id=msg_data.chat.id, text="This channel's user tag has been successfully changed.")
 	elif command == "/set_channel_hashtag":
 		if len(arguments) != 1:
 			bot.send_message(chat_id=msg_data.chat.id, text="You should specify only one hashtag.")
@@ -168,6 +153,16 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 		if not db_utils.is_main_channel_exists(main_channel_id):
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
+
+		found_user = core_api.get_user(user)
+		if not found_user:
+			if user.startswith("@"):
+				bot.send_message(chat_id=msg_data.chat.id, text="Can't find user by provided username.")
+			else:
+				bot.send_message(chat_id=msg_data.chat.id, text="Can't find user by provided id.")
+			return
+
+		user = found_user.id
 
 		is_tag_already_exists = db_utils.is_user_tag_exists(main_channel_id, tag)
 

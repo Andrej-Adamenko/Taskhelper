@@ -15,7 +15,7 @@ if not os.path.exists(CONFIG_FILE):
 	logging.error("Config file not found")
 	exit()
 
-MANDATORY_KEYS = ["BOT_TOKEN", "ADMIN_USERS"]
+MANDATORY_KEYS = ["BOT_TOKEN", "ADMIN_USERS", "APP_API_ID", "APP_API_HASH"]
 
 BOT_TOKEN: str = ""
 DUMP_CHAT_ID: str = ""

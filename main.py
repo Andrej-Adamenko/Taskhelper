@@ -15,8 +15,7 @@ import user_utils
 import utils
 
 import messages_export_utils
-from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH, DISCUSSION_CHAT_DATA,\
-	SUPPORTED_CONTENT_TYPES, INTERVAL_UPDATE_START_DELAY
+from config_utils import BOT_TOKEN, DISCUSSION_CHAT_DATA, SUPPORTED_CONTENT_TYPES, INTERVAL_UPDATE_START_DELAY
 
 db_utils.initialize_db()
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
@@ -35,10 +34,7 @@ scheduled_messages_utils.start_scheduled_thread(bot)
 
 daily_reminder.start_reminder_thread(bot)
 
-if APP_API_ID and APP_API_HASH:
-	pyrogram_app = messages_export_utils.init_pyrogram(APP_API_ID, APP_API_HASH, BOT_TOKEN)
-	messages_export_utils.export_comments_from_discussion_chats(pyrogram_app)
-	messages_export_utils.export_main_channels(pyrogram_app)
+messages_export_utils.start_exporting()
 
 interval_updating_utils.start_interval_updating(bot, INTERVAL_UPDATE_START_DELAY)
 
