@@ -208,21 +208,27 @@ Changes timeout for skipping daily reminder if user is interacted with tickets w
 
 ### ***Individual channel structure for every user***
 
-Each created channel now has its own unique structure. After adding a bot to a new channel, simply write any message in chat and then type "/start" to bring up the settings menu.
+Each created channel now has its own unique structure. After adding a bot to a new channel, simply write "/start" to bring up the settings menu.
 
-The settings menu gives you the option to select or deselect certain settings from the seven available:
+The settings menu gives you the option to select or deselect certain settings from the nine available:
 
-* "Assigned to this user" - displaying the tickets assigned to this user.
-* "Reported by this user" - displays the tickets that were created by this user.
-* "CCed to this user" - enabling this option will display tickets in this channel when the user is added to the ticket copy (CC).
-* "Scheduled to this user" - if this parameter is enabled, the channel will display the pending tickets assigned to this user.
+* "Assigned to" - include tickets that is assigned to the selected users.
+* "Reported by" - include tickets that is created by the selected users.
+* "CCed to" - include tickets where the selected users in CC.
+* "Remind me when" - regulates what tickets can be reminded in this channel.
+* "Due" - if this option is enabled, regular(NOT scheduled) tickets will be included in this channel.
+* "Deferred" - if this option is enabled, scheduled tickets will be included in this channel.
 * "Priority 1/2/3" - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel.
 
-After selecting the desired settings, you should press the "Save" button to save and apply the settings.
+The "Assigned to", "Reported by", and "CCed to" buttons open a menu of user tags where multiple user tags can be selected at once.
 
-After selecting the channel settings you need to set user tag for this channel by sending the following command:
-* "/set_user_tag {user_tag}", instead of "{user_tag}" you should insert your user tag
-* Example: "/set_user_tag ab", in this case "ab" is user tag
+Selected users are displayed in the button text as "Assigned to: aa, bb, cc".
+
+In addition to user tags, there is also a "New User" option that will automatically add new users to the current category after they have been added using the bot command.
+
+"Due" and "Deferred" by default, both parameters are ON when a new channel is created.
+
+After selecting the desired settings, you should press the "Save" button to save and apply the settings.
 
 If you need to change the channel settings, you can use the command "/show_settings" to call the parameter selection menu again.
 
