@@ -163,7 +163,7 @@ def send_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message
 
 	keyboard = generate_settings_keyboard(channel_id)
 	text = '''
-		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. You can call this settings menu using "/show_settings" command. If "New users" parameter is selected than new users will be automatically added to the category where it's activated. Descriptions of each parameter:
+		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. You can call this settings menu using "/show_settings" command. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
 		1) Assigned to - include tickets that is assigned to the selected users
 		2) Reported by - include tickets that is created by the selected users
 		3) CCed to - include tickets where the selected users in CC
