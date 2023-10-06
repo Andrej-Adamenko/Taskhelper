@@ -447,3 +447,19 @@ def add_new_user_tag_to_channels(main_channel_id: int, user_tag: str):
 
 		settings_str = json.dumps(settings)
 		db_utils.update_individual_channel_settings(channel_id, settings_str)
+
+
+def remove_user_tag_from_channels(main_channel_id: int, user_tag: str):
+	channel_data = db_utils.get_all_individual_channels(main_channel_id)
+	for channel in channel_data:
+		channel_id, settings = channel
+		settings = json.loads(settings)
+
+		tag_filter = lambda t: t != user_tag
+		for setting_type in [SETTING_TYPES.ASSIGNED, SETTING_TYPES.REPORTED, SETTING_TYPES.FOLLOWED]:
+			if setting_type not in settings:
+				continue
+			settings[setting_type] = list(filter(tag_filter, settings[setting_type]))
+
+		settings_str = json.dumps(settings)
+		db_utils.update_individual_channel_settings(channel_id, settings_str)

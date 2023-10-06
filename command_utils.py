@@ -205,6 +205,7 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			return
 
 		db_utils.delete_user_by_tag(main_channel_id, tag)
+		channel_manager.remove_user_tag_from_channels(main_channel_id, tag)
 		user_utils.load_users(bot)
 
 		if main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
