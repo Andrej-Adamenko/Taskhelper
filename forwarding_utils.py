@@ -84,8 +84,6 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
 	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, hashtag_data)
-#	all_users_channel_ids = get_all_users_channels_from_hashtags(main_channel_id, main_message_id, hashtag_data)
-#	subchannel_ids.update(all_users_channel_ids)
 
 	unchanged_posts = get_unchanged_posts(bot, post_data, list(subchannel_ids))
 
