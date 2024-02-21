@@ -1,5 +1,6 @@
 import logging
 import telebot
+from telebot.types import ChatMemberOwner
 
 import channel_manager
 import command_utils
@@ -185,11 +186,14 @@ def handle_channel_bot_command(msg_data: telebot.types.Message):
 
 @bot.chat_member_handler()
 def handle_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
-	if member_update.new_chat_member.status == "creator":
-		chat_id = member_update.chat.id
-		if db_utils.is_individual_channel_exists(chat_id):
-			user_id = member_update.new_chat_member.user.id
-			db_utils.update_individual_channel_user(chat_id, user_id)
+	chat_id = member_update.chat.id
+	if db_utils.is_individual_channel_exists(chat_id):
+		chat_admins = bot.get_chat_administrators(chat_id)
+		chat_owner = next((user for user in chat_admins if type(user) == ChatMemberOwner), None)
+		if not chat_owner:
+			return
+		owner_id = chat_owner.user.id
+		db_utils.update_individual_channel_user(chat_id, owner_id)
 
 
 bot.infinity_polling(allowed_updates=[

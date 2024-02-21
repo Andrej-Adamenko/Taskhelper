@@ -279,7 +279,9 @@ def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: in
 												message_id=message_id)
 		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
 	except ApiTelegramException as E:
-		logging.error(f"Error during getting message content - {E}")
+		if E.error_code == 429:
+			raise E
+		logging.error(f"Error during getting message {[message_id, chat_id]} content - {E}")
 		return
 
 	return forwarded_message
