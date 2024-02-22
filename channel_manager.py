@@ -83,8 +83,9 @@ def add_user_tags_to_button_text(button: InlineKeyboardButton, channel_type: str
 	if len(user_tags) < 1:
 		return
 
-	parse_user_tag = lambda u: u if u != NEW_USER_TYPE else "<new users>"
-	user_tags = [parse_user_tag(tag) for tag in user_tags]
+	if NEW_USER_TYPE in user_tags:
+		user_tags.remove(NEW_USER_TYPE)
+		user_tags.append("<new users>")
 
 	button.text += f" {user_tags[0]}"
 	for user_tag in user_tags[1:]:

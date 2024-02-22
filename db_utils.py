@@ -807,7 +807,9 @@ def get_user_individual_channels(main_channel_id, user_id):
 
 
 @db_thread_lock
-def get_tickets_for_reminding(main_channel_id, user_id, priority):
+def get_tickets_for_reminding(main_channel_id, user_id, user_tag, priority):
+	# finds all forwarded tickets from every channel where user is channel's owner
+	# that match priority and is opened (scheduled tickets is ignored)
 	sql = '''
 		SELECT copied_messages.copied_channel_id, copied_messages.copied_message_id, copied_messages.main_channel_id,
 		copied_messages.main_message_id, tickets_data.user_tags, tickets_data.update_time, reminded_tickets.reminded_at
@@ -817,7 +819,7 @@ def get_tickets_for_reminding(main_channel_id, user_id, priority):
 		LEFT JOIN reminded_tickets ON
 		reminded_tickets.main_channel_id = copied_messages.main_channel_id AND
 		reminded_tickets.main_message_id = copied_messages.main_message_id AND
-		reminded_tickets.user_tag IN (SELECT user_tag FROM users WHERE user_id = (?) AND main_channel_id = (?))
+		reminded_tickets.user_tag = (?)
 		WHERE copied_channel_id IN (
 			SELECT channel_id FROM individual_channel_settings WHERE user_id = (?) AND main_channel_id = (?)
 		) AND copied_messages.main_message_id NOT IN (
@@ -825,7 +827,7 @@ def get_tickets_for_reminding(main_channel_id, user_id, priority):
 		) AND tickets_data.priority=(?) AND tickets_data.is_opened=1;
 	'''
 
-	CURSOR.execute(sql, (user_id, main_channel_id, user_id, main_channel_id, priority,))
+	CURSOR.execute(sql, (user_tag, user_id, main_channel_id, priority,))
 	result = CURSOR.fetchall()
 	return result
 
