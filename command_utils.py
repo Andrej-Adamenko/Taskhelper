@@ -155,6 +155,12 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			return
 
 		found_user = core_api.get_user(user)
+		# use core api to get user id because telegram bot api can't get user by username
+		if found_user:
+			found_user = user_utils.get_user(bot, found_user.id)
+		else:
+			found_user = user_utils.get_user(bot, user)
+
 		if not found_user:
 			if user.startswith("@"):
 				bot.send_message(chat_id=msg_data.chat.id, text="Can't find user by provided username.")
