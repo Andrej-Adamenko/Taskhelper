@@ -2,9 +2,10 @@ import logging
 from typing import Union
 
 import telebot.types
+from telebot.apihelper import ApiTelegramException
 
-import config_utils
 import db_utils
+import utils
 
 USER_DATA = {}
 
@@ -37,12 +38,20 @@ def load_users(bot: telebot.TeleBot):
 			USER_DATA[str(main_channel_id)] = {}
 
 		USER_DATA[main_channel_id][user_tag] = user_id
-		try:
-			user_info = bot.get_chat(user_id)
-		except Exception as E:
-			logging.error(f"Error during loading info about user {user_id}, {E}")
+		user_info = get_user(bot, user_id)
+		if not user_info:
 			continue
 		USER_DATA[main_channel_id][user_tag] = user_info
+
+
+@utils.timeout_error_lock
+def get_user(bot: telebot.TeleBot, user: Union[str, int]):
+	try:
+		return bot.get_chat(user)
+	except ApiTelegramException as E:
+		if E.error_code == 429:
+			raise E
+		logging.error(f"Error during loading info about user {user}, {E}")
 
 
 def insert_user_reference(main_channel_id: int, user_tag: str, text: str):
