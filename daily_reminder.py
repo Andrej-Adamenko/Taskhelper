@@ -44,14 +44,14 @@ def update_user_last_interaction(main_message_id: int, main_channel_id: int, msg
 
 
 def ticket_update_time_comparator(ticket):
-	_, _, _, _, _, update_time, remind_time = ticket
+	_, _, _, _, _, _, update_time, remind_time = ticket
 	return max(update_time or 0, remind_time or 0)
 
 
-def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str, priority: str):
-	ticket_data = db_utils.get_tickets_for_reminding(main_channel_id, user_id, user_tag, priority)
+def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str):
+	ticket_data = db_utils.get_tickets_for_reminding(main_channel_id, user_id, user_tag)
 	if not ticket_data:
-		logging.info(f"No tickets for reminding were found in {user_tag, priority, main_channel_id}")
+		logging.info(f"No tickets for reminding were found in {user_tag, main_channel_id}")
 		return
 
 	channel_ids = db_utils.get_user_individual_channels(main_channel_id, user_id)
@@ -61,7 +61,7 @@ def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str,
 
 	filtered_ticket_data = []
 	for ticket in ticket_data:
-		copied_channel_id, copied_message_id, main_channel_id, main_message_id, ticket_user_tags, _, _ = ticket
+		copied_channel_id, copied_message_id, main_channel_id, main_message_id, ticket_user_tags, priority, _, _ = ticket
 		if copied_channel_id not in channel_data:
 			continue
 
@@ -85,12 +85,20 @@ def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str,
 				filtered_ticket_data.append(ticket)
 				continue
 
+	highest_priority = 3
+	for ticket in filtered_ticket_data:
+		priority = int(ticket[5])
+		if priority < highest_priority:
+			highest_priority = priority
+
+	filtered_ticket_data = list(filter(lambda ticket: int(ticket[5]) == highest_priority, filtered_ticket_data))
+
 	if not filtered_ticket_data:
-		logging.info(f"No forwarded tickets for reminding were found in {user_tag, priority, main_channel_id}")
+		logging.info(f"No forwarded tickets for reminding were found in {user_tag, main_channel_id}")
 		return
 
 	filtered_ticket_data.sort(key=ticket_update_time_comparator)
-	copied_channel_id, copied_message_id, main_channel_id, main_message_id, _, _, _ = filtered_ticket_data[0]
+	copied_channel_id, copied_message_id, main_channel_id, main_message_id, _, _, _, _ = filtered_ticket_data[0]
 
 	return main_message_id, copied_channel_id, copied_message_id
 
@@ -106,15 +114,25 @@ def send_daily_reminders(bot: telebot.TeleBot):
 		seconds_since_last_interaction = time.time() - last_interaction_time
 		if seconds_since_last_interaction < config_utils.REMINDER_TIME_WITHOUT_INTERACTION * 60:
 			continue
-		highest_priority = db_utils.get_user_highest_priority(main_channel_id, user_tag)
-		message_to_remind = get_message_for_reminding(main_channel_id, user_id, user_tag, highest_priority)
+
+		message_to_remind = None
+		while not message_to_remind:
+			message_to_remind = get_message_for_reminding(main_channel_id, user_id, user_tag)
+			if not message_to_remind:
+				break
+			message_id_to_remind, copied_channel_id, copied_message_id = message_to_remind
+
+			forwarding_utils.delete_forwarded_message(bot, copied_channel_id, copied_message_id)
+			interval_updating_utils.update_older_message(bot, main_channel_id, message_id_to_remind)
+			new_message_id = db_utils.find_copied_message_in_channel(copied_channel_id, message_id_to_remind)
+			if not new_message_id:
+				logging.info(f"Tried to remind ticket {message_id_to_remind, main_channel_id}, but channel settings was changed.")
+				message_to_remind = None
+
 		if not message_to_remind:
 			continue
-		message_id_to_remind, copied_channel_id, copied_message_id = message_to_remind
 
-		forwarding_utils.delete_forwarded_message(bot, copied_channel_id, copied_message_id)
-		interval_updating_utils.update_older_message(bot, main_channel_id, message_id_to_remind)
-
+		message_id_to_remind, _, _ = message_to_remind
 		db_utils.insert_or_update_remind_time(message_id_to_remind, main_channel_id, user_tag, int(time.time()))
 		logging.info(f"Sent reminder to {user_id, user_tag}, message: {message_id_to_remind, main_channel_id}.")
 
