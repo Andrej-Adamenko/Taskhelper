@@ -123,6 +123,9 @@ def handle_bot_changed_permissions(member_update: telebot.types.ChatMemberUpdate
 
 @bot.callback_query_handler(func=lambda call: main_channel_filter(call.message))
 def handle_main_channel_keyboard_callback(call: telebot.types.CallbackQuery):
+	if not utils.check_content_type(bot, call.message):
+		return
+
 	if call.data.startswith(forwarding_utils.CALLBACK_PREFIX):
 		forwarding_utils.handle_callback(bot, call)
 	elif call.data.startswith(post_link_utils.CALLBACK_PREFIX):
@@ -143,6 +146,10 @@ def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 		return
 	main_message_id, main_channel_id = main_message_data
 	msg_data = utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+
+	if not utils.check_content_type(bot, msg_data):
+		forwarding_utils.delete_all_forwarded_messages(bot, main_channel_id, main_message_id)
+		return
 
 	subchannel_message_id = call.message.message_id
 	subchannel_id = call.message.chat.id

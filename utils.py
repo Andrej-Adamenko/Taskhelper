@@ -291,3 +291,17 @@ def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: in
 def copy_message(bot: telebot.TeleBot, **kwargs):
 	return bot.copy_message(**kwargs)
 
+
+@timeout_error_lock
+def remove_keyboard(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
+
+
+def check_content_type(bot: telebot.TeleBot, message: telebot.types.Message):
+	if message.content_type not in config_utils.SUPPORTED_CONTENT_TYPES:
+		if message.reply_markup:
+			chat_id = message.chat.id
+			message_id = message.message_id
+			remove_keyboard(bot, chat_id, message_id)
+		return False
+	return True

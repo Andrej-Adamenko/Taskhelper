@@ -121,6 +121,18 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		utils.edit_message_keyboard(bot, post_data, keyboard_markup, chat_id=subchannel_id, message_id=copied_message.message_id)
 
 
+def delete_all_forwarded_messages(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int):
+	copied_messages = db_utils.get_all_copied_messages(main_channel_id, main_message_id)
+	for copied_message in copied_messages:
+		copied_channel_id, copied_message_id = copied_message
+		try:
+			utils.delete_message(bot, copied_channel_id, copied_message_id)
+		except ApiTelegramException:
+			utils.remove_keyboard(bot, copied_channel_id, copied_message_id)
+		db_utils.delete_copied_message(copied_message_id, copied_channel_id)
+		logging.info(f"Deleted message {[copied_message_id, copied_channel_id]} with not supported content type, deleted from db")
+
+
 def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	try:
 		utils.delete_message(bot, chat_id=chat_id, message_id=message_id)
@@ -139,8 +151,17 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 					db_utils.delete_copied_message(oldest_message_id, chat_id)
 					logging.info(f"Message {[oldest_message_id, chat_id]} doesn't exists, deleted from db")
 					continue
+				if oldest_message_data.content_type not in config_utils.SUPPORTED_CONTENT_TYPES:
+					db_utils.delete_copied_message(oldest_message_id, chat_id)
+					logging.info(f"Deleted message {[oldest_message_id, chat_id]} with not supported content type, deleted from db")
+					oldest_message_data = None
+					continue
 
 			msg_to_delete_data = utils.get_message_content_by_id(bot, chat_id, message_id)
+			if not utils.check_content_type(bot, msg_to_delete_data):
+				db_utils.delete_copied_message(message_id, chat_id)
+				logging.info(f"Deleted message {[message_id, chat_id]} with not supported content type, deleted from db")
+				return
 
 			oldest_message_main_data = db_utils.get_main_message_from_copied(oldest_message_id, chat_id)
 			if oldest_message_main_data is None:
