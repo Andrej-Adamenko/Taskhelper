@@ -31,6 +31,8 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, current_msg
 
 	forwarded_message.message_id = main_channel_message_id
 	forwarded_message.chat = forwarded_message.forward_from_chat
+	if not utils.check_content_type(bot, forwarded_message):
+		return
 
 	updated_message = post_link_utils.update_post_link(bot, forwarded_message)
 

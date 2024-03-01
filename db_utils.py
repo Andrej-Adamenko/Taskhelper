@@ -865,3 +865,14 @@ def get_all_individual_channels(main_channel_id):
 		return result
 	else:
 		return []
+
+
+@db_thread_lock
+def get_all_copied_messages(main_channel_id, main_message_id):
+	sql = '''
+		SELECT copied_channel_id, copied_message_id FROM copied_messages
+		WHERE main_channel_id = (?) AND main_message_id = (?)
+	'''
+	CURSOR.execute(sql, (main_channel_id, main_message_id))
+	return CURSOR.fetchall()
+
