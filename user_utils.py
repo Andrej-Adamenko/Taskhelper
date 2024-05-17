@@ -5,7 +5,7 @@ import telebot.types
 from telebot.apihelper import ApiTelegramException
 
 import db_utils
-import utils
+import threading_utils
 
 USER_DATA = {}
 
@@ -44,7 +44,7 @@ def load_users(bot: telebot.TeleBot):
 		USER_DATA[main_channel_id][user_tag] = user_info
 
 
-@utils.timeout_error_lock
+@threading_utils.timeout_error_lock
 def get_user(bot: telebot.TeleBot, user: Union[str, int]):
 	try:
 		return bot.get_chat(user)
