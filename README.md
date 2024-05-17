@@ -104,6 +104,11 @@ When you installed Python, dependencies and filled config.json you should invite
 $ python3 main.py
 ```
 
+You can also execute tests with
+```
+$ python3 -m unittest -v
+```
+
 In order for bot to be able to forward tickets to subchannels you need to specify hashtags in the text of your ticket:
 * #о - means ticket is open and bot can forward it to subchannel
 * #х - means ticket is closed
