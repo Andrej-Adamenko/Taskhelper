@@ -117,13 +117,13 @@ def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 
 
 def get_current_msg_id(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None, start_from_message: int = None):
-	if start_from_message and discussion_chat_id:
-		return db_utils.get_discussion_message_id(start_from_message, main_channel_id)
-	elif discussion_chat_id:
+	if discussion_chat_id:
+		if start_from_message:
+			return db_utils.get_discussion_message_id(start_from_message, main_channel_id)
 		discussion_chat = bot.get_chat(discussion_chat_id)
-		return discussion_chat.pinned_message.message_id
-	else:
-		return utils.get_last_message(bot, main_channel_id)
+		if discussion_chat.pinned_message:
+			return discussion_chat.pinned_message.message_id
+	return utils.get_last_message(bot, main_channel_id)
 
 
 def check_all_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None, start_from_message: int = None):
