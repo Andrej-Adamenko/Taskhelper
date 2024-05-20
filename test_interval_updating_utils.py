@@ -1,21 +1,33 @@
-import unittest
-from unittest.mock import MagicMock
+from unittest import TestCase, main
+from unittest.mock import Mock, patch
 
-import telebot
+from telebot import TeleBot
+from telebot.types import Chat, Message
 
 from interval_updating_utils import get_current_msg_id
 
 
-class IntervalUpdatingUtilsTest(unittest.TestCase):
-  def test_get_current_msg_id_does_not_throw_if_no_pinned_message(self):
-    get_chat_mock = MagicMock()
-    get_chat_mock.return_value = telebot.types.Chat(1, "private")
+class GetCurrentMsgIdTest(TestCase):
+  @patch('utils.get_last_message')
+  def test_no_pinned_message(self, mock_get_last_message):
+    mock_chat = Mock(spec=Chat)
+    mock_chat.pinned_message = None
 
-    bot = telebot.TeleBot("token")
-    bot.get_chat = get_chat_mock
+    mock_bot = Mock(spec=TeleBot)
+    mock_bot.get_chat.return_value = mock_chat
 
-    get_current_msg_id(bot, 1, 1)
+    mock_message = Mock(spec=Message)
+    mock_get_last_message.return_value = mock_message
+
+    main_channel_id = 1
+    discussion_chat_id = 2
+    result = get_current_msg_id(
+        mock_bot, main_channel_id, discussion_chat_id)
+
+    mock_bot.get_chat.assert_called_once_with(discussion_chat_id)
+    mock_get_last_message.assert_called_once_with(mock_bot, main_channel_id)
+    self.assertEqual(result, mock_message)
 
 
 if __name__ == "__main__":
-  unittest.main()
+  main()
