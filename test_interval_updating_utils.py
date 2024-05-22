@@ -2,7 +2,7 @@ from unittest import TestCase, main
 from unittest.mock import Mock, patch
 
 from telebot import TeleBot
-from telebot.types import Chat, Message
+from telebot.types import Chat
 
 from interval_updating_utils import get_current_msg_id
 
@@ -16,8 +16,7 @@ class GetCurrentMsgIdTest(TestCase):
     mock_bot = Mock(spec=TeleBot)
     mock_bot.get_chat.return_value = mock_chat
 
-    mock_message = Mock(spec=Message)
-    mock_get_last_message.return_value = mock_message
+    mock_message = mock_get_last_message.return_value
 
     main_channel_id = 1
     discussion_chat_id = 2

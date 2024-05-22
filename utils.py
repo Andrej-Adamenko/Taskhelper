@@ -161,7 +161,8 @@ def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity],
 		if character_after_entity == " ":
 			entity_to_cut.length += 1
 
-	text = text[:entity_to_cut.offset] + " " + text[entity_to_cut.offset + entity_to_cut.length:]
+	end = text[entity_to_cut.offset + entity_to_cut.length:]
+	text = text[:entity_to_cut.offset] + ("" if end == "" else " ") + end
 	offsetted_entities = offset_entities(entities[entity_index + 1:], -entity_to_cut.length + 1)
 	entities[entity_index:] = offsetted_entities
 
