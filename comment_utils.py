@@ -42,7 +42,9 @@ def save_comment(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 	daily_reminder.set_ticket_update_time(main_message_id, main_channel_id)
 
 
-def update_comment(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData):
+def update_comment(bot: telebot.TeleBot, hashtag_data: HashtagData):
+	post_data = hashtag_data.get_post_data_without_hashtags()
+
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
@@ -67,3 +69,5 @@ def update_comment(bot: telebot.TeleBot, post_data: telebot.types.Message, hasht
 		utils.set_post_content(post_data, text, entities)
 		utils.edit_message_content(bot, post_data, reply_markup=keyboard_markup)
 		db_utils.update_previous_next_action(main_message_id, main_channel_id, current_comment_with_prefix)
+
+		forwarding_utils.rearrange_hashtags(bot, post_data, hashtag_data)

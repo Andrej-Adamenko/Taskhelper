@@ -240,8 +240,13 @@ class HashtagData:
 		entities_to_remove = list(filter(lambda elem: elem is not None, entities_to_remove))
 		entities_to_remove.sort(reverse=True)
 
+		if not len(entities_to_remove):
+			return self.post_data
+
 		for entity_index in entities_to_remove:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
+
+		text = text[:-1] # remove trailing newline
 
 		utils.set_post_content(self.post_data, text, entities)
 		return self.post_data
