@@ -42,17 +42,15 @@ def save_comment(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 	daily_reminder.set_ticket_update_time(main_message_id, main_channel_id)
 
 
-def update_comment(bot: telebot.TeleBot, hashtag_data: HashtagData):
-	post_data = hashtag_data.get_post_data_without_hashtags()
-
+def update_comment(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
 	text, entities = utils.get_post_content(post_data)
 
-	if hashtag_data.scheduled_tag:
-		split = text.rfind('\n')
-		text = text[:split]
+	if len(hashtag_data.get_present_hashtag_indices()):
+		content_end_index = text.rfind('\n')
+		text, hashtag_text = text[:content_end_index], text[content_end_index:]
 
 	next_action = db_utils.get_next_action_text(main_message_id, main_channel_id)
 
@@ -62,16 +60,25 @@ def update_comment(bot: telebot.TeleBot, hashtag_data: HashtagData):
 		if text.endswith(current_comment_with_prefix):
 			return
 
+		offset = 0
 		if previous_text and previous_text in text:
 			previous_text_index = text.rfind(previous_text)
 			text = text[:previous_text_index] + text[previous_text_index + len(previous_text):]  # remove previous comment
+			offset -= len(previous_text)
 
 		text += current_comment_with_prefix
+		offset += len(current_comment_with_prefix)
+
+		if hashtag_text:
+			if (not offset == 0):
+				for entity in entities:
+					if entity.offset > content_end_index:
+						entity.offset += offset
+
+			text += hashtag_text
 
 		keyboard_markup = forwarding_utils.generate_control_buttons(hashtag_data, post_data)
 
 		utils.set_post_content(post_data, text, entities)
 		utils.edit_message_content(bot, post_data, reply_markup=keyboard_markup)
 		db_utils.update_previous_next_action(main_message_id, main_channel_id, current_comment_with_prefix)
-
-		forwarding_utils.rearrange_hashtags(bot, post_data, hashtag_data)

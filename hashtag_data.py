@@ -229,15 +229,19 @@ class HashtagData:
 			entity_text = self.get_tag_from_entity(entities[entity_index], text)
 			hashtags.append("#" + entity_text)
 		return hashtags
+	
+	def get_present_hashtag_indices(self):
+		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
+
+		hashtags = [scheduled_tag_index, status_tag_index, priority_tag_index]
+		if user_tag_indexes:
+			hashtags += user_tag_indexes
+		return list(filter(lambda elem: elem is not None, hashtags))
 
 	def get_post_data_without_hashtags(self):
 		text, entities = utils.get_post_content(self.post_data)
-		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
-
-		entities_to_remove = [scheduled_tag_index, status_tag_index, priority_tag_index]
-		if user_tag_indexes:
-			entities_to_remove += user_tag_indexes
-		entities_to_remove = list(filter(lambda elem: elem is not None, entities_to_remove))
+		
+		entities_to_remove = self.get_present_hashtag_indices()
 		entities_to_remove.sort(reverse=True)
 
 		if not len(entities_to_remove):
