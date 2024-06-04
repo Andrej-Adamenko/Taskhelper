@@ -50,6 +50,10 @@ def update_comment(bot: telebot.TeleBot, hashtag_data: HashtagData):
 
 	text, entities = utils.get_post_content(post_data)
 
+	if hashtag_data.scheduled_tag:
+		split = text.rfind('\n')
+		text = text[:split]
+
 	next_action = db_utils.get_next_action_text(main_message_id, main_channel_id)
 
 	if next_action:

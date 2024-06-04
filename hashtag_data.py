@@ -246,7 +246,8 @@ class HashtagData:
 		for entity_index in entities_to_remove:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 
-		text = text[:-1] # remove trailing newline
+		if text.endswith('\n'):
+			text = text[:-1]
 
 		utils.set_post_content(self.post_data, text, entities)
 		return self.post_data

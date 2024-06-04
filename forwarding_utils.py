@@ -652,6 +652,9 @@ def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, h
 	hashtags = hashtag_data.get_hashtags_for_insertion()
 	post_data = hashtag_utils.insert_hashtags(post_data, hashtags)
 
+	text, entities = utils.get_post_content(post_data)
+	hashtag_data.hashtag_indexes = hashtag_data.find_hashtag_indexes(text, entities, post_data.chat.id)
+
 	if original_post_data and utils.is_post_data_equal(post_data, original_post_data):
 		return
 
