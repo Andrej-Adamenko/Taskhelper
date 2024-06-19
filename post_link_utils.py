@@ -81,7 +81,13 @@ def remove_previous_link(text: str, entities: List[MessageEntity], previous_link
 	else:
 		text = text[previous_link.length:]
 		entity_offset -= previous_link.length
-		if text.startswith(LINK_ENDING[:len(text)]):
+		first_line = text.split("\n")[0]
+
+		if len(LINK_ENDING) > len(first_line) and first_line.startswith(LINK_ENDING[:len(first_line)]):
+			# remove remaining part of previous link from the first line
+			text = text[len(first_line):]
+			entity_offset -= len(first_line)
+		elif text.startswith(LINK_ENDING[:len(text)]):
 			# remove LINE_ENDING that's placed after the link
 			text = text[len(LINK_ENDING):]
 			entity_offset -= len(LINK_ENDING)

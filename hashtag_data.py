@@ -82,10 +82,10 @@ class HashtagData:
 
 	def get_hashtags_for_insertion(self):
 		hashtags = []
-		hashtags.append(self.scheduled_tag)
 		hashtags.append(self.status_tag)
 		hashtags += self.user_tags
 		hashtags.append(self.priority_tag)
+		hashtags.append(self.scheduled_tag)
 		return hashtags
 
 	def set_status_tag(self, state: typing.Union[bool, None]):
@@ -125,16 +125,6 @@ class HashtagData:
 			if self.get_priority_number() is None:
 				self.set_priority("")
 
-	def check_priority_tag(self, tag, priority_tag):
-		if not tag.startswith(priority_tag):
-			return False
-		return tag == priority_tag or tag[len(priority_tag):] in POSSIBLE_PRIORITIES
-
-	def check_scheduled_tag(self, tag, scheduled_tag):
-		if tag == scheduled_tag or tag.startswith(scheduled_tag + " "):
-			return True
-		return False
-
 	def find_hashtag_indexes(self, text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
 		scheduled_tag_index = None
 		status_tag_index = None
@@ -144,7 +134,7 @@ class HashtagData:
 		if entities is None:
 			return None, None, [], None
 
-		for entity_index in reversed(range(len(entities))):
+		for entity_index in range(len(entities)):
 			entity = entities[entity_index]
 			if entity.type == "hashtag":
 				tag = text[entity.offset + 1:entity.offset + entity.length]
@@ -165,7 +155,7 @@ class HashtagData:
 					continue
 
 				if db_utils.is_user_tag_exists(main_channel_id, tag):
-					user_tag_indexes.insert(0, entity_index)
+					user_tag_indexes.append(entity_index)
 					continue
 
 				if config_utils.HASHTAGS_BEFORE_UPDATE and self.check_old_priority_tag(tag):
@@ -250,14 +240,8 @@ class HashtagData:
 		for entity_index in entities_to_remove:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 
-		if text.endswith('\n'):
-			text = text[:-1]
-
 		utils.set_post_content(self.post_data, text, entities)
 		return self.post_data
-
-	def get_tag_from_entity(self, entity: telebot.types.MessageEntity, text: str):
-		return text[entity.offset + 1:entity.offset + entity.length]
 
 	def update_scheduled_tag(self, text: str, entities: List[telebot.types.MessageEntity], tag_index: int):
 		scheduled_tag_offset = entities[tag_index].offset
@@ -270,25 +254,51 @@ class HashtagData:
 			return True
 		return False
 
-	def check_old_status_tag(self, tag: str):
+	def get_default_subchannel_priority(self):
+		main_channel_id_str = str(self.main_channel_id)
+		if main_channel_id_str in DEFAULT_USER_DATA:
+			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
+			return priority
+
+	@staticmethod
+	def get_tag_from_entity(entity: telebot.types.MessageEntity, text: str):
+		return text[entity.offset + 1:entity.offset + entity.length]
+
+	@staticmethod
+	def check_priority_tag(tag, priority_tag):
+		if not tag.startswith(priority_tag):
+			return False
+		return tag == priority_tag or tag[len(priority_tag):] in POSSIBLE_PRIORITIES
+
+	@staticmethod
+	def check_scheduled_tag(tag, scheduled_tag):
+		if tag == scheduled_tag or tag.startswith(scheduled_tag + " "):
+			return True
+		return False
+
+	@staticmethod
+	def check_old_status_tag(tag: str):
 		old_opened_tag = config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]
 		old_closed_tag = config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]
 		if tag == old_opened_tag or tag == old_closed_tag:
 			return True
 		return False
 
-	def check_old_scheduled_tag(self, tag: str):
+	@staticmethod
+	def check_old_scheduled_tag(tag: str):
 		old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]
-		if self.check_scheduled_tag(tag, old_scheduled_tag):
+		if HashtagData.check_scheduled_tag(tag, old_scheduled_tag):
 			return True
 		return False
 
-	def check_old_priority_tag(self, tag: str):
-		if self.check_priority_tag(tag, config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]):
+	@staticmethod
+	def check_old_priority_tag(tag: str):
+		if HashtagData.check_priority_tag(tag, config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]):
 			return True
 		return False
 
-	def replace_old_status_tag(self, text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+	@staticmethod
+	def replace_old_status_tag(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
 		tag = text[entities[entity_index].offset + 1:entities[entity_index].offset + entities[entity_index].length]
 		old_opened_tag = config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]
 		old_closed_tag = config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]
@@ -302,7 +312,8 @@ class HashtagData:
 			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, "#" + new_hashtag, position)
 			return text
 
-	def replace_old_scheduled_tag(self, text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+	@staticmethod
+	def replace_old_scheduled_tag(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
 		tag = text[entities[entity_index].offset + 1:entities[entity_index].offset + entities[entity_index].length]
 		old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]
 		if tag.startswith(old_scheduled_tag):
@@ -312,7 +323,8 @@ class HashtagData:
 			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, "#" + new_hashtag, position)
 			return text
 
-	def replace_old_priority_tag(self, text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+	@staticmethod
+	def replace_old_priority_tag(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
 		tag = text[entities[entity_index].offset + 1:entities[entity_index].offset + entities[entity_index].length]
 		old_priority_tag = config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]
 		if tag.startswith(old_priority_tag):
@@ -321,9 +333,3 @@ class HashtagData:
 			new_hashtag = PRIORITY_TAG + tag[len(old_priority_tag):]
 			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, "#" + new_hashtag, position)
 			return text
-
-	def get_default_subchannel_priority(self):
-		main_channel_id_str = str(self.main_channel_id)
-		if main_channel_id_str in DEFAULT_USER_DATA:
-			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
-			return priority

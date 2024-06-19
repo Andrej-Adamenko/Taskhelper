@@ -153,17 +153,14 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 
 def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
 	entity_to_cut = entities[entity_index]
-	if entity_to_cut.offset != 0 and text[entity_to_cut.offset - 1] == " ":
-		entity_to_cut.offset -= 1
-		entity_to_cut.length += 1
 	if len(text) > entity_to_cut.offset + entity_to_cut.length:
 		character_after_entity = text[entity_to_cut.offset + entity_to_cut.length]
 		if character_after_entity == " ":
 			entity_to_cut.length += 1
 
 	end = text[entity_to_cut.offset + entity_to_cut.length:]
-	text = text[:entity_to_cut.offset] + ("" if end == "" else " ") + end
-	offsetted_entities = offset_entities(entities[entity_index + 1:], -entity_to_cut.length + 1)
+	text = text[:entity_to_cut.offset] + end
+	offsetted_entities = offset_entities(entities[entity_index + 1:], -entity_to_cut.length)
 	entities[entity_index:] = offsetted_entities
 
 	return text, entities
