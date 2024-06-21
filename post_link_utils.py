@@ -3,7 +3,6 @@ from telebot.types import MessageEntity, InlineKeyboardMarkup, InlineKeyboardBut
 from typing import List
 
 import utils
-import interval_updating_utils
 
 LINK_ENDING = ". "
 

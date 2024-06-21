@@ -520,6 +520,11 @@ def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.Callback
 	main_channel_id = post_data.chat.id
 
 	hashtag_data = HashtagData(post_data, main_channel_id)
+	is_opened_tag_in_other_tags = hashtag_data.is_tag_in_other_hashtags(hashtag_data_utils.OPENED_TAG)
+	if not hashtag_data.is_scheduled() and not is_ticket_opened and is_opened_tag_in_other_tags:
+		bot.answer_callback_query(call.id, "This ticket cannot be closed due to an opened tag in the text")
+		return
+
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	state_str = "opened" if is_ticket_opened else "closed"
@@ -557,6 +562,11 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 	is_user_tag_changed = hashtag_data.get_assigned_user() != subchannel_user
 	is_priority_tag_changed = hashtag_data.get_priority_number() != subchannel_priority
 
+	priorities = hashtag_data.find_priorities_in_other_hashtags()
+	if priorities and int(subchannel_priority) > min(priorities):
+		bot.answer_callback_query(call.id, "Can't change priority because of a tag with higher priority in the text")
+		return
+
 	comment_text = f"{call.from_user.first_name} "
 	if is_user_tag_changed and is_priority_tag_changed:
 		comment_text += f"reassigned the ticket to {{USER}}, and changed its priority to {subchannel_priority}."
@@ -584,6 +594,12 @@ def change_priority_button_event(bot: telebot.TeleBot, call: telebot.types.Callb
 
 	original_post_data = copy.deepcopy(post_data)
 	hashtag_data = HashtagData(post_data, main_channel_id)
+
+	priorities = hashtag_data.find_priorities_in_other_hashtags()
+	if priorities and int(new_priority) > min(priorities):
+		bot.answer_callback_query(call.id, "Can't change priority because of a tag with higher priority in the text")
+		return
+
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	utils.add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} changed ticket's priority to {new_priority}. ")
@@ -603,6 +619,9 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	if selected_user in hashtag_data.get_followed_users():
+		if selected_user in hashtag_data.mentioned_users:
+			bot.answer_callback_query(call.id, "Can't remove this user because he's mentioned in the text")
+			return
 		hashtag_data.remove_from_followers(selected_user)
 		comment_text = f"{call.from_user.first_name} removed {{USER}} from ticket's followers."
 	else:
@@ -649,6 +668,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData,
 					   original_post_data: telebot.types.Message = None):
+	hashtag_data.update_hashtags()
 	hashtags = hashtag_data.get_hashtags_for_insertion()
 	post_data = hashtag_utils.insert_hashtags(post_data, hashtags)
 

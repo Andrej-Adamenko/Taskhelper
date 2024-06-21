@@ -35,6 +35,11 @@ class HashtagData:
 		self.user_tags = user_tags
 		self.priority_tag = priority_tag
 
+		self.mentioned_users = self.find_mentioned_users(post_data)
+		for user_tag in self.mentioned_users:
+			if user_tag not in self.user_tags:
+				self.user_tags.append(user_tag)
+
 		self.other_hashtags = self.extract_other_hashtags(post_data)
 
 	def is_status_missing(self):
@@ -125,6 +130,54 @@ class HashtagData:
 			if self.get_priority_number() is None:
 				self.set_priority("")
 
+	def get_entities_to_ignore(self, text: str, entities: List[telebot.types.MessageEntity]):
+		front_index = 0
+		current_offset = 0
+		while front_index < (len(entities)):
+			next_entity = entities[front_index]
+
+			if next_entity.type == "hashtag":
+				self.update_scheduled_tag(text, entities, front_index)
+
+			text_in_between = text[current_offset:next_entity.offset]
+			spaces_only = all([i == ' ' for i in text_in_between])
+
+			if not spaces_only:
+				break
+
+			if next_entity.type == "text_link":
+				post_link = str(self.post_data.message_id) + post_link_utils.LINK_ENDING
+				if text[next_entity.offset:].startswith(post_link):
+					current_offset += next_entity.length + len(post_link_utils.LINK_ENDING)
+					front_index += 1
+					continue
+
+			current_offset = next_entity.offset + next_entity.length
+			front_index += 1
+
+		last_new_line = text.rfind("\n")
+		last_new_line = last_new_line if last_new_line >= 0 else len(text)
+		back_index = len(entities) - 1
+		current_offset = 0
+		while back_index >= 0:
+			previous_entity = entities[back_index]
+			if previous_entity.offset < last_new_line:
+				break
+
+			if previous_entity.type == "hashtag":
+				self.update_scheduled_tag(text, entities, back_index)
+
+			text_in_between = text[previous_entity.offset + previous_entity.length:len(text)-current_offset]
+			spaces_only = all([i == ' ' for i in text_in_between])
+			if not spaces_only:
+				break
+			current_offset = len(text) - previous_entity.offset
+			back_index -= 1
+
+		if back_index < (front_index - 2):
+			back_index = front_index
+		return range(front_index, back_index + 1)
+
 	def find_hashtag_indexes(self, text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
 		scheduled_tag_index = None
 		status_tag_index = None
@@ -134,7 +187,11 @@ class HashtagData:
 		if entities is None:
 			return None, None, [], None
 
-		for entity_index in range(len(entities)):
+		entities_to_ignore = self.get_entities_to_ignore(text, entities)
+
+		for entity_index in reversed(range(len(entities))):
+			if entity_index in entities_to_ignore:
+				continue
 			entity = entities[entity_index]
 			if entity.type == "hashtag":
 				tag = text[entity.offset + 1:entity.offset + entity.length]
@@ -155,7 +212,7 @@ class HashtagData:
 					continue
 
 				if db_utils.is_user_tag_exists(main_channel_id, tag):
-					user_tag_indexes.append(entity_index)
+					user_tag_indexes.insert(0, entity_index)
 					continue
 
 				if config_utils.HASHTAGS_BEFORE_UPDATE and self.check_old_priority_tag(tag):
@@ -244,9 +301,9 @@ class HashtagData:
 		return self.post_data
 
 	def update_scheduled_tag(self, text: str, entities: List[telebot.types.MessageEntity], tag_index: int):
-		scheduled_tag_offset = entities[tag_index].offset
-		if text[scheduled_tag_offset + 1:].startswith(SCHEDULED_TAG):
-			text_after_tag = text[scheduled_tag_offset + 1 + len(SCHEDULED_TAG) + 1:]
+		scheduled_tag = entities[tag_index]
+		if text[scheduled_tag.offset + 1:].startswith(SCHEDULED_TAG):
+			text_after_tag = text[scheduled_tag.offset + scheduled_tag.length + 1:]
 			result = re.search(self.SCHEDULED_DATE_FORMAT_REGEX, text_after_tag)
 			if result is None:
 				return False
@@ -259,6 +316,59 @@ class HashtagData:
 		if main_channel_id_str in DEFAULT_USER_DATA:
 			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
 			return priority
+
+	def find_mentioned_users(self, post_data: telebot.types.Message):
+		text, entities = utils.get_post_content(post_data)
+		mentioned_users = []
+		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
+		ignored_indexes = [scheduled_tag_index, status_tag_index, priority_tag_index]
+		ignored_indexes += user_tag_indexes
+
+		for entity_index in range(len(entities)):
+			if entity_index in ignored_indexes or entities[entity_index].type != "hashtag":
+				continue
+
+			tag = self.get_tag_from_entity(entities[entity_index], text)
+			if db_utils.is_user_tag_exists(self.main_channel_id, tag):
+				mentioned_users.append(tag)
+		return mentioned_users
+
+	def is_tag_in_other_hashtags(self, tag: str):
+		if not tag.startswith("#"):
+			tag = f"#{tag}"
+		return tag in self.other_hashtags
+
+	def find_priorities_in_other_hashtags(self):
+		other_hashtags = [h[1:] for h in self.other_hashtags]
+		priority_filter = lambda t: (t.startswith(PRIORITY_TAG)) and (t[len(PRIORITY_TAG):] in POSSIBLE_PRIORITIES)
+		priority_tags = filter(priority_filter, other_hashtags)
+		priorities = [int(p[len(PRIORITY_TAG):]) for p in priority_tags]
+		return priorities
+
+	def update_hashtags(self):
+		if self.is_scheduled():
+			pass
+		elif self.status_tag is None:
+			if self.is_tag_in_other_hashtags(OPENED_TAG):
+				self.status_tag = OPENED_TAG
+			elif self.is_tag_in_other_hashtags(CLOSED_TAG):
+				self.status_tag = CLOSED_TAG
+		elif self.status_tag != OPENED_TAG and self.is_tag_in_other_hashtags(OPENED_TAG):
+			self.status_tag = OPENED_TAG
+
+		priorities = self.find_priorities_in_other_hashtags()
+		if priorities:
+			current_priority = self.get_priority_number_or_default()
+			highest_priority = min(priorities)
+
+			if current_priority is not None:
+				current_priority = int(current_priority)
+				if current_priority < highest_priority:
+					return
+				priorities.append(current_priority)
+
+			highest_priority = min(priorities)
+			self.priority_tag = f"{PRIORITY_TAG}{highest_priority}"
 
 	@staticmethod
 	def get_tag_from_entity(entity: telebot.types.MessageEntity, text: str):

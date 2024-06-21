@@ -23,10 +23,6 @@ def update_ticket_data(main_message_id: int, main_channel_id: int, hashtag_data:
 	db_utils.insert_or_update_ticket_data(main_message_id, main_channel_id, is_ticket_opened, user_tags, priority)
 
 
-def set_ticket_update_time(main_message_id: int, main_channel_id: int):
-	db_utils.set_ticket_update_time(main_message_id, main_channel_id, int(time.time()))
-
-
 def update_user_last_interaction(main_message_id: int, main_channel_id: int, msg_data: telebot.types.Message):
 	user_tags = db_utils.get_tags_from_user_id(msg_data.from_user.id)
 	if not user_tags and msg_data.from_user.username:
