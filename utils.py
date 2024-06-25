@@ -1,6 +1,7 @@
 import logging
 from typing import List
 import time
+import datetime
 
 import telebot.types
 from telebot.apihelper import ApiTelegramException
@@ -14,6 +15,7 @@ SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new me
 MSG_CANT_BE_DELETED_ERROR = "message can't be deleted"
 MSG_NOT_FOUND_ERROR = "message to delete not found"
 KICKED_FROM_CHANNEL_ERROR = "Forbidden: bot was kicked from the channel chat"
+SCHEDULED_DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 
 def create_callback_str(callback_prefix, callback_type, *args):
@@ -110,8 +112,13 @@ def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.ty
 	for entity_i in range(len(entities1)):
 		e1 = entities1[entity_i]
 		e2 = entities2[entity_i]
-		if e1.type != e2.type or e1.offset != e2.offset or e1.url != e2.url or e1.length != e2.length:
+		if e1.type != e2.type or e1.offset != e2.offset or e1.url != e2.url:
 			return False
+
+		if e1.type == "hashtag":
+			return True  # for hashtags length is ignored because length of scheduled tags can be changed
+		else:
+			return e1.length == e2.length
 
 	return True
 
@@ -157,6 +164,10 @@ def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity],
 		character_after_entity = text[entity_to_cut.offset + entity_to_cut.length]
 		if character_after_entity == " ":
 			entity_to_cut.length += 1
+	elif text[entity_to_cut.offset - 1] == " ":
+		# remove space before last tag if it's at the end of the line
+		entity_to_cut.offset -= 1
+		entity_to_cut.length += 1
 
 	end = text[entity_to_cut.offset + entity_to_cut.length:]
 	text = text[:entity_to_cut.offset] + end
@@ -269,3 +280,10 @@ def check_content_type(bot: telebot.TeleBot, message: telebot.types.Message):
 			remove_keyboard(bot, chat_id, message_id)
 		return False
 	return True
+
+
+def check_datetime(datetime_str, template_str):
+	try:
+		return datetime.datetime.strptime(datetime_str, template_str)
+	except ValueError:
+		return

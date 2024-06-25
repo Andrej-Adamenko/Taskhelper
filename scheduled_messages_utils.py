@@ -6,22 +6,20 @@ import time
 
 import pytz
 import telebot
-from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 import config_utils
 import db_utils
 import forwarding_utils
-import hashtag_utils
 import utils
 from config_utils import TIMEZONE_NAME
 from hashtag_data import HashtagData
+from utils import SCHEDULED_DATETIME_FORMAT
 
 CALLBACK_PREFIX = "SCH"
 
 SCHEDULED_MESSAGES_LIST: list = []
 
-DATE_FORMAT = "%Y-%m-%d %H:%M"
 
 class CB_TYPES:
 	MONTH_CALENDAR = "CALENDAR"
@@ -41,7 +39,7 @@ def schedule_message(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, se
 	if not db_utils.is_main_channel_exists(main_channel_id):
 		return
 
-	date_str = dt.strftime(DATE_FORMAT)
+	date_str = dt.strftime(SCHEDULED_DATETIME_FORMAT)
 
 	if db_utils.is_message_scheduled(main_message_id, main_channel_id):
 		db_utils.update_scheduled_message(main_message_id, main_channel_id, send_time)
@@ -74,14 +72,14 @@ def schedule_message(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, se
 	comment_text = f"{call.from_user.first_name} scheduled the ticket to be sent on {date_str}."
 	utils.add_comment_to_ticket(bot, message, comment_text)
 
+	db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
+
 	hashtag_data = HashtagData(message, main_channel_id)
 	message = hashtag_data.get_post_data_without_hashtags()
 
 	hashtag_data.set_scheduled_tag(date_str)
 	hashtag_data.set_status_tag(None)
 	forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
-
-	db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
 
 	forwarding_utils.add_control_buttons(bot, message, hashtag_data)
 	forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
@@ -266,8 +264,7 @@ def send_scheduled_message(bot: telebot.TeleBot, scheduled_message_info):
 	forwarding_utils.add_control_buttons(bot, post_data, hashtag_data)
 	forwarding_utils.forward_to_subchannel(bot, post_data, hashtag_data)
 
-	SCHEDULED_MESSAGES_LIST.remove(scheduled_message_info)
-	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
+	cancel_scheduled_message(main_channel_id, main_message_id)
 
 
 def cancel_scheduled_message(main_channel_id, main_message_id):

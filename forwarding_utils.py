@@ -642,12 +642,8 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 	original_post_data = copy.deepcopy(post_data)
 
-	hashtag_data = HashtagData(post_data, main_channel_id)
+	hashtag_data = HashtagData(post_data, main_channel_id, True)
 	post_data = hashtag_data.get_post_data_without_hashtags()
-	assigned_user = hashtag_data.get_assigned_user()
-	priority = hashtag_data.get_priority_number()
-	if assigned_user is None or priority is None or hashtag_data.is_status_missing():
-		hashtag_data.insert_default_user_and_priority()
 
 	ticket_user_tags = hashtag_data.get_all_users()
 
@@ -668,9 +664,10 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData,
 					   original_post_data: telebot.types.Message = None):
-	hashtag_data.update_hashtags()
-	hashtags = hashtag_data.get_hashtags_for_insertion()
-	post_data = hashtag_utils.insert_hashtags(post_data, hashtags)
+	is_scheduled = db_utils.is_message_scheduled(post_data.message_id, post_data.chat.id)
+	post_data = hashtag_data.rearrange_hashtags(post_data, is_scheduled)
+	if not hashtag_data.is_scheduled():
+		scheduled_messages_utils.cancel_scheduled_message(post_data.chat.id, post_data.message_id)
 
 	text, entities = utils.get_post_content(post_data)
 	hashtag_data.hashtag_indexes = hashtag_data.find_hashtag_indexes(text, entities, post_data.chat.id)
