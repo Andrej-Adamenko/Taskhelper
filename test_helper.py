@@ -18,5 +18,6 @@ def create_hashtag_entity_list(text: str):
 def create_mock_message(text: str, entities: List[MessageEntity]):
 	message = Mock(spec=Message)
 	message.text = text
+	message.caption = None
 	message.entities = entities
 	return message

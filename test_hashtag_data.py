@@ -2,7 +2,7 @@ from unittest import TestCase, main
 from unittest.mock import patch
 
 from hashtag_data import HashtagData
-import test_utils
+import test_helper
 
 
 @patch("hashtag_data.PRIORITY_TAG", "p")
@@ -18,8 +18,8 @@ class FindMentionedUsersTest(TestCase):
 		mock_is_user_tag_exists.side_effect = is_user_tag
 
 		text = f"text #aa #bb\n#o #cc #p #user_tag"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -38,8 +38,8 @@ class FindMentionedUsersTest(TestCase):
 		mock_is_user_tag_exists.side_effect = is_user_tag
 
 		text = f"text test\n#o #cc #p #user_tag"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 
 		main_channel_id = 123
 
@@ -56,8 +56,8 @@ class GetEntitiesToIgnoreTest(TestCase):
 		mock_hashtag_data_init.return_value = None
 
 		text = f"text #aa #bb\n#o #cc #p #user_tag"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -69,8 +69,8 @@ class GetEntitiesToIgnoreTest(TestCase):
 		mock_hashtag_data_init.return_value = None
 
 		text = f"#aa #bb test #cc test"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -82,8 +82,8 @@ class GetEntitiesToIgnoreTest(TestCase):
 		mock_hashtag_data_init.return_value = None
 
 		text = f"test text\n#o #cc #p #user_tag"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -95,8 +95,8 @@ class GetEntitiesToIgnoreTest(TestCase):
 		mock_hashtag_data_init.return_value = None
 
 		text = f"#o #cc #p test #aa #bb text"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -108,8 +108,8 @@ class GetEntitiesToIgnoreTest(TestCase):
 		mock_hashtag_data_init.return_value = None
 
 		text = f"#aa text #bb #user_tag"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -127,8 +127,8 @@ class RemoveDuplicatesTest(TestCase):
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_remove_user_tag_duplicates(self, *args):
 		text = f"text\n#aa #bb #cc #aa #bb"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -145,8 +145,8 @@ class RemoveRedundantPriorityTagsTest(TestCase):
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_same_priority_tags(self, *args):
 		text = f"text\n#aa #bb #p1 #p1"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -160,8 +160,8 @@ class RemoveRedundantPriorityTagsTest(TestCase):
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_different_priority_tags(self, *args):
 		text = f"text\n#aa #bb #p2 #p3 #p1"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -179,8 +179,8 @@ class RemoveRedundantStatusTagsTest(TestCase):
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_same_status_tags(self, *args):
 		text = f"text\n#o #o #aa #bb #p1 #o"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -192,8 +192,8 @@ class RemoveRedundantStatusTagsTest(TestCase):
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_different_status_tags(self, *args):
 		text = f"text\n#x #o #x #aa #bb #p1"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -221,9 +221,9 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_identical_scheduled_tags(self, *args):
 		text = "text\n#aa #bb #p1 #s 2023-06-25 17:00 #s 2023-06-25 17:00"
-		entities = test_utils.create_hashtag_entity_list(text)
+		entities = test_helper.create_hashtag_entity_list(text)
 		self.update_scheduled_tag_entities_length("#s", text, entities)
-		post_data = test_utils.create_mock_message(text, entities)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -234,8 +234,8 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_scheduled_tags_without_date(self, *args):
 		text = "text\n#aa #bb #p1 #s #s"
-		entities = test_utils.create_hashtag_entity_list(text)
-		post_data = test_utils.create_mock_message(text, entities)
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)

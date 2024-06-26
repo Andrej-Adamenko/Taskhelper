@@ -80,7 +80,6 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
-	comment_utils.update_comment(bot, post_data, hashtag_data)
 	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
 	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, hashtag_data)
@@ -657,6 +656,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 				hashtag_data.add_to_followers(user_tag)
 
 	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
+	comment_utils.add_next_action_comment(bot, post_data)
 	add_control_buttons(bot, post_data, hashtag_data)
 	if config_utils.AUTO_FORWARDING_ENABLED or force_forward:
 		forward_to_subchannel(bot, post_data, hashtag_data)
