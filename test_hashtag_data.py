@@ -119,11 +119,10 @@ class GetEntitiesToIgnoreTest(TestCase):
 
 class RemoveDuplicatesTest(TestCase):
 	priority_side_effect = lambda text, entities: (text, entities)
-	status_side_effect = lambda text, entities, is_scheduled: (text, entities)
+	status_side_effect = lambda text, entities: (text, entities)
 
 	@patch("hashtag_data.HashtagData.remove_redundant_priority_tags", side_effect=priority_side_effect)
 	@patch("hashtag_data.HashtagData.remove_redundant_status_tags", side_effect=status_side_effect)
-	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_remove_user_tag_duplicates(self, *args):
 		text = f"text\n#aa #bb #cc #aa #bb"
@@ -133,7 +132,7 @@ class RemoveDuplicatesTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
-		result = hashtag_data.remove_duplicates(post_data, False)
+		result = hashtag_data.remove_duplicates(post_data)
 		self.assertEqual(result.text, "text\n#aa #bb #cc")
 
 
@@ -141,7 +140,6 @@ class RemoveDuplicatesTest(TestCase):
 @patch("hashtag_data.PRIORITY_TAG", "p")
 class RemoveRedundantPriorityTagsTest(TestCase):
 	@patch("hashtag_data.HashtagData.get_priority_number_or_default", return_value="1")
-	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_same_priority_tags(self, *args):
 		text = f"text\n#aa #bb #p1 #p1"
@@ -156,7 +154,6 @@ class RemoveRedundantPriorityTagsTest(TestCase):
 		self.assertEqual(result[0], f"text\n#aa #bb #p1")
 
 	@patch("hashtag_data.HashtagData.get_priority_number_or_default", return_value="1")
-	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_different_priority_tags(self, *args):
 		text = f"text\n#aa #bb #p2 #p3 #p1"
@@ -185,7 +182,7 @@ class RemoveRedundantStatusTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
-		result = hashtag_data.remove_redundant_status_tags(text, entities, False)
+		result = hashtag_data.remove_redundant_status_tags(text, entities)
 		self.assertEqual(result[0], f"text\n#o #aa #bb #p1")
 
 	@patch("hashtag_data.HashtagData.is_scheduled", return_value=False)
@@ -198,7 +195,7 @@ class RemoveRedundantStatusTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
-		result = hashtag_data.remove_redundant_status_tags(text, entities, False)
+		result = hashtag_data.remove_redundant_status_tags(text, entities)
 		self.assertEqual(result[0], f"text\n#o #aa #bb #p1")
 
 
@@ -215,12 +212,14 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 
 			text_after_tag = text[entity.offset:]
 			scheduled_tag_parts = text_after_tag.split(" ")[:3]
+			if len(scheduled_tag_parts) < 3:
+				continue
 			full_tag_length = len(" ".join(scheduled_tag_parts))
 			entity.length = full_tag_length
 
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_identical_scheduled_tags(self, *args):
-		text = "text\n#aa #bb #p1 #s 2023-06-25 17:00 #s 2023-06-25 17:00"
+		text = "text\n#o #aa #bb #p1 #s 2023-06-25 17:00 #s 2023-06-25 17:00"
 		entities = test_helper.create_hashtag_entity_list(text)
 		self.update_scheduled_tag_entities_length("#s", text, entities)
 		post_data = test_helper.create_mock_message(text, entities)
@@ -228,20 +227,64 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
-		result = hashtag_data.remove_redundant_scheduled_tags(text, entities, True)
-		self.assertEqual(result[0], "text\n#aa #bb #p1 #s 2023-06-25 17:00")
+		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
+		self.assertEqual(result[0], "text\n#o #aa #bb #p1 #s 2023-06-25 17:00")
 
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	def test_scheduled_tags_without_date(self, *args):
-		text = "text\n#aa #bb #p1 #s #s"
+		text = "text\n#o #aa #bb #p1 #s #s"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
-		result = hashtag_data.remove_redundant_scheduled_tags(text, entities, False)
+		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
 		self.assertEqual(result[0], "text\n#o #aa #bb #p1")
+		self.assertIsNone(hashtag_data.scheduled_tag)
+
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	def test_partial_scheduled_tag(self, *args):
+		text = "text\n#o #aa #bb #p1 #s 2023-06-25"
+		entities = test_helper.create_hashtag_entity_list(text)
+		self.update_scheduled_tag_entities_length("#s", text, entities)
+		post_data = test_helper.create_mock_message(text, entities)
+		main_channel_id = 123
+
+		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.main_channel_id = main_channel_id
+		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
+		self.assertEqual(result[0], "text\n#o #aa #bb #p1 #s 2023-06-25")
+
+
+@patch("hashtag_data.SCHEDULED_TAG", "s")
+@patch("hashtag_data.SCHEDULED_DATE_FORMAT_REGEX", "^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}")
+class UpdateScheduledTagTest(TestCase):
+	def test_update_entity(self, *args):
+		text = "#s 2023-06-25 17:00"
+		entities = test_helper.create_hashtag_entity_list(text)
+
+		result = HashtagData.update_scheduled_tag(text, entities, 0)
+		self.assertTrue(result)
+		self.assertEqual(entities[0].length, len(text))
+
+	def test_not_scheduled_tag(self, *args):
+		text = "#test 2023-06-25 17:00"
+		entities = test_helper.create_hashtag_entity_list(text)
+
+		entity_length = entities[0].length
+		result = HashtagData.update_scheduled_tag(text, entities, 0)
+		self.assertFalse(result)
+		self.assertEqual(entities[0].length, entity_length)
+
+	def test_incomplete_scheduled_tag(self, *args):
+		text = "#s 2023-06-25"
+		entities = test_helper.create_hashtag_entity_list(text)
+
+		entity_length = entities[0].length
+		result = HashtagData.update_scheduled_tag(text, entities, 0)
+		self.assertFalse(result)
+		self.assertEqual(entities[0].length, entity_length)
 
 
 if __name__ == "__main__":

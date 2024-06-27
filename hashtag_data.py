@@ -20,11 +20,10 @@ CLOSED_TAG = HASHTAGS["CLOSED"]
 SCHEDULED_TAG = HASHTAGS["SCHEDULED"]
 
 POSSIBLE_PRIORITIES = ["1", "2", "3"]
+SCHEDULED_DATE_FORMAT_REGEX = "^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}"
 
 
 class HashtagData:
-	SCHEDULED_DATE_FORMAT_REGEX = "^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}"
-
 	def __init__(self, post_data: telebot.types.Message, main_channel_id: int, insert_default_tags: bool = False):
 		self.hashtag_indexes = []
 		self.post_data = post_data
@@ -49,10 +48,10 @@ class HashtagData:
 		self.other_hashtags = self.extract_other_hashtags(post_data)
 
 	def is_status_missing(self):
-		return self.status_tag is None and self.scheduled_tag is None
+		return self.status_tag is None
 
 	def is_opened(self):
-		return self.status_tag == OPENED_TAG or self.is_scheduled()
+		return self.status_tag == OPENED_TAG
 
 	def is_closed(self):
 		return self.status_tag == CLOSED_TAG
@@ -306,17 +305,6 @@ class HashtagData:
 		utils.set_post_content(self.post_data, text, entities)
 		return self.post_data
 
-	def update_scheduled_tag(self, text: str, entities: List[telebot.types.MessageEntity], tag_index: int):
-		scheduled_tag = entities[tag_index]
-		if text[scheduled_tag.offset + 1:].startswith(SCHEDULED_TAG):
-			text_after_tag = text[scheduled_tag.offset + scheduled_tag.length + 1:]
-			result = re.search(self.SCHEDULED_DATE_FORMAT_REGEX, text_after_tag)
-			if result is None:
-				return False
-			entities[tag_index].length += 1 + result.end()
-			return True
-		return False
-
 	def get_default_subchannel_priority(self):
 		main_channel_id_str = str(self.main_channel_id)
 		if main_channel_id_str in DEFAULT_USER_DATA:
@@ -376,19 +364,6 @@ class HashtagData:
 			highest_priority = min(priorities)
 			self.priority_tag = f"{PRIORITY_TAG}{highest_priority}"
 
-	def is_service_tag(self, tag: str):
-		is_status_tag = tag == OPENED_TAG or tag == CLOSED_TAG
-		is_scheduled_tag = tag.startswith(SCHEDULED_TAG + " ") or tag == SCHEDULED_TAG
-		is_user_tag = db_utils.is_user_tag_exists(self.post_data.chat.id, tag)
-
-		is_priority_tag = False
-		if tag.startswith(PRIORITY_TAG):
-			priority = tag[len(PRIORITY_TAG):]
-			if priority in POSSIBLE_PRIORITIES or priority == "":
-				is_priority_tag = True
-
-		return is_status_tag or is_scheduled_tag or is_user_tag or is_priority_tag
-
 	def remove_redundant_priority_tags(self, text: str, entities: List[MessageEntity]):
 		entity_tags = [self.get_tag_from_entity(e, text) for e in entities]
 		entities_to_ignore = self.get_entities_to_ignore(text, entities)
@@ -424,11 +399,10 @@ class HashtagData:
 
 		return text, entities
 
-	def remove_redundant_status_tags(self, text: str, entities: List[MessageEntity], is_scheduled: bool):
+	def remove_redundant_status_tags(self, text: str, entities: List[MessageEntity]):
 		entities_to_ignore = self.get_entities_to_ignore(text, entities)
 
 		opened_tag_exists = False
-		scheduled_tag_exists = False
 		status_tag_indexes = []
 		for i in range(len(entities)):
 			entity = entities[i]
@@ -441,8 +415,6 @@ class HashtagData:
 				status_tag_indexes.append(i)
 			elif tag == CLOSED_TAG:
 				status_tag_indexes.append(i)
-			elif tag == SCHEDULED_TAG or tag.startswith(SCHEDULED_TAG + " "):
-				scheduled_tag_exists = True
 
 		if len(status_tag_indexes) < 1:
 			return text, entities
@@ -456,9 +428,7 @@ class HashtagData:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 
 		status_tag_str = "#"
-		if scheduled_tag_exists and is_scheduled:
-			return text, entities
-		elif opened_tag_exists:
+		if opened_tag_exists:
 			status_tag_str += OPENED_TAG
 		else:
 			status_tag_str += CLOSED_TAG
@@ -466,7 +436,7 @@ class HashtagData:
 
 		return text, entities
 
-	def remove_redundant_scheduled_tags(self, text: str, entities: List[MessageEntity], is_scheduled: bool):
+	def remove_redundant_scheduled_tags(self, text: str, entities: List[MessageEntity]):
 		entities_to_ignore = self.get_entities_to_ignore(text, entities)
 
 		scheduled_tag_indexes = []
@@ -532,18 +502,15 @@ class HashtagData:
 		for entity_index in scheduled_tag_indexes:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 
-		if earliest_datetime_str and is_scheduled:
+		if earliest_datetime_str:
 			scheduled_tag_str = f"#{SCHEDULED_TAG} {earliest_datetime_str}"
 			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, scheduled_tag_str, first_scheduled_tag_offset)
 		else:
 			self.set_scheduled_tag(None)
-			last_line_start = text.rfind("\n")
-			if last_line_start >= 0:
-				text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, f"#{OPENED_TAG}", last_line_start + 1)
 
 		return text, entities
 
-	def remove_duplicates(self, post_data: telebot.types.Message, is_scheduled: bool):
+	def remove_duplicates(self, post_data: telebot.types.Message):
 		text, entities = utils.get_post_content(post_data)
 		entity_tags = [self.get_tag_from_entity(e, text) for e in entities]
 		entities_to_ignore = self.get_entities_to_ignore(text, entities)
@@ -568,20 +535,32 @@ class HashtagData:
 		self.hashtag_indexes = self.find_hashtag_indexes(text, entities, self.main_channel_id)
 
 		text, entities = self.remove_redundant_priority_tags(text, entities)
-		text, entities = self.remove_redundant_scheduled_tags(text, entities, is_scheduled)
-		text, entities = self.remove_redundant_status_tags(text, entities, is_scheduled)
+		text, entities = self.remove_redundant_scheduled_tags(text, entities)
+		text, entities = self.remove_redundant_status_tags(text, entities)
 
 		utils.set_post_content(post_data, text, entities)
 		return post_data
 
-	def rearrange_hashtags(self, post_data: telebot.types.Message, is_scheduled: bool):
+	def rearrange_hashtags(self, post_data: telebot.types.Message):
 		self.copy_tags_from_other_tags()
 		hashtags = self.get_hashtags_for_insertion()
 		hashtag_utils.insert_hashtags(post_data, hashtags)
 
-		post_data = self.remove_duplicates(post_data, is_scheduled)
+		post_data = self.remove_duplicates(post_data)
 		self.extract_hashtags(post_data, self.main_channel_id)
 		return post_data
+
+	@staticmethod
+	def update_scheduled_tag(text: str, entities: List[telebot.types.MessageEntity], tag_index: int):
+		scheduled_tag = entities[tag_index]
+		if text[scheduled_tag.offset + 1:].startswith(SCHEDULED_TAG):
+			text_after_tag = text[scheduled_tag.offset + scheduled_tag.length + 1:]
+			result = re.search(SCHEDULED_DATE_FORMAT_REGEX, text_after_tag)
+			if result is None:
+				return False
+			entities[tag_index].length += 1 + result.end()
+			return True
+		return False
 
 	@staticmethod
 	def get_tag_from_entity(entity: telebot.types.MessageEntity, text: str):

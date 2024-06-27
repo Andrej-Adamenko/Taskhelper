@@ -53,7 +53,11 @@ def update_next_action(bot: telebot.TeleBot, main_message_id: int, main_channel_
 	except ApiTelegramException:
 		return
 
+#	hashtag_data = HashtagData(post_data, main_channel_id)
 	text, entities = utils.get_post_content(post_data)
+	for i in range(len(entities)):
+		HashtagData.update_scheduled_tag(text, entities, i)
+
 	is_hashtag_line_present = hashtag_utils.is_last_line_contains_only_hashtags(text, entities)
 	if _NEXT_ACTION_TEXT_PREFIX in text:
 		prefix_position = text.find(_NEXT_ACTION_TEXT_PREFIX)
