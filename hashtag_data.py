@@ -429,8 +429,10 @@ class HashtagData:
 
 		status_tag_str = "#"
 		if opened_tag_exists:
+			self.set_status_tag(True)
 			status_tag_str += OPENED_TAG
 		else:
+			self.set_status_tag(False)
 			status_tag_str += CLOSED_TAG
 		text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, status_tag_str, previous_status_offset)
 
