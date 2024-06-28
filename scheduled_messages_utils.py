@@ -54,15 +54,14 @@ def schedule_message(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, se
 		comment_text = f"{call.from_user.first_name} rescheduled the ticket to be sent on {date_str}."
 		utils.add_comment_to_ticket(bot, message, comment_text)
 
-		if time.time() < send_time:
-			hashtag_data = HashtagData(message, main_channel_id)
-			message = hashtag_data.get_post_data_without_hashtags()
+		hashtag_data = HashtagData(message, main_channel_id)
+		message = hashtag_data.get_post_data_without_hashtags()
 
-			hashtag_data.set_scheduled_tag(date_str)
-			forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
+		hashtag_data.set_scheduled_tag(date_str)
+		forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
-			forwarding_utils.add_control_buttons(bot, message, hashtag_data)
-			forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
+		forwarding_utils.add_control_buttons(bot, message, hashtag_data)
+		forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
 
 		return
 
