@@ -374,7 +374,7 @@ class HashtagData:
 			return text, entities
 		highest_priority = [int(self.get_priority_number_or_default()), priority_tag_index]
 		priority_entity_indexes = []
-		for i in range(len(entities)):
+		for i in self.get_entity_deduplication_order(text, entities):
 			entity = entities[i]
 			tag = entity_tags[i]
 			if i in entities_to_ignore or entity.type != "hashtag":
@@ -445,7 +445,7 @@ class HashtagData:
 		remained_text = []
 		earliest_datetime_str = None
 		earliest_tag_time = None
-		for i in range(len(entities)):
+		for i in self.get_entity_deduplication_order(text, entities):
 			entity = entities[i]
 			tag = self.get_tag_from_entity(entity, text)
 			is_scheduled_tag = tag == SCHEDULED_TAG or tag.startswith(SCHEDULED_TAG + " ")
@@ -486,8 +486,7 @@ class HashtagData:
 		if len(scheduled_tag_indexes) < 1:
 			return text, entities
 
-		scheduled_tag_indexes.sort(reverse=True)
-		first_scheduled_tag_index = scheduled_tag_indexes[-1]
+		first_scheduled_tag_index = scheduled_tag_indexes[0]
 		first_scheduled_tag_entity = entities[first_scheduled_tag_index]
 		first_scheduled_tag_offset = first_scheduled_tag_entity.offset
 
@@ -501,6 +500,7 @@ class HashtagData:
 				changed_offset += len(str_to_insert)
 			utils.offset_entities(entities[entities_to_ignore.start:], changed_offset)
 
+		scheduled_tag_indexes.sort(reverse=True)
 		for entity_index in scheduled_tag_indexes:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 
@@ -520,7 +520,7 @@ class HashtagData:
 		checked_tags = []
 
 		entities_to_remove = []
-		for i in range(len(entities)):
+		for i in self.get_entity_deduplication_order(text, entities):
 			entity = entities[i]
 			tag = entity_tags[i]
 			if i in entities_to_ignore or entity.type != "hashtag":
@@ -551,6 +551,22 @@ class HashtagData:
 		post_data = self.remove_duplicates(post_data)
 		self.extract_hashtags(post_data, self.main_channel_id)
 		return post_data
+
+	@staticmethod
+	def get_entity_deduplication_order(text: str, entities: List[telebot.types.MessageEntity]):
+		if not hashtag_utils.is_last_line_contains_only_hashtags(text, entities):
+			return range(len(entities))
+
+		last_line_start = text.rfind("\n")
+		last_line_entities = []
+		other_entities = []
+		for i, entity in enumerate(entities):
+			if entity.offset > last_line_start:
+				last_line_entities.append(i)
+			else:
+				other_entities.append(i)
+
+		return last_line_entities + other_entities
 
 	@staticmethod
 	def update_scheduled_tag(text: str, entities: List[telebot.types.MessageEntity], tag_index: int):
