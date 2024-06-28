@@ -1,6 +1,7 @@
 import logging
 import telebot
 from telebot.types import ChatMemberOwner
+from telebot.apihelper import ApiTelegramException
 
 import channel_manager
 import command_utils
@@ -145,7 +146,11 @@ def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 		logging.info(f"Button event in unknown message {[call.message.message_id, call.message.chat.id]}")
 		return
 	main_message_id, main_channel_id = main_message_data
-	msg_data = utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+	try:
+		msg_data = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
+	except ApiTelegramException:
+		utils.delete_main_message(bot, main_channel_id, main_message_id)
+		return
 
 	if not utils.check_content_type(bot, msg_data):
 		forwarding_utils.delete_all_forwarded_messages(bot, main_channel_id, main_message_id)

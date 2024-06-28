@@ -20,7 +20,12 @@ _UPDATE_STATUS: bool = False
 
 
 def update_older_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int):
-	forwarded_message = utils.get_message_content_by_id(bot, main_channel_id, current_msg_id)
+	try:
+		forwarded_message = utils.get_main_message_content_by_id(bot, main_channel_id, current_msg_id)
+	except ApiTelegramException:
+		utils.delete_main_message(bot, main_channel_id, current_msg_id)
+		return
+
 	if forwarded_message is None:
 		return
 
@@ -120,9 +125,7 @@ def get_current_msg_id(bot: telebot.TeleBot, main_channel_id: int, discussion_ch
 	if discussion_chat_id:
 		if start_from_message:
 			return db_utils.get_discussion_message_id(start_from_message, main_channel_id)
-		discussion_chat = bot.get_chat(discussion_chat_id)
-		if discussion_chat.pinned_message:
-			return discussion_chat.pinned_message.message_id
+		return utils.get_last_message(bot, discussion_chat_id)
 	return utils.get_last_message(bot, main_channel_id)
 
 
@@ -141,6 +144,8 @@ def check_all_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_ch
 				raise Exception("Interval update stop requested")
 			if discussion_chat_id:
 				main_channel_message_id = store_discussion_message(bot, main_channel_id, current_msg_id, discussion_chat_id)
+				if not main_channel_message_id:
+					main_channel_message_id = db_utils.get_main_from_discussion_message(current_msg_id, main_channel_id)
 				if main_channel_message_id:
 					update_older_message(bot, main_channel_id, main_channel_message_id)
 					last_updated_message_id = main_channel_message_id
