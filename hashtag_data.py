@@ -404,7 +404,7 @@ class HashtagData:
 
 		opened_tag_exists = False
 		status_tag_indexes = []
-		for i in range(len(entities)):
+		for i in self.get_entity_deduplication_order(text, entities):
 			entity = entities[i]
 			tag = self.get_tag_from_entity(entity, text)
 			if i in entities_to_ignore or entity.type != "hashtag":
@@ -419,22 +419,21 @@ class HashtagData:
 		if len(status_tag_indexes) < 1:
 			return text, entities
 
-		status_tag_indexes.sort(reverse=True)
-		first_status_tag_index = status_tag_indexes[-1]
+		first_status_tag_index = status_tag_indexes[0]
 		first_status_tag_entity = entities[first_status_tag_index]
 		previous_status_offset = first_status_tag_entity.offset
 
+		status_tag_str = "#" + (OPENED_TAG if opened_tag_exists else CLOSED_TAG)
+		self.set_status_tag(opened_tag_exists)
+
+		text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, status_tag_str, previous_status_offset)
+		for i, status_index in enumerate(status_tag_indexes):
+			if status_index >= first_status_tag_index:
+				status_tag_indexes[i] += 1
+
+		status_tag_indexes.sort(reverse=True)
 		for entity_index in status_tag_indexes:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
-
-		status_tag_str = "#"
-		if opened_tag_exists:
-			self.set_status_tag(True)
-			status_tag_str += OPENED_TAG
-		else:
-			self.set_status_tag(False)
-			status_tag_str += CLOSED_TAG
-		text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, status_tag_str, previous_status_offset)
 
 		return text, entities
 
@@ -486,10 +485,6 @@ class HashtagData:
 		if len(scheduled_tag_indexes) < 1:
 			return text, entities
 
-		first_scheduled_tag_index = scheduled_tag_indexes[0]
-		first_scheduled_tag_entity = entities[first_scheduled_tag_index]
-		first_scheduled_tag_offset = first_scheduled_tag_entity.offset
-
 		if len(remained_text) > 0:
 			last_main_entity = entities[entities_to_ignore.start - 1]
 			insertion_start = last_main_entity.offset + last_main_entity.length
@@ -506,7 +501,7 @@ class HashtagData:
 
 		if earliest_datetime_str:
 			scheduled_tag_str = f"#{SCHEDULED_TAG} {earliest_datetime_str}"
-			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, scheduled_tag_str, first_scheduled_tag_offset)
+			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, scheduled_tag_str)
 		else:
 			self.set_scheduled_tag(None)
 
