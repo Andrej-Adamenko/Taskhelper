@@ -305,6 +305,41 @@ class ScheduledMessageDispatcher:
 					logging.error(f"Exception during sending scheduled message: {E}")
 			time.sleep(1)
 
+	def update_scheduled_time_from_ticket(self, bot: telebot.TeleBot, msg_data: telebot.types.Message, hashtag_data: HashtagData):
+		main_channel_id = msg_data.chat.id
+		main_message_id = msg_data.message_id
+
+		if not hashtag_data.is_scheduled():
+			db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
+			self.remove_scheduled_message(main_channel_id, main_message_id)
+			return
+
+		datetime_str = hashtag_data.get_scheduled_datetime()
+		dt = datetime.datetime.strptime(datetime_str, SCHEDULED_DATETIME_FORMAT)
+
+		timezone = pytz.timezone(TIMEZONE_NAME)
+		dt = timezone.localize(dt)
+		tag_send_time = int(dt.astimezone(pytz.UTC).timestamp())
+
+		if not db_utils.is_message_scheduled(main_message_id, main_channel_id):
+			db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, tag_send_time)
+			self.insert_schedule_message_info(main_message_id, main_channel_id, tag_send_time)
+			comment_text = f"Ticket was scheduled to be sent on {datetime_str}."
+			utils.add_comment_to_ticket(bot, msg_data, comment_text)
+			return
+
+		ticket_send_time = db_utils.get_scheduled_message_send_time(main_message_id, main_channel_id)
+		if ticket_send_time != tag_send_time:
+			db_utils.update_scheduled_message(main_message_id, main_channel_id, tag_send_time)
+
+			for msg in self.__scheduled_messages_list:
+				if msg.main_message_id == main_message_id and msg.main_channel_id == main_channel_id:
+					msg.send_time = tag_send_time
+			self.__scheduled_messages_list.sort(key=self.scheduled_message_comparison_func)
+
+			comment_text = f"Ticket was rescheduled to {datetime_str}."
+			utils.add_comment_to_ticket(bot, msg_data, comment_text)
+
 	@staticmethod
 	def update_scheduled_message_tags(hashtag_data: HashtagData):
 		if not hashtag_data.is_scheduled():
