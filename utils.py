@@ -18,6 +18,46 @@ KICKED_FROM_CHANNEL_ERROR = "Forbidden: bot was kicked from the channel chat"
 SCHEDULED_DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 
+def align_entities_to_utf8(text: str, entities: List[telebot.types.MessageEntity]):
+	if not entities:
+		return
+
+	aligned_entities = []
+	remained_entities = [e for e in entities if not getattr(e, "aligned_to_utf8", False)]
+	for i, c in enumerate(text):
+		if ord(c) > 0xffff:
+			remained_entities = [e for e in remained_entities if e.offset > i]
+			for entity in remained_entities:
+				entity.offset -= 1
+				if entity not in aligned_entities:
+					aligned_entities.append(entity)
+
+	for entity in aligned_entities:
+		entity.aligned_to_utf8 = True
+
+	return entities
+
+
+def align_entities_to_utf16(text: str, entities: List[telebot.types.MessageEntity]):
+	if not entities:
+		return
+
+	aligned_entities = []
+	remained_entities = [e for e in entities if getattr(e, "aligned_to_utf8", False)]
+	for i, c in enumerate(text):
+		if ord(c) > 0xffff:
+			remained_entities = [e for e in remained_entities if e.offset > i]
+			for entity in remained_entities:
+				entity.offset += 1
+				if entity not in aligned_entities:
+					aligned_entities.append(entity)
+
+	for entity in aligned_entities:
+		entity.aligned_to_utf8 = False
+
+	return entities
+
+
 def create_callback_str(callback_prefix, callback_type, *args):
 	arguments_str = ",".join([str(arg) for arg in args])
 	components = [callback_prefix, callback_type]
@@ -55,14 +95,16 @@ def get_forwarded_from_id(message_data):
 
 def get_post_content(post_data: telebot.types.Message):
 	if post_data.text is not None:
-		return post_data.text, post_data.entities
+		aligned_entities = align_entities_to_utf8(post_data.text, post_data.entities)
+		return post_data.text, aligned_entities
 	elif post_data.caption is not None:
-		return post_data.caption, post_data.caption_entities
+		aligned_entities = align_entities_to_utf8(post_data.caption, post_data.caption_entities)
+		return post_data.caption, aligned_entities
 
 	return "", []
 
 
-def set_post_content(post_data: telebot.types.Message, text: str, entities: telebot.types.MessageEntity):
+def set_post_content(post_data: telebot.types.Message, text: str, entities: List[telebot.types.MessageEntity]):
 	if post_data.text is not None:
 		post_data.text = text
 		post_data.entities = entities
@@ -81,6 +123,8 @@ def edit_message_content(bot: telebot.TeleBot, post_data: telebot.types.Message,
 		kwargs["text"] = post_data.text if post_data.text else post_data.caption
 	if "entities" not in kwargs:
 		kwargs["entities"] = post_data.entities if post_data.entities else post_data.caption_entities
+
+	kwargs["entities"] = align_entities_to_utf16(kwargs["text"], kwargs["entities"])
 
 	try:
 		if post_data.text is not None:
