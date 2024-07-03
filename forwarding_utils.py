@@ -637,7 +637,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
-	original_post_data = copy.deepcopy(post_data)
+	original_post_data = None if new_ticket else copy.deepcopy(post_data)
 
 	hashtag_data = HashtagData(post_data, main_channel_id, True)
 	post_data = hashtag_data.get_post_data_without_hashtags()
