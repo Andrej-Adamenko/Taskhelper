@@ -20,7 +20,7 @@ SCHEDULED_DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 def align_entities_to_utf8(text: str, entities: List[telebot.types.MessageEntity]):
 	if not entities:
-		return
+		return []
 
 	aligned_entities = []
 	remained_entities = [e for e in entities if not getattr(e, "aligned_to_utf8", False)]
@@ -40,7 +40,7 @@ def align_entities_to_utf8(text: str, entities: List[telebot.types.MessageEntity
 
 def align_entities_to_utf16(text: str, entities: List[telebot.types.MessageEntity]):
 	if not entities:
-		return
+		return []
 
 	aligned_entities = []
 	remained_entities = [e for e in entities if getattr(e, "aligned_to_utf8", False)]
