@@ -53,7 +53,6 @@ def update_next_action(bot: telebot.TeleBot, main_message_id: int, main_channel_
 	except ApiTelegramException:
 		return
 
-#	hashtag_data = HashtagData(post_data, main_channel_id)
 	text, entities = utils.get_post_content(post_data)
 	for i in range(len(entities)):
 		HashtagData.update_scheduled_tag(text, entities, i)
@@ -101,11 +100,14 @@ def add_next_action_comment(bot: telebot.TeleBot, post_data: telebot.types.Messa
 	main_message_id = post_data.message_id
 
 	text, entities = utils.get_post_content(post_data)
+	stored_next_action = db_utils.get_next_action_text(main_message_id, main_channel_id)
+
 	if _NEXT_ACTION_TEXT_PREFIX not in text:
+		if stored_next_action:
+			db_utils.insert_or_update_current_next_action(main_message_id, main_channel_id, "")
 		return
 
 	is_hashtag_line_present = hashtag_utils.is_last_line_contains_only_hashtags(text, entities)
-	stored_next_action = db_utils.get_next_action_text(main_message_id, main_channel_id)
 
 	next_action_index = text.find(_NEXT_ACTION_TEXT_PREFIX)
 	if is_hashtag_line_present:
