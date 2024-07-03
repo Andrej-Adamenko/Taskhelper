@@ -31,7 +31,7 @@ def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity
 
 		for entity in entities:
 			if entity.offset >= position:
-				entity.offset += len(hashtag) + 1
+				entity.offset += len(hashtag + additional_space)
 
 	entity_length = hashtag.find(" ") if " " in hashtag else len(hashtag)
 
