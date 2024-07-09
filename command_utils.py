@@ -278,6 +278,9 @@ def handle_change_button_text(bot: telebot.TeleBot, msg_data: telebot.types.Mess
 
 
 def handle_change_hashtag_text(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
+	bot.send_message(chat_id=msg_data.chat.id, text=f"Currently this command is not working.")
+	return  # TODO: remove this after the fix in https://github.com/DnRuban/Taskhelper/issues/49
+
 	tag_name, new_value = arguments.split(" ")
 
 	if config_utils.HASHTAGS_BEFORE_UPDATE is None:

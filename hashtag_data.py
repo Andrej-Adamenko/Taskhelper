@@ -36,16 +36,17 @@ class HashtagData:
 		self.user_tags = user_tags
 		self.priority_tag = priority_tag
 
+		self.other_hashtags = self.extract_other_hashtags(post_data)
+
 		missing_tags = self.get_assigned_user() is None or self.get_priority_number() is None or self.is_status_missing()
 		if insert_default_tags and missing_tags:
-			self.insert_default_user_and_priority()
+			self.insert_default_tags()
 
 		self.mentioned_users = self.find_mentioned_users(post_data)
 		for user_tag in self.mentioned_users:
 			if user_tag not in self.user_tags:
 				self.user_tags.append(user_tag)
 
-		self.other_hashtags = self.extract_other_hashtags(post_data)
 
 	def is_status_missing(self):
 		return self.status_tag is None
@@ -125,15 +126,22 @@ class HashtagData:
 		else:
 			self.scheduled_tag = None
 
-	def insert_default_user_and_priority(self):
+	def insert_default_user(self, default_user):
+		if not self.get_assigned_user():
+			self.assign_to_user(default_user)
+
+	def insert_default_priority(self):
+		if self.get_priority_number() is None:
+			if not self.find_priorities_in_other_hashtags():
+				self.set_priority("")
+
+	def insert_default_tags(self):
 		main_channel_id_str = str(self.main_channel_id)
 		if main_channel_id_str in DEFAULT_USER_DATA:
 			self.status_tag = OPENED_TAG if self.is_status_missing() else self.status_tag
 			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split(" ")
-			if not self.get_assigned_user():
-				self.assign_to_user(user)
-			if self.get_priority_number() is None:
-				self.set_priority("")
+			self.insert_default_user(user)
+			self.insert_default_priority()
 
 	def get_entities_to_ignore(self, text: str, entities: List[telebot.types.MessageEntity]):
 		front_index = 0
@@ -353,11 +361,11 @@ class HashtagData:
 		priorities = self.find_priorities_in_other_hashtags()
 		if priorities:
 			current_priority = self.get_priority_number_or_default()
-			highest_priority = min(priorities)
+			highest_priority_from_other_tags = min(priorities)
 
 			if current_priority is not None:
 				current_priority = int(current_priority)
-				if current_priority < highest_priority:
+				if current_priority < highest_priority_from_other_tags:
 					return
 				priorities.append(current_priority)
 

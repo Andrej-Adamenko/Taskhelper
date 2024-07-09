@@ -287,5 +287,43 @@ class UpdateScheduledTagTest(TestCase):
 		self.assertEqual(entities[0].length, entity_length)
 
 
+@patch("hashtag_data.POSSIBLE_PRIORITIES", ["1", "2", "3"])
+@patch("hashtag_data.PRIORITY_TAG", "p")
+@patch("hashtag_data.OPENED_TAG", "o")
+@patch("hashtag_data.CLOSED_TAG", "x")
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class CopyTagsFromOtherTagsTest(TestCase):
+	def test_multiple_priority_tags(self, *args):
+		hashtag_data = HashtagData()
+		hashtag_data.scheduled_tag = None
+		hashtag_data.status_tag = None
+		hashtag_data.priority_tag = None
+		hashtag_data.other_hashtags = ["#p2", "#p3", "#p1", "#p2"]
+
+		hashtag_data.copy_tags_from_other_tags()
+		self.assertEqual(hashtag_data.priority_tag, "p1")
+
+	@patch("hashtag_data.HashtagData.get_priority_number_or_default", return_value=None)
+	def test_default_priority_higher_than_found_priority(self, *args):
+		hashtag_data = HashtagData()
+		hashtag_data.scheduled_tag = None
+		hashtag_data.status_tag = None
+		hashtag_data.priority_tag = "p1"
+		hashtag_data.other_hashtags = ["#p2", "#p3", "#p2"]
+
+		hashtag_data.copy_tags_from_other_tags()
+		self.assertEqual(hashtag_data.priority_tag, "p2")
+
+	def test_status_tags(self, *args):
+		hashtag_data = HashtagData()
+		hashtag_data.scheduled_tag = None
+		hashtag_data.status_tag = None
+		hashtag_data.priority_tag = None
+		hashtag_data.other_hashtags = ["#o", "#x"]
+
+		hashtag_data.copy_tags_from_other_tags()
+		self.assertEqual(hashtag_data.status_tag, "o")
+
+
 if __name__ == "__main__":
 	main()
