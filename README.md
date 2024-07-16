@@ -253,11 +253,13 @@ To do this, go to the comments section for a particular ticket, accessible via b
 
 Then, in the input field, write a comment, starting it with ":". For example, ":test_comment". This comment will appear in the body of the ticket after the "::" character.
 
-If you want to change the comment, use the same ":" symbol and write your corrected comment. 
+You can add a comment by editing the ticket using the "Edit" button (by right-clicking on the ticket) and add a comment starting with the "::" character. For example, "::test_comment".
 
-If you try to add text via the "edit" button (by pressing the right key on the ticket), the added text will be included in the main text of the channel.
+If you want to change the comment, use the ":" symbol via button number 6 and write your corrected comment.
 
-When you edit a comment and delete a part of it, the edited part will remain and the comment will be moved to the end of the ticket.
+In addition you can edit the comment using the "Edit" button (by pressing the right button on the ticket).
+
+You can also delete a comment via "Edit" (by right-clicking on the ticket).
 
 ### ***Deleting messages from user channels***
 
