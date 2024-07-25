@@ -4,6 +4,7 @@ from typing import Union
 import telebot.types
 from telebot.apihelper import ApiTelegramException
 
+import core_api
 import db_utils
 import threading_utils
 
@@ -47,11 +48,31 @@ def load_users(bot: telebot.TeleBot):
 @threading_utils.timeout_error_lock
 def get_user(bot: telebot.TeleBot, user: Union[str, int]):
 	try:
-		return bot.get_chat(user)
+		user_chat = bot.get_chat(user)
+		return telebot.types.User(
+			id=user_chat.id,
+			first_name=user_chat.first_name,
+			last_name=user_chat.last_name,
+			username=user_chat.username,
+			is_bot=False
+		)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
-		logging.error(f"Error during loading info about user {user}, {E}")
+		logging.error(f"Error during loading info about user {user} using bot api: {E}")
+
+	# try to get user using core api because in some cases bot api can't find the user by id
+	core_api_user = core_api.get_user(user)
+	if core_api_user:
+		return telebot.types.User(
+			id=core_api_user.id,
+			first_name=core_api_user.first_name,
+			last_name=core_api_user.last_name,
+			username=core_api_user.username,
+			is_bot=False
+		)
+
+	logging.error(f"Error during loading info about user {user} using core api")
 
 
 def insert_user_reference(main_channel_id: int, user_tag: str, text: str):
@@ -72,7 +93,7 @@ def insert_user_reference(main_channel_id: int, user_tag: str, text: str):
 		return text, None
 
 	user = user_tags[user_tag]
-	if type(user) == telebot.types.Chat:
+	if type(user) == telebot.types.User:
 		if user.username:
 			user_reference_text = f"@{user.username}"
 			text = text[:placeholder_position] + user_reference_text + text[placeholder_position:]
