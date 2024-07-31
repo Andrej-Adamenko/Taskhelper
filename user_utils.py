@@ -24,7 +24,7 @@ def find_user_by_signature(signature: str, main_channel_id: int):
 		return
 	for user_tag in USER_DATA[main_channel_id_str]:
 		user = USER_DATA[main_channel_id_str][user_tag]
-		if type(user) == telebot.types.Chat:
+		if type(user) == telebot.types.User:
 			current_signature = get_signature(user)
 			if current_signature == signature:
 				return user.id
