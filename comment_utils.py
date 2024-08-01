@@ -68,7 +68,7 @@ def update_next_action(bot: telebot.TeleBot, main_message_id: int, main_channel_
 			entities_to_update = [e for e in entities if e.offset > prefix_position]
 
 			removed_length = last_line_start - prefix_position
-			utils.offset_entities(entities_to_update, removed_length)
+			utils.offset_entities(entities_to_update, -removed_length)
 			text = text[:prefix_position] + text[last_line_start:]
 		else:
 			is_entity_remains = lambda e: e.offset > prefix_position
@@ -79,6 +79,8 @@ def update_next_action(bot: telebot.TeleBot, main_message_id: int, main_channel_
 	next_action_with_prefix = _NEXT_ACTION_TEXT_PREFIX + next_action
 	if is_hashtag_line_present:
 		last_line_start = text.rfind("\n")
+		entities_to_update = [e for e in entities if e.offset > last_line_start]
+		utils.offset_entities(entities_to_update, len(next_action_with_prefix))
 		text = text[:last_line_start] + next_action_with_prefix + text[last_line_start:]
 	else:
 		text += next_action_with_prefix

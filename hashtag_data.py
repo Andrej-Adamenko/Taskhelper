@@ -1,4 +1,5 @@
 import re
+import time
 import typing
 from typing import List
 import datetime
@@ -29,12 +30,17 @@ class HashtagData:
 		self.post_data = post_data
 		self.main_channel_id = main_channel_id
 
+		text, entities = utils.get_post_content(post_data)
+		entities = self.remove_strikethrough_entities(text, entities)
+		utils.set_post_content(post_data, text, entities)
+
 		hashtags = self.extract_hashtags(post_data, main_channel_id)
 		scheduled_tag, status_tag, user_tags, priority_tag = hashtags
 		self.scheduled_tag = scheduled_tag
 		self.status_tag = status_tag
 		self.user_tags = user_tags
 		self.priority_tag = priority_tag
+		self.is_sent = None
 
 		self.other_hashtags = self.extract_other_hashtags(post_data)
 
@@ -46,7 +52,6 @@ class HashtagData:
 		for user_tag in self.mentioned_users:
 			if user_tag not in self.user_tags:
 				self.user_tags.append(user_tag)
-
 
 	def is_status_missing(self):
 		return self.status_tag is None
@@ -125,6 +130,15 @@ class HashtagData:
 			self.scheduled_tag = SCHEDULED_TAG + " " + date
 		else:
 			self.scheduled_tag = None
+
+	def get_scheduled_datetime_str(self):
+		if not self.is_scheduled():
+			return
+		space_index = self.scheduled_tag.find(" ")
+		return self.scheduled_tag[space_index + 1:]
+
+	def set_scheduled_status(self, is_sent):
+		self.is_sent = is_sent
 
 	def insert_default_user(self, default_user):
 		if not self.get_assigned_user():
@@ -300,7 +314,7 @@ class HashtagData:
 
 	def get_post_data_without_hashtags(self):
 		text, entities = utils.get_post_content(self.post_data)
-		
+
 		entities_to_remove = self.get_present_hashtag_indices()
 		entities_to_remove.sort(reverse=True)
 
@@ -543,6 +557,9 @@ class HashtagData:
 		text, entities = self.remove_redundant_scheduled_tags(text, entities)
 		text, entities = self.remove_redundant_status_tags(text, entities)
 
+		if self.is_sent:
+			text, entities = self.strike_through_scheduled_tag(text, entities)
+
 		utils.set_post_content(post_data, text, entities)
 		return post_data
 
@@ -554,6 +571,53 @@ class HashtagData:
 		post_data = self.remove_duplicates(post_data)
 		self.extract_hashtags(post_data, self.main_channel_id)
 		return post_data
+
+	def remove_strikethrough_entities(self, text, entities):
+		entities_to_ignore = self.get_entities_to_ignore(text, entities)
+		entities_to_remove = []
+		for i, entity in enumerate(entities):
+			if i in entities_to_ignore:
+				continue
+
+			if entity.type != "strikethrough":
+				continue
+
+			if i == 0:
+				continue
+
+			previous_entity = entities[i - 1]
+			if previous_entity.type != "hashtag":
+				continue
+
+			previous_entity_str = "#" + self.get_tag_from_entity(previous_entity, text)
+			scheduled_tag_start = f"#{SCHEDULED_TAG} "
+			if not previous_entity_str.startswith(scheduled_tag_start):
+				continue
+
+			if not entity.offset == (previous_entity.offset + len(scheduled_tag_start)):
+				continue
+			if not entity.length == (previous_entity.length - len(scheduled_tag_start)):
+				continue
+
+			entities_to_remove.append(entity)
+
+		return [e for e in entities if e not in entities_to_remove]
+
+	def strike_through_scheduled_tag(self, text, entities):
+		scheduled_tag_index, _, _, _ = self.hashtag_indexes
+		if not scheduled_tag_index:
+			return text, entities
+		scheduled_tag_entity = entities[scheduled_tag_index]
+		scheduled_tag = self.get_tag_from_entity(scheduled_tag_entity, text)
+		datetime_offset = scheduled_tag.find(" ") + 1
+		datetime_str = scheduled_tag[datetime_offset:]
+
+		strikethrough_offset = scheduled_tag_entity.offset + 1 + datetime_offset  # +1 because of the hashtag
+
+		strikethrough_entity = MessageEntity(type="strikethrough", offset=strikethrough_offset, length=len(datetime_str))
+		entities.append(strikethrough_entity)
+
+		return text, entities
 
 	@staticmethod
 	def get_entity_deduplication_order(text: str, entities: List[telebot.types.MessageEntity]):

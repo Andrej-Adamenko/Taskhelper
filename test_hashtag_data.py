@@ -1,6 +1,8 @@
 from unittest import TestCase, main
 from unittest.mock import patch
 
+import telebot.types
+
 from hashtag_data import HashtagData
 import test_helper
 
@@ -131,6 +133,7 @@ class RemoveDuplicatesTest(TestCase):
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.is_sent = False
 		hashtag_data.main_channel_id = main_channel_id
 		result = hashtag_data.remove_duplicates(post_data)
 		self.assertEqual(result.text, "text\n#aa #bb #cc")
@@ -323,6 +326,43 @@ class CopyTagsFromOtherTagsTest(TestCase):
 
 		hashtag_data.copy_tags_from_other_tags()
 		self.assertEqual(hashtag_data.status_tag, "o")
+
+
+@patch("hashtag_data.SCHEDULED_TAG", "s")
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class StrikeThroughScheduledTagTest(TestCase):
+	def test_add_strikethrough_entity(self, *args):
+		hashtag_data = HashtagData()
+		scheduled_tag = "s 2024-01-23 13:00"
+		text = f"text\n#o #cc #p #" + scheduled_tag
+		hashtag_data.hashtag_indexes = [3, 0, [1], 2]
+		entities = test_helper.create_hashtag_entity_list(text)
+		entities[-1].length = len(scheduled_tag) + 3
+		text, entities = hashtag_data.strike_through_scheduled_tag(text, entities)
+
+		last_entity = entities[-1]
+
+		self.assertEqual(last_entity.type, "strikethrough")
+		self.assertEqual(last_entity.length, 16)
+		self.assertEqual(last_entity.offset, 18)
+
+
+@patch("hashtag_data.SCHEDULED_TAG", "s")
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class RemoveStrikethroughEntitiesTest(TestCase):
+	def test_remove_strikethrough_entity(self, *args):
+		hashtag_data = HashtagData()
+		scheduled_tag = "#s 2024-01-23 13:00"
+		text = f"text\n#o #cc #p " + scheduled_tag
+		entities = test_helper.create_hashtag_entity_list(text)
+		entities[-1].length = len(scheduled_tag)
+		entities.append(telebot.types.MessageEntity(type="strikethrough", offset=18, length=16))
+
+		entities = hashtag_data.remove_strikethrough_entities(text, entities)
+
+		is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in entities])
+		self.assertFalse(is_strikethrough_entity_exists)
+		self.assertEqual(len(entities), 4)
 
 
 if __name__ == "__main__":
