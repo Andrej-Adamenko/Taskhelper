@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 
 import telebot
 from telebot.types import MessageEntity
@@ -6,7 +6,8 @@ from telebot.types import MessageEntity
 import utils
 
 
-def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity], hashtag: str, position: int | None = None):
+def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity], hashtag: str,
+                           position: Union[int, None] = None):
 	"""
 	Inserts hashtag into post content either at the end of the text or at specified position.
 
