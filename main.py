@@ -62,9 +62,6 @@ def handle_post(post_data: telebot.types.Message):
 def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(msg_data.message_id, msg_data.chat.id)
 
-	if msg_data.text == interval_updating_utils.UPDATE_STARTED_MSG_TEXT or msg_data.text == post_link_utils.START_UPDATE_QUESTION:
-		return
-
 	forwarded_from_str = str(msg_data.forward_from_chat.id)
 	if forwarded_from_str not in DISCUSSION_CHAT_DATA:
 		return

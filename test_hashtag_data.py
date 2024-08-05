@@ -259,6 +259,19 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
 		self.assertEqual(result[0], "text\n#o #aa #bb #p1 #s 2023-06-25")
 
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	def test_user_tag_at_the_end(self, *args):
+		text = "text\n#o #aa #bb #p1 #s 2023-06-25 17:00 #test"
+		entities = test_helper.create_hashtag_entity_list(text)
+		self.update_scheduled_tag_entities_length("#s", text, entities)
+		post_data = test_helper.create_mock_message(text, entities)
+		main_channel_id = 123
+
+		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.main_channel_id = main_channel_id
+		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
+		self.assertEqual(result[0], "text\n#o #aa #bb #p1 #s 2023-06-25 17:00 #test")
+
 
 @patch("hashtag_data.SCHEDULED_TAG", "s")
 @patch("hashtag_data.SCHEDULED_DATE_FORMAT_REGEX", "^\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}")
@@ -333,27 +346,74 @@ class CopyTagsFromOtherTagsTest(TestCase):
 class StrikeThroughScheduledTagTest(TestCase):
 	def test_add_strikethrough_entity(self, *args):
 		hashtag_data = HashtagData()
-		scheduled_tag = "s 2024-01-23 13:00"
-		text = f"text\n#o #cc #p #" + scheduled_tag
+		scheduled_tag = "#s 2024-01-23 13:00"
+		text = f"text\n#o #cc #p {scheduled_tag}"
 		hashtag_data.hashtag_indexes = [3, 0, [1], 2]
 		entities = test_helper.create_hashtag_entity_list(text)
-		entities[-1].length = len(scheduled_tag) + 3
-		text, entities = hashtag_data.strike_through_scheduled_tag(text, entities)
+		entities[-1].length = len(scheduled_tag)
+		entities = hashtag_data.strike_through_scheduled_tag(text, entities)
 
-		last_entity = entities[-1]
+		strikethrough_entity = entities[-1]
 
-		self.assertEqual(last_entity.type, "strikethrough")
-		self.assertEqual(last_entity.length, 16)
-		self.assertEqual(last_entity.offset, 18)
+		self.assertEqual(strikethrough_entity.type, "strikethrough")
+		self.assertEqual(strikethrough_entity.length, 16)
+		self.assertEqual(strikethrough_entity.offset, 18)
+
+	def test_add_strikethrough_entity_with_other_tags(self, *args):
+		hashtag_data = HashtagData()
+		scheduled_tag = "#s 2024-01-23 13:00"
+		text = f"text\n#o #cc #p {scheduled_tag} #test #asdf"
+		hashtag_data.hashtag_indexes = [3, 0, [1], 2]
+		entities = test_helper.create_hashtag_entity_list(text)
+		entities[3].length = len(scheduled_tag)
+		entities = hashtag_data.strike_through_scheduled_tag(text, entities)
+
+		strikethrough_entity = None
+		for i, entity in enumerate(entities):
+			if i == 0:
+				continue
+			previous_entity = entities[i - 1]
+			self.assertTrue(previous_entity.offset <= entity.offset)
+
+			if entity.type == "strikethrough":
+				strikethrough_entity = entity
+
+		self.assertEqual(strikethrough_entity.type, "strikethrough")
+		self.assertEqual(strikethrough_entity.length, 16)
+		self.assertEqual(strikethrough_entity.offset, 18)
+
+
+@patch("hashtag_data.SCHEDULED_TAG", "x")
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class StrikeThroughTicketNumberTest(TestCase):
+	def test_add_strikethrough_entity(self, *args):
+		hashtag_data = HashtagData()
+		text = f"123. text\n#o #cc #p"
+		hashtag_data.post_data = test_helper.create_mock_message(text, [])
+		hashtag_data.post_data.message_id = 123
+
+		entities = [
+			telebot.types.MessageEntity(type="text_link", offset=0, length=3, url="https://t.me/c/1234567890/123"),
+		] + test_helper.create_hashtag_entity_list(text)
+		entities = hashtag_data.strike_through_ticket_number(text, entities)
+
+		first_entity = entities[0]
+
+		self.assertEqual(first_entity.type, "strikethrough")
+		self.assertEqual(first_entity.length, 3)
+		self.assertEqual(first_entity.offset, 0)
 
 
 @patch("hashtag_data.SCHEDULED_TAG", "s")
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
 class RemoveStrikethroughEntitiesTest(TestCase):
-	def test_remove_strikethrough_entity(self, *args):
+	def test_remove_scheduled_date_strikethrough_entity(self, *args):
 		hashtag_data = HashtagData()
 		scheduled_tag = "#s 2024-01-23 13:00"
 		text = f"text\n#o #cc #p " + scheduled_tag
+		hashtag_data.post_data = test_helper.create_mock_message(text, [])
+		hashtag_data.post_data.message_id = 123
+
 		entities = test_helper.create_hashtag_entity_list(text)
 		entities[-1].length = len(scheduled_tag)
 		entities.append(telebot.types.MessageEntity(type="strikethrough", offset=18, length=16))
@@ -363,6 +423,29 @@ class RemoveStrikethroughEntitiesTest(TestCase):
 		is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in entities])
 		self.assertFalse(is_strikethrough_entity_exists)
 		self.assertEqual(len(entities), 4)
+
+	def test_remove_ticket_number_strikethrough_entity(self, *args):
+		hashtag_data = HashtagData()
+		text = f"123. text\n#o #cc #p"
+		hashtag_data.post_data = test_helper.create_mock_message(text, [])
+		hashtag_data.post_data.message_id = 123
+
+		first_strikethrough_entities = [
+			telebot.types.MessageEntity(type="strikethrough", offset=0, length=3),
+			telebot.types.MessageEntity(type="text_link", offset=0, length=3, url="https://t.me/c/1234567890/123"),
+		] + test_helper.create_hashtag_entity_list(text)
+
+		first_link_entities = [
+			telebot.types.MessageEntity(type="text_link", offset=0, length=3, url="https://t.me/c/1234567890/123"),
+			telebot.types.MessageEntity(type="strikethrough", offset=0, length=3),
+		] + test_helper.create_hashtag_entity_list(text)
+
+		for entities in [first_link_entities, first_strikethrough_entities]:
+			entities = hashtag_data.remove_strikethrough_entities(text, entities)
+
+			is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in entities])
+			self.assertFalse(is_strikethrough_entity_exists)
+			self.assertEqual(len(entities), 4)
 
 
 if __name__ == "__main__":

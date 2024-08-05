@@ -173,8 +173,7 @@ class HashtagData:
 				break
 
 			if next_entity.type == "text_link":
-				post_link = str(self.post_data.message_id) + post_link_utils.LINK_ENDING
-				if text[next_entity.offset:].startswith(post_link):
+				if post_link_utils.is_ticket_number_entity(self.post_data, text, next_entity):
 					current_offset += next_entity.length + len(post_link_utils.LINK_ENDING)
 					front_index += 1
 					continue
@@ -518,12 +517,13 @@ class HashtagData:
 			utils.offset_entities(entities[entities_to_ignore.start:], changed_offset)
 
 		scheduled_tag_indexes.sort(reverse=True)
+		insertion_offset = entities[scheduled_tag_indexes[-1]].offset
 		for entity_index in scheduled_tag_indexes:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 
 		if earliest_datetime_str:
 			scheduled_tag_str = f"#{SCHEDULED_TAG} {earliest_datetime_str}"
-			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, scheduled_tag_str)
+			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, scheduled_tag_str, insertion_offset)
 		else:
 			self.set_scheduled_tag(None)
 
@@ -557,9 +557,6 @@ class HashtagData:
 		text, entities = self.remove_redundant_scheduled_tags(text, entities)
 		text, entities = self.remove_redundant_status_tags(text, entities)
 
-		if self.is_sent:
-			text, entities = self.strike_through_scheduled_tag(text, entities)
-
 		utils.set_post_content(post_data, text, entities)
 		return post_data
 
@@ -570,6 +567,19 @@ class HashtagData:
 
 		post_data = self.remove_duplicates(post_data)
 		self.extract_hashtags(post_data, self.main_channel_id)
+		post_data = self.add_strikethrough_entities(post_data)
+
+		return post_data
+
+	def add_strikethrough_entities(self, post_data):
+		text, entities = utils.get_post_content(post_data)
+
+		if self.is_sent:
+			entities = self.strike_through_scheduled_tag(text, entities)
+		if self.is_closed():
+			entities = self.strike_through_ticket_number(text, entities)
+
+		utils.set_post_content(post_data, text, entities)
 		return post_data
 
 	def remove_strikethrough_entities(self, text, entities):
@@ -580,6 +590,10 @@ class HashtagData:
 				continue
 
 			if entity.type != "strikethrough":
+				continue
+
+			if post_link_utils.is_ticket_number_entity(self.post_data, text, entity):
+				entities_to_remove.append(entity)
 				continue
 
 			if i == 0:
@@ -616,8 +630,28 @@ class HashtagData:
 
 		strikethrough_entity = MessageEntity(type="strikethrough", offset=strikethrough_offset, length=len(datetime_str))
 		entities.append(strikethrough_entity)
+		entities.sort(key=lambda e: e.offset)
 
-		return text, entities
+		return entities
+
+	def strike_through_ticket_number(self, text, entities):
+		ticket_number_entity = None
+		for entity in entities:
+			if post_link_utils.is_ticket_number_entity(self.post_data, text, entity):
+				ticket_number_entity = entity
+				break
+
+		if not ticket_number_entity:
+			return entities
+
+		strikethrough_entity = MessageEntity(
+			type="strikethrough",
+			offset=ticket_number_entity.offset,
+			length=ticket_number_entity.length,
+		)
+		entities.insert(0, strikethrough_entity)
+
+		return entities
 
 	@staticmethod
 	def get_entity_deduplication_order(text: str, entities: List[telebot.types.MessageEntity]):

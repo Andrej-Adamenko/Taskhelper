@@ -1,5 +1,5 @@
 import telebot.types
-from telebot.types import MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import MessageEntity, Message
 from typing import List
 
 import utils
@@ -8,10 +8,8 @@ LINK_ENDING = ". "
 
 CALLBACK_PREFIX = "LNK"
 
-START_UPDATE_QUESTION = "Do you want to start updating older posts? (This can take some time, bot can respond with delay until updating is complete)"
 
-
-def get_post_url(post_data: telebot.types.Message):
+def get_post_url(post_data: Message):
 	channel_url = str(post_data.chat.id)[4:]
 	return f"https://t.me/c/{channel_url}/{post_data.message_id}"
 
@@ -24,7 +22,7 @@ def get_previous_link(entities: List[MessageEntity], post_url: str):
 	return None
 
 
-def insert_link_into_post(post_data: telebot.types.Message, link_text: str, post_url: str, additional_offset: int = 0):
+def insert_link_into_post(post_data: Message, link_text: str, post_url: str, additional_offset: int = 0):
 	text, entities = utils.get_post_content(post_data)
 
 	updated_entities = utils.offset_entities(entities, len(link_text) + len(LINK_ENDING) + additional_offset)
@@ -39,18 +37,18 @@ def insert_link_into_post(post_data: telebot.types.Message, link_text: str, post
 	return post_data
 
 
-def get_link_text(post_data: telebot.types.Message):
+def get_link_text(post_data: Message):
 	return str(post_data.message_id)
 
 
-def add_link_to_new_post(post_data: telebot.types.Message):
+def add_link_to_new_post(post_data: Message):
 	post_url = get_post_url(post_data)
 	link_text = get_link_text(post_data)
 
 	return insert_link_into_post(post_data, link_text, post_url)
 
 
-def update_post_link(bot: telebot.TeleBot, post_data: telebot.types.Message):
+def update_post_link(bot: telebot.TeleBot, post_data: Message):
 	text, entities = utils.get_post_content(post_data)
 
 	post_url = get_post_url(post_data)
@@ -101,5 +99,11 @@ def remove_previous_link(text: str, entities: List[MessageEntity], previous_link
 	return text, entities
 
 
-def handle_callback(bot, call):
-	pass
+def is_ticket_number_entity(post_data: Message, text: str, entity: MessageEntity):
+	entity_text = text[entity.offset:entity.offset + entity.length]
+	if entity_text == get_link_text(post_data):
+		text_after_entity = text[entity.offset + entity.length:]
+		if text_after_entity.startswith(LINK_ENDING):
+			return True
+
+	return False
