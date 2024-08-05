@@ -12,7 +12,7 @@ import forwarding_utils
 import interval_updating_utils
 import post_link_utils
 import db_utils
-import scheduled_messages_utils
+from scheduled_messages_utils import scheduled_message_dispatcher
 import user_utils
 import utils
 
@@ -32,7 +32,7 @@ user_utils.load_users(bot)
 utils.check_last_messages(bot)
 
 command_utils.initialize_bot_commands(bot)
-scheduled_messages_utils.start_scheduled_thread(bot)
+scheduled_message_dispatcher.start_scheduled_thread(bot)
 
 daily_reminder.start_reminder_thread(bot)
 
@@ -62,9 +62,6 @@ def handle_post(post_data: telebot.types.Message):
 @bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(msg_data.message_id, msg_data.chat.id)
-
-	if msg_data.text == interval_updating_utils.UPDATE_STARTED_MSG_TEXT or msg_data.text == post_link_utils.START_UPDATE_QUESTION:
-		return
 
 	forwarded_from_str = str(msg_data.forward_from_chat.id)
 	if forwarded_from_str not in DISCUSSION_CHAT_DATA:
@@ -131,8 +128,8 @@ def handle_main_channel_keyboard_callback(call: telebot.types.CallbackQuery):
 		forwarding_utils.handle_callback(bot, call)
 	elif call.data.startswith(post_link_utils.CALLBACK_PREFIX):
 		post_link_utils.handle_callback(bot, call)
-	elif call.data.startswith(scheduled_messages_utils.CALLBACK_PREFIX):
-		scheduled_messages_utils.handle_callback(bot, call)
+	elif call.data.startswith(scheduled_message_dispatcher.CALLBACK_PREFIX):
+		scheduled_message_dispatcher.handle_callback(bot, call)
 
 
 @bot.callback_query_handler(func=lambda call: subchannel_filter(call.message))
@@ -166,8 +163,8 @@ def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 
 	if call.data.startswith(forwarding_utils.CALLBACK_PREFIX):
 		forwarding_utils.handle_callback(bot, call, subchannel_id, subchannel_message_id)
-	if call.data.startswith(scheduled_messages_utils.CALLBACK_PREFIX):
-		scheduled_messages_utils.handle_callback(bot, call, subchannel_id, subchannel_message_id)
+	if call.data.startswith(scheduled_message_dispatcher.CALLBACK_PREFIX):
+		scheduled_message_dispatcher.handle_callback(bot, call, subchannel_id, subchannel_message_id)
 
 
 @bot.callback_query_handler(func=lambda call: True)

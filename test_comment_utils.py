@@ -45,6 +45,27 @@ class UpdateNextActionTest(TestCase):
 		mock_edit_message_content.assert_called_once_with(mock_bot, ANY, chat_id=main_channel_id,
 	                           message_id=main_message_id, reply_markup=ANY)
 
+	@patch("utils.get_post_content")
+	@patch("utils.set_post_content")
+	@patch("utils.edit_message_content")
+	def test_update_entity_offsets(self, mock_edit_message_content, mock_set_post_content, mock_get_post_content, *args):
+		text = f"text::previous next action\n#o #cc #p"
+		entities = test_helper.create_hashtag_entity_list(text)
+		mock_get_post_content.return_value = (text, entities)
+
+		main_channel_id = 123
+		main_message_id = 34
+		next_action = "next"
+		mock_bot = Mock(spec=TeleBot)
+
+		comment_utils.update_next_action(mock_bot, main_message_id, main_channel_id, next_action)
+		mock_set_post_content.assert_called_once_with(ANY, "text::next\n#o #cc #p", entities)
+		self.assertEqual(entities[0].offset, 11)
+		self.assertEqual(entities[1].offset, 14)
+		self.assertEqual(entities[2].offset, 18)
+		mock_edit_message_content.assert_called_once_with(mock_bot, ANY, chat_id=main_channel_id,
+	                           message_id=main_message_id, reply_markup=ANY)
+
 
 @patch("comment_utils._NEXT_ACTION_COMMENT_PREFIX", ":")
 @patch("comment_utils.DISCUSSION_CHAT_DATA", {3333: 1111})

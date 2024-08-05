@@ -13,8 +13,6 @@ import threading
 
 from config_utils import DISCUSSION_CHAT_DATA, DELAY_AFTER_ONE_SCAN
 
-UPDATE_STARTED_MSG_TEXT = "Started updating older posts. When update is complete this message will be deleted."
-
 _INTERVAL_UPDATING_THREAD: threading.Thread = None
 _UPDATE_STATUS: bool = False
 

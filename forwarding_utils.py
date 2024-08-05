@@ -15,7 +15,7 @@ import config_utils
 import daily_reminder
 import db_utils
 import hashtag_utils
-import scheduled_messages_utils
+from scheduled_messages_utils import scheduled_message_dispatcher
 import user_utils
 import utils
 import hashtag_data as hashtag_data_utils
@@ -331,7 +331,7 @@ def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types
 	cc_callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SHOW_CC)
 	cc_button = InlineKeyboardButton(config_utils.BUTTON_TEXTS["CC"], callback_data=cc_callback_data)
 
-	schedule_button = scheduled_messages_utils.generate_schedule_button()
+	schedule_button = scheduled_message_dispatcher.generate_schedule_button()
 
 	buttons = [
 		state_switch_button,
@@ -662,12 +662,10 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData,
 					   original_post_data: telebot.types.Message = None):
+	scheduled_message_dispatcher.update_scheduled_message_tags(hashtag_data)
 	post_data = hashtag_data.rearrange_hashtags(post_data)
 	if not hashtag_data.is_scheduled():
-		scheduled_messages_utils.update_scheduled_message_status(post_data)
-
-	text, entities = utils.get_post_content(post_data)
-	hashtag_data.hashtag_indexes = hashtag_data.find_hashtag_indexes(text, entities, post_data.chat.id)
+		scheduled_message_dispatcher.update_scheduled_message_status(post_data)
 
 	if original_post_data and utils.is_post_data_equal(post_data, original_post_data):
 		return
