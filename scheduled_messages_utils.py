@@ -14,11 +14,11 @@ import db_utils
 import forwarding_utils
 import utils
 from hashtag_data import HashtagData
-from utils import SCHEDULED_DATETIME_FORMAT
 
 
 class ScheduledMessageDispatcher:
 	CALLBACK_PREFIX = "SCH"
+	SCHEDULED_DATETIME_FORMAT = "%Y-%m-%d %H:%M"
 
 	__scheduled_messages_list: list = []
 
@@ -47,7 +47,7 @@ class ScheduledMessageDispatcher:
 		hashtag_data = HashtagData(message, main_channel_id)
 
 		send_datetime = datetime.datetime.fromtimestamp(send_time, pytz.timezone(config_utils.TIMEZONE_NAME))
-		date_str = send_datetime.strftime(SCHEDULED_DATETIME_FORMAT)
+		date_str = send_datetime.strftime(self.SCHEDULED_DATETIME_FORMAT)
 
 		if db_utils.is_message_scheduled(main_message_id, main_channel_id):
 			self.update_scheduled_time(main_message_id, main_channel_id, send_time)
@@ -299,9 +299,10 @@ class ScheduledMessageDispatcher:
 			return
 
 		datetime_str = hashtag_data.get_scheduled_datetime()
-		dt = datetime.datetime.strptime(datetime_str, SCHEDULED_DATETIME_FORMAT)
+		dt = datetime.datetime.strptime(datetime_str, self.SCHEDULED_DATETIME_FORMAT)
 
 		timezone = pytz.timezone(config_utils.TIMEZONE_NAME)
+
 		dt = timezone.localize(dt)
 		tag_send_time = int(dt.astimezone(pytz.UTC).timestamp())
 
@@ -324,15 +325,14 @@ class ScheduledMessageDispatcher:
 		for m in scheduled_messages:
 			main_message_id, main_channel_id, send_time = m
 			current_datetime = datetime.datetime.fromtimestamp(send_time, tz=current_timezone)
-			current_datetime_str = current_datetime.strftime(SCHEDULED_DATETIME_FORMAT)
-			new_datetime = datetime.datetime.strptime(current_datetime_str, SCHEDULED_DATETIME_FORMAT)
+			current_datetime_str = current_datetime.strftime(self.SCHEDULED_DATETIME_FORMAT)
+			new_datetime = datetime.datetime.strptime(current_datetime_str, self.SCHEDULED_DATETIME_FORMAT)
 			updated_send_time = new_timezone.localize(new_datetime).timestamp()
 			self.update_scheduled_time(main_message_id, main_channel_id, updated_send_time)
 
 	def sort_scheduled_messages(self):
 		comparison_function = lambda m: m.send_time
 		self.__scheduled_messages_list.sort(key=comparison_function)
-
 
 
 scheduled_message_dispatcher = ScheduledMessageDispatcher()

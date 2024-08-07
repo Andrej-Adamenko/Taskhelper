@@ -56,3 +56,4 @@ def get_user(identifier):
 		return app.get_users(identifier)
 	except Exception as E:
 		logging.info(f"Core api get_user({identifier}) exception: {E}")
+

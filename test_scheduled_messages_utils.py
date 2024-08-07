@@ -13,7 +13,6 @@ from hashtag_data import HashtagData
 
 
 @patch("config_utils.TIMEZONE_NAME", "UTC")
-@patch("utils.SCHEDULED_DATETIME_FORMAT", "%Y-%m-%d %H:%M")
 class UpdateStatusFromTagsTest(TestCase):
 	def setUp(self):
 		self.scheduled_message_dispatcher = scheduled_messages_utils.ScheduledMessageDispatcher()
@@ -144,7 +143,6 @@ class UpdateTimezoneTest(TestCase):
 
 
 @patch("config_utils.TIMEZONE_NAME", "UTC")
-@patch("utils.SCHEDULED_DATETIME_FORMAT", "%Y-%m-%d %H:%M")
 class ScheduleMessageTest(TestCase):
 	def setUp(self):
 		self.scheduled_message_dispatcher = scheduled_messages_utils.ScheduledMessageDispatcher()
