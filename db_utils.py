@@ -444,7 +444,10 @@ def get_finished_update_channels():
 	sql = "SELECT main_channel_id FROM interval_updates_status WHERE current_message_id <= 0"
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
-	return result
+	if result:
+		return [row[0] for row in result]
+	else:
+		return []
 
 
 @db_thread_lock

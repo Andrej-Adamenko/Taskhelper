@@ -50,6 +50,8 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, current_msg
 
 
 def store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int, discussion_chat_id: int):
+	# retrieve message from discussion chat, get message_id of the message in main channel and save it to db
+
 	forwarded_message = utils.get_message_content_by_id(bot, discussion_chat_id, current_msg_id)
 	if forwarded_message is None:
 		return
@@ -90,30 +92,24 @@ def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 		update_in_progress_channel = db_utils.get_unfinished_update_channel()
 		if update_in_progress_channel:
 			main_channel_id, current_message_id = update_in_progress_channel
-			main_channel_id_str = str(main_channel_id)
-
-			discussion_chat_id = None
-			if main_channel_id_str in DISCUSSION_CHAT_DATA:
-				discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
-
-			check_all_messages(bot, main_channel_id, discussion_chat_id, current_message_id)
+			check_main_messages(bot, main_channel_id, current_message_id)
 
 		finished_channels = db_utils.get_finished_update_channels()
-		finished_channels = [c[0] for c in finished_channels]
 
 		main_channel_ids = db_utils.get_main_channel_ids()
 		for main_channel_id in main_channel_ids:
 			if main_channel_id in finished_channels:
 				continue
-			main_channel_id_str = str(main_channel_id)
+			check_main_messages(bot, main_channel_id)
 
+			main_channel_id_str = str(main_channel_id)
 			discussion_chat_id = None
 			if main_channel_id_str in DISCUSSION_CHAT_DATA:
 				discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
 
-			check_all_messages(bot, main_channel_id, discussion_chat_id)
+			check_discussion_messages(bot, main_channel_id, discussion_chat_id)
 
-		logging.info("Interval check complete")
+		logging.info(f"Interval check is finished")
 		db_utils.clear_updates_in_progress()
 		if _UPDATE_STATUS and config_utils.HASHTAGS_BEFORE_UPDATE:
 			config_utils.HASHTAGS_BEFORE_UPDATE = None
@@ -121,54 +117,55 @@ def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 		last_update_time = time.time()
 
 
-def get_current_msg_id(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None, start_from_message: int = None):
-	if discussion_chat_id:
-		if start_from_message:
-			return db_utils.get_discussion_message_id(start_from_message, main_channel_id)
-		return utils.get_last_message(bot, discussion_chat_id)
-	return utils.get_last_message(bot, main_channel_id)
-
-
-def check_all_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None, start_from_message: int = None):
-	current_msg_id = get_current_msg_id(
-		bot, main_channel_id, discussion_chat_id, start_from_message)
-	if current_msg_id is None:
+def check_main_messages(bot: telebot.TeleBot, main_channel_id: int, start_from_message: int = None):
+	start_msg_id = start_from_message or utils.get_last_message(bot, main_channel_id)
+	if start_msg_id is None:
 		return
 
-	last_updated_message_id = current_msg_id
-
-	while current_msg_id > 0:
+	for current_msg_id in range(start_msg_id, 0, -1):
 		time.sleep(DELAY_AFTER_ONE_SCAN)
 		try:
 			if not _UPDATE_STATUS:
 				raise Exception("Interval update stop requested")
-			if discussion_chat_id:
-				main_channel_message_id = store_discussion_message(bot, main_channel_id, current_msg_id, discussion_chat_id)
-				if not main_channel_message_id:
-					main_channel_message_id = db_utils.get_main_from_discussion_message(current_msg_id, main_channel_id)
-				if main_channel_message_id:
-					update_older_message(bot, main_channel_id, main_channel_message_id)
-					last_updated_message_id = main_channel_message_id
-					db_utils.insert_or_update_channel_update_progress(main_channel_id, last_updated_message_id)
-			else:
-				update_older_message(bot, main_channel_id, current_msg_id)
-				db_utils.insert_or_update_channel_update_progress(main_channel_id, current_msg_id)
+
+			update_older_message(bot, main_channel_id, current_msg_id)
+			db_utils.insert_or_update_channel_update_progress(main_channel_id, current_msg_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				logging.warning(f"Too many requests - {E}")
 				time.sleep(20)
 				continue
-			logging.error(f"Error during updating older messages - {E}")
+			logging.error(f"Telegram error during main channel check ({main_channel_id, current_msg_id}) - {E}")
 		except Exception as E:
-			logging.error(f"Updating older messages stopped because of exception - {E}")
+			logging.error(f"Discussion channel check stopped ({main_channel_id, current_msg_id}) - {E}")
 			return
 
-		current_msg_id -= 1
-		if discussion_chat_id and current_msg_id <= 0:
-			current_msg_id = last_updated_message_id
-			discussion_chat_id = None
-			logging.info(f"Checked all messages in discussion chat, last updated message id: {last_updated_message_id}")
-
 	db_utils.insert_or_update_channel_update_progress(main_channel_id, 0)
-	logging.info(f"Checked all messages in main channel - id: {main_channel_id}")
+	logging.info(f"Main channel check completed in {main_channel_id}")
+
+
+def check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None):
+	start_msg_id = utils.get_last_message(bot, discussion_chat_id)
+	if start_msg_id is None:
+		return
+
+	logging.info(f"Starting to check discussion channel: {discussion_chat_id}")
+
+	for current_msg_id in range(start_msg_id, 0, -1):
+		time.sleep(DELAY_AFTER_ONE_SCAN)
+		try:
+			if not _UPDATE_STATUS:
+				raise Exception("Interval update stop requested")
+			store_discussion_message(bot, main_channel_id, current_msg_id, discussion_chat_id)
+		except ApiTelegramException as E:
+			if E.error_code == 429:
+				logging.warning(f"Too many requests - {E}")
+				time.sleep(20)
+				continue
+			logging.error(f"Telegram error during discussion channel check ({discussion_chat_id, current_msg_id}) - {E}")
+		except Exception as E:
+			logging.error(f"Discussion channel check stopped ({discussion_chat_id, current_msg_id}) - {E}")
+			return
+
+	logging.info(f"Discussion channel check completed in {discussion_chat_id}")
 
