@@ -662,10 +662,12 @@ class HashtagData:
 			if previous_entity.type != "hashtag":
 				continue
 
-			previous_entity_str = "#" + self.get_tag_from_entity(previous_entity, text)
-			scheduled_tag_start = f"#{SCHEDULED_TAG} "
-			if not previous_entity_str.startswith(scheduled_tag_start):
+			previous_entity_tag = self.get_tag_from_entity(previous_entity, text)
+			if not previous_entity_tag == SCHEDULED_TAG:
 				continue
+
+			scheduled_tag_start = f"#{SCHEDULED_TAG} "
+			self.update_scheduled_tag(text, entities, i - 1)
 
 			if not entity.offset == (previous_entity.offset + len(scheduled_tag_start)):
 				continue
