@@ -145,6 +145,9 @@ def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.ty
 	text1, entities1 = get_post_content(post_data1)
 	text2, entities2 = get_post_content(post_data2)
 
+	entities1 = [e for e in entities1 if e.type != "phone_number"]
+	entities2 = [e for e in entities2 if e.type != "phone_number"]
+
 	if text1 != text2:
 		return False
 

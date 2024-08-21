@@ -2,6 +2,8 @@ from unittest import TestCase, main
 from unittest.mock import Mock
 from telebot.types import MessageEntity, Message
 
+import forwarding_utils
+import test_helper
 import utils
 
 
@@ -59,6 +61,52 @@ class AlignEntitiesToUTF16Test(TestCase):
 		self.assertEqual(entities[0].offset, 5)
 		self.assertEqual(entities[1].offset, 12)
 		self.assertEqual(entities[2].offset, 19)
+
+
+class IsPostDataEqualTest(TestCase):
+	def test_phone_number_in_entities(self):
+		text = "test 0991234567 test\n#o #bb #p2"
+		entities1 = test_helper.create_hashtag_entity_list(text)
+		entities2 = [MessageEntity(type="phone_number", offset=5, length=10)] + test_helper.create_hashtag_entity_list(text)
+
+		post_data1 = test_helper.create_mock_message(text, entities1)
+		post_data2 = test_helper.create_mock_message(text, entities2)
+
+		self.assertTrue(utils.is_post_data_equal(post_data1, post_data2))
+
+	def test_scheduled_tag_in_entities(self):
+		scheduled_tag = "#s 2024-08-05 18:00"
+		text = f"test test\n#o #bb #p2 {scheduled_tag}"
+		entities1 = test_helper.create_hashtag_entity_list(text)
+		entities2 = test_helper.create_hashtag_entity_list(text)
+		entities2[-1].length = len(scheduled_tag)
+
+		post_data1 = test_helper.create_mock_message(text, entities1)
+		post_data2 = test_helper.create_mock_message(text, entities2)
+
+		self.assertTrue(utils.is_post_data_equal(post_data1, post_data2))
+
+	def test_different_entity_amount(self):
+		text = f"test test\n#o #bb #p2"
+		entities1 = test_helper.create_hashtag_entity_list(text)
+		entities2 = test_helper.create_hashtag_entity_list(text)
+		entities2.append(MessageEntity(type="hashtag", offset=17, length=3))
+
+		post_data1 = test_helper.create_mock_message(text, entities1)
+		post_data2 = test_helper.create_mock_message(text, entities2)
+
+		self.assertFalse(utils.is_post_data_equal(post_data1, post_data2))
+
+	def test_different_text(self):
+		text1 = f"test test\n#o #bb #p2"
+		text2 = f"asdf asdf\n#o #bb #p2"
+		entities1 = test_helper.create_hashtag_entity_list(text1)
+		entities2 = test_helper.create_hashtag_entity_list(text2)
+
+		post_data1 = test_helper.create_mock_message(text1, entities1)
+		post_data2 = test_helper.create_mock_message(text2, entities2)
+
+		self.assertFalse(utils.is_post_data_equal(post_data1, post_data2))
 
 
 if __name__ == "__main__":
