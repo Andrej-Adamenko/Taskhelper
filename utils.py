@@ -145,6 +145,9 @@ def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.ty
 	text1, entities1 = get_post_content(post_data1)
 	text2, entities2 = get_post_content(post_data2)
 
+	entities1 = [e for e in entities1 if e.type != "phone_number"]
+	entities2 = [e for e in entities2 if e.type != "phone_number"]
+
 	if text1 != text2:
 		return False
 
@@ -360,8 +363,8 @@ def delete_main_message(bot: telebot.TeleBot, main_channel_id: int, main_message
 	messages = db_utils.get_copied_messages_from_main(main_message_id, main_channel_id)
 	for msg in messages:
 		copied_message_id, copied_channel_id = msg
-		forwarding_utils.delete_forwarded_message(bot, copied_channel_id, copied_message_id)
 		db_utils.delete_copied_message(copied_message_id, copied_channel_id)
+		forwarding_utils.delete_forwarded_message(bot, copied_channel_id, copied_message_id)
 		logging.info(f"Removed forwarded message {msg} after it was deleted from main channel {main_message_id, main_channel_id}")
 	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
 

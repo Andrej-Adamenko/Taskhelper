@@ -117,6 +117,42 @@ In order for bot to be able to forward tickets to subchannels you need to specif
 
 You can also change ticket's tags using buttons that bot will add to all messages in main channel
 
+## How to create a service
+If you want the bot to be always running you can create a service that will automatically start the bot with the system startup.
+
+In order to create the service first you should create a service file which will contain a configuration for your service. It should be placed in **/etc/systemd/system**, the name of the file will be the name of your service, and have **.service** extension, example:
+```
+/etc/systemd/system/taskhelper.service
+```
+
+Here is an example of a service file content:
+```
+[Unit]
+Description=Taskhelper service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/taskhelper_user/Taskhelper/main.py
+WorkingDirectory=/home/user/Taskhelper
+RestartSec=30
+Restart=always
+User=taskhelper_user
+
+[Install]
+WantedBy=multi-user.target
+```
+
+You need to change **ExecStart**, **WorkingDirectory** and **User**, other options can remain the same.
+
+After service file is created you need to run following commands.
+```
+systemctl enable taskhelper.service
+systemctl start taskhelper.service
+```
+
+After that bot will be started, and when the system is turned on it will automatically start the bot.
+
 ## Buttons
 There are 5 control buttons:
 1) Open/close ticket
