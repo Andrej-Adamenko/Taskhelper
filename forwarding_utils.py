@@ -664,10 +664,8 @@ def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, h
 					   original_post_data: telebot.types.Message = None):
 	scheduled_message_dispatcher.update_scheduled_message_tags(hashtag_data)
 	post_data = hashtag_data.rearrange_hashtags(post_data)
-	# if not hashtag_data.is_scheduled():
-	# 	scheduled_message_dispatcher.update_scheduled_message_status(post_data)
 
-	scheduled_message_dispatcher.update_scheduled_time_from_ticket(bot, post_data, hashtag_data)
+	scheduled_message_dispatcher.update_status_from_tags(bot, post_data, hashtag_data)
 
 	text, entities = utils.get_post_content(post_data)
 	hashtag_data.hashtag_indexes = hashtag_data.find_hashtag_indexes(text, entities, post_data.chat.id)
