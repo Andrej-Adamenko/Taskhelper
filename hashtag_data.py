@@ -1,5 +1,4 @@
 import re
-import time
 import typing
 from typing import List
 import datetime
@@ -21,8 +20,6 @@ CLOSED_TAG = HASHTAGS["CLOSED"]
 SCHEDULED_TAG = HASHTAGS["SCHEDULED"]
 
 POSSIBLE_PRIORITIES = ["1", "2", "3"]
-SCHEDULED_DATE_FORMAT_REGEX = "^\d{4}-\d{1,2}-\d{1,2}"
-SCHEDULED_TIME_FORMAT_REGEX = "^\d{1,2}:\d{1,2}"
 
 
 class HashtagData:
@@ -32,6 +29,8 @@ class HashtagData:
 		self.main_channel_id = main_channel_id
 
 		text, entities = utils.get_post_content(post_data)
+		for i, entity in enumerate(entities):
+			self.update_scheduled_tag_entity_length(text, entities, i)
 		entities = self.remove_strikethrough_entities(text, entities)
 		utils.set_post_content(post_data, text, entities)
 
@@ -223,7 +222,7 @@ class HashtagData:
 		priority_tag_index = None
 
 		for i, entity in enumerate(entities):
-			self.update_scheduled_tag(text, entities, i)
+			self.update_scheduled_tag_entity_length(text, entities, i)
 
 		if entities is None:
 			return None, None, [], None
@@ -276,7 +275,7 @@ class HashtagData:
 			if config_utils.HASHTAGS_BEFORE_UPDATE:
 				result = self.replace_old_scheduled_tag(text, entities, scheduled_tag_index)
 				text = result if result else text
-			self.update_scheduled_tag(text, entities, scheduled_tag_index)
+			self.update_scheduled_tag_entity_length(text, entities, scheduled_tag_index)
 			scheduled_tag = self.get_tag_from_entity(entities[scheduled_tag_index], text)
 
 		status_tag = None
@@ -383,16 +382,16 @@ class HashtagData:
 				continue
 
 			scheduled_parts = tag.split(" ")
-			if len(scheduled_parts) < 3:
+			if len(scheduled_parts) < 2:
 				continue
 
 			date_str = scheduled_parts[1]
-			if not utils.check_datetime(date_str, "%Y-%m-%d"):
+			if not utils.parse_datetime(date_str, "%Y-%m-%d"):
 				continue
 
-			time_str = scheduled_parts[2]
-			if not utils.check_datetime(time_str, "%H:%M"):
-				continue
+			time_str = scheduled_parts[2] if len(scheduled_parts) > 2 else ""
+			if not utils.parse_datetime(time_str, "%H:%M"):
+				time_str = "00:00"
 
 			datetime_str = f"{date_str} {time_str}"
 			scheduled_date = datetime.datetime.strptime(datetime_str, SCHEDULED_DATETIME_FORMAT)
@@ -532,7 +531,7 @@ class HashtagData:
 				continue
 
 			date_str = scheduled_parts[1]
-			if not utils.check_datetime(date_str, "%Y-%m-%d"):
+			if not utils.parse_datetime(date_str, "%Y-%m-%d"):
 				remained_text.append(date_str)
 				if len(scheduled_parts) > 2:
 					remained_text.append(scheduled_parts[2])
@@ -542,7 +541,7 @@ class HashtagData:
 				time_str = "00:00"
 			else:
 				time_str = scheduled_parts[2]
-				if not utils.check_datetime(time_str, "%H:%M"):
+				if not utils.parse_datetime(time_str, "%H:%M"):
 					remained_text.append(time_str)
 					time_str = "00:00"
 
@@ -560,8 +559,7 @@ class HashtagData:
 			return text, entities
 
 		if len(remained_text) > 0:
-			last_main_entity = entities[entities_to_ignore.start - 1]
-			insertion_start = last_main_entity.offset + last_main_entity.length
+			insertion_start = text.rfind("\n")
 			changed_offset = 0
 			for s in remained_text[::-1]:
 				str_to_insert = f" {s}"
@@ -662,12 +660,12 @@ class HashtagData:
 			if previous_entity.type != "hashtag":
 				continue
 
-			previous_entity_tag = self.get_tag_from_entity(previous_entity, text)
-			if not previous_entity_tag == SCHEDULED_TAG:
+			scheduled_tag_start = f"#{SCHEDULED_TAG} "
+			previous_entity_tag = "#" + self.get_tag_from_entity(previous_entity, text)
+			if scheduled_tag_start[:len(previous_entity_tag)].startswith(previous_entity_tag):
 				continue
 
-			scheduled_tag_start = f"#{SCHEDULED_TAG} "
-			self.update_scheduled_tag(text, entities, i - 1)
+			self.update_scheduled_tag_entity_length(text, entities, i - 1)
 
 			if not entity.offset == (previous_entity.offset + len(scheduled_tag_start)):
 				continue
@@ -731,31 +729,35 @@ class HashtagData:
 		return last_line_entities + other_entities
 
 	@staticmethod
-	def update_scheduled_tag(text: str, entities: List[MessageEntity], tag_index: int):
+	def update_scheduled_tag_entity_length(text: str, entities: List[MessageEntity], tag_index: int):
 		scheduled_tag = entities[tag_index]
 		scheduled_tag_text = text[scheduled_tag.offset:scheduled_tag.offset + scheduled_tag.length]
 
 		scheduled_parts = scheduled_tag_text.split(" ")
 		if len(scheduled_parts) == 3:
-			tag, date, time = scheduled_parts
-			date_match = re.search(SCHEDULED_DATE_FORMAT_REGEX, date)
-			time_match = re.search(SCHEDULED_TIME_FORMAT_REGEX, time)
-			if date_match and time_match:
+			tag, date_str, time_str = scheduled_parts
+			parsed_date = utils.parse_datetime(date_str, "%Y-%m-%d")
+			parsed_time = utils.parse_datetime(time_str, "%H:%M")
+			if parsed_date and parsed_time:
 				return True
 
 		if text[scheduled_tag.offset + 1:].startswith(SCHEDULED_TAG):
 			scheduled_tag.length = len(SCHEDULED_TAG) + 1
 			text_after_tag = text[scheduled_tag.offset + scheduled_tag.length + 1:]
-			date_match = re.search(SCHEDULED_DATE_FORMAT_REGEX, text_after_tag)
-			if date_match is None:
-				return False
-			entities[tag_index].length += date_match.end() + 1
+			new_line_index = text_after_tag.find("\n")
+			if new_line_index != -1:
+				text_after_tag = text_after_tag[:new_line_index]
+			tag_parts = text_after_tag.split(" ")
 
-			text_after_date = text_after_tag[date_match.end() + 1:]
-			time_match = re.search(SCHEDULED_TIME_FORMAT_REGEX, text_after_date)
-			if time_match is None:
+			date_part = tag_parts[0] if len(tag_parts) > 0 else ""
+			if not utils.parse_datetime(date_part, "%Y-%m-%d"):
 				return False
-			entities[tag_index].length += time_match.end() + 1
+			entities[tag_index].length += len(date_part) + 1
+
+			time_part = tag_parts[1] if len(tag_parts) > 1 else ""
+			if not utils.parse_datetime(time_part, "%H:%M"):
+				return False
+			entities[tag_index].length += len(time_part) + 1
 
 			return True
 		return False

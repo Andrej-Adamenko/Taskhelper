@@ -276,7 +276,7 @@ class ScheduledMessageDispatcher:
 		try:
 			message = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
 		except ApiTelegramException:
-			utils.delete_main_message(bot, main_channel_id, main_message_id)
+			forwarding_utils.delete_main_message(bot, main_channel_id, main_message_id)
 			self.__scheduled_messages_list.remove(scheduled_message)
 			return
 
@@ -340,7 +340,11 @@ class ScheduledMessageDispatcher:
 		if not hashtag_data.is_scheduled():
 			return
 
-		dt = datetime.datetime.strptime(hashtag_data.get_scheduled_datetime_str(), utils.SCHEDULED_DATETIME_FORMAT)
+		scheduled_datetime_str = hashtag_data.get_scheduled_datetime_str()
+		dt = utils.parse_datetime(scheduled_datetime_str, utils.SCHEDULED_DATETIME_FORMAT)
+		if not dt:
+			return
+
 		timezone = pytz.timezone(TIMEZONE_NAME)
 		dt = timezone.localize(dt)
 		is_sent = datetime.datetime.now().timestamp() > dt.timestamp()

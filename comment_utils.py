@@ -55,7 +55,7 @@ def update_next_action(bot: telebot.TeleBot, main_message_id: int, main_channel_
 
 	text, entities = utils.get_post_content(post_data)
 	for i in range(len(entities)):
-		HashtagData.update_scheduled_tag(text, entities, i)
+		HashtagData.update_scheduled_tag_entity_length(text, entities, i)
 
 	is_hashtag_line_present = hashtag_utils.is_last_line_contains_only_hashtags(text, entities)
 	if _NEXT_ACTION_TEXT_PREFIX in text:

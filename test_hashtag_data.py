@@ -261,6 +261,7 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 		self.assertEqual(result[0], "text\n#o #aa #bb #p1 #s 2023-06-25")
 
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	@patch("hashtag_data.HashtagData.get_scheduled_timestamp", return_value=1687701600)
 	def test_user_tag_at_the_end(self, *args):
 		text = "text\n#o #aa #bb #p1 #s 2023-06-25 17:00 #test"
 		entities = test_helper.create_hashtag_entity_list(text)
@@ -275,14 +276,12 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 
 
 @patch("hashtag_data.SCHEDULED_TAG", "s")
-@patch("hashtag_data.SCHEDULED_DATE_FORMAT_REGEX", "^\d{4}-\d{1,2}-\d{1,2}")
-@patch("hashtag_data.SCHEDULED_TIME_FORMAT_REGEX", "^\d{1,2}:\d{1,2}")
 class UpdateScheduledTagTest(TestCase):
 	def test_update_entity(self, *args):
 		text = "#s 2023-06-25 17:00"
 		entities = test_helper.create_hashtag_entity_list(text)
 
-		result = HashtagData.update_scheduled_tag(text, entities, 0)
+		result = HashtagData.update_scheduled_tag_entity_length(text, entities, 0)
 		self.assertTrue(result)
 		self.assertEqual(entities[0].length, len(text))
 
@@ -291,7 +290,7 @@ class UpdateScheduledTagTest(TestCase):
 		entities = test_helper.create_hashtag_entity_list(text)
 
 		entity_length = entities[0].length
-		result = HashtagData.update_scheduled_tag(text, entities, 0)
+		result = HashtagData.update_scheduled_tag_entity_length(text, entities, 0)
 		self.assertFalse(result)
 		self.assertEqual(entities[0].length, entity_length)
 
@@ -299,9 +298,18 @@ class UpdateScheduledTagTest(TestCase):
 		text = "#s 2023-06-25"
 		entities = test_helper.create_hashtag_entity_list(text)
 
-		result = HashtagData.update_scheduled_tag(text, entities, 0)
+		result = HashtagData.update_scheduled_tag_entity_length(text, entities, 0)
 		self.assertFalse(result)
 		self.assertEqual(entities[0].length, len(text))
+
+	def test_new_line_after_scheduled_tag(self, *args):
+		scheduled_tag = "#s 2023-06-25 22:00"
+		text = f"test {scheduled_tag}\ntext test"
+		entities = test_helper.create_hashtag_entity_list(text)
+
+		result = HashtagData.update_scheduled_tag_entity_length(text, entities, 0)
+		self.assertTrue(result)
+		self.assertEqual(entities[0].length, len(scheduled_tag))
 
 
 @patch("hashtag_data.POSSIBLE_PRIORITIES", ["1", "2", "3"])
@@ -317,7 +325,7 @@ class CopyTagsFromOtherTagsTest(TestCase):
 		hashtag_data.priority_tag = None
 		hashtag_data.other_hashtags = ["#p2", "#p3", "#p1", "#p2"]
 
-		hashtag_data.copy_tags_from_other_tags()
+		hashtag_data.copy_tags_from_other_hashtags()
 		self.assertEqual(hashtag_data.priority_tag, "p1")
 
 	@patch("hashtag_data.HashtagData.get_priority_number_or_default", return_value=None)
@@ -328,7 +336,7 @@ class CopyTagsFromOtherTagsTest(TestCase):
 		hashtag_data.priority_tag = "p1"
 		hashtag_data.other_hashtags = ["#p2", "#p3", "#p2"]
 
-		hashtag_data.copy_tags_from_other_tags()
+		hashtag_data.copy_tags_from_other_hashtags()
 		self.assertEqual(hashtag_data.priority_tag, "p2")
 
 	def test_status_tags(self, *args):
@@ -338,7 +346,7 @@ class CopyTagsFromOtherTagsTest(TestCase):
 		hashtag_data.priority_tag = None
 		hashtag_data.other_hashtags = ["#o", "#x"]
 
-		hashtag_data.copy_tags_from_other_tags()
+		hashtag_data.copy_tags_from_other_hashtags()
 		self.assertEqual(hashtag_data.status_tag, "o")
 
 
@@ -447,6 +455,31 @@ class RemoveStrikethroughEntitiesTest(TestCase):
 			is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in entities])
 			self.assertFalse(is_strikethrough_entity_exists)
 			self.assertEqual(len(entities), 4)
+
+
+@patch("hashtag_data.SCHEDULED_TAG", "s")
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class FindScheduledTagInOtherHashtagsTest(TestCase):
+	def test_find_scheduled_tag(self, *args):
+		hashtag_data = HashtagData()
+		hashtag_data.other_hashtags = ["#ab", "#bb", "#test", "#s 2024-01-23 13:00"]
+
+		result = hashtag_data.find_scheduled_tag_in_other_hashtags()
+		self.assertEqual(result, "2024-01-23 13:00")
+
+	def test_multiple_scheduled_tags(self, *args):
+		hashtag_data = HashtagData()
+		hashtag_data.other_hashtags = ["#ab", "#bb", "#s 2024-01-23 13:00", "#s 2024-03-01 12:00", "#s 2024-08-10 22:30"]
+
+		result = hashtag_data.find_scheduled_tag_in_other_hashtags()
+		self.assertEqual(result, "2024-01-23 13:00")
+
+	def test_scheduled_tag_without_time(self, *args):
+		hashtag_data = HashtagData()
+		hashtag_data.other_hashtags = ["#ab", "#bb", "#s 2024-03-01", "#s 2024-03-01 12:00"]
+
+		result = hashtag_data.find_scheduled_tag_in_other_hashtags()
+		self.assertEqual(result, "2024-03-01 00:00")
 
 
 if __name__ == "__main__":

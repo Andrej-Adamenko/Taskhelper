@@ -21,7 +21,7 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, current_msg
 	try:
 		forwarded_message = utils.get_main_message_content_by_id(bot, main_channel_id, current_msg_id)
 	except ApiTelegramException:
-		utils.delete_main_message(bot, main_channel_id, current_msg_id)
+		forwarding_utils.delete_main_message(bot, main_channel_id, current_msg_id)
 		return
 
 	if forwarded_message is None:

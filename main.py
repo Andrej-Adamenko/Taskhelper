@@ -146,7 +146,7 @@ def handle_subchannel_keyboard_callback(call: telebot.types.CallbackQuery):
 	try:
 		msg_data = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
 	except ApiTelegramException:
-		utils.delete_main_message(bot, main_channel_id, main_message_id)
+		forwarding_utils.delete_main_message(bot, main_channel_id, main_message_id)
 		return
 
 	if not utils.check_content_type(bot, msg_data):

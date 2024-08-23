@@ -9,7 +9,6 @@ from telebot.apihelper import ApiTelegramException
 import config_utils
 import db_utils
 import threading_utils
-import forwarding_utils
 from config_utils import MAX_BUTTONS_IN_ROW
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
@@ -352,27 +351,11 @@ def check_content_type(bot: telebot.TeleBot, message: telebot.types.Message):
 	return True
 
 
-def check_datetime(datetime_str, template_str):
+def parse_datetime(datetime_str, template_str):
 	try:
 		return datetime.datetime.strptime(datetime_str, template_str)
 	except ValueError:
 		return
-
-
-def delete_main_message(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int):
-	messages = db_utils.get_copied_messages_from_main(main_message_id, main_channel_id)
-	for msg in messages:
-		copied_message_id, copied_channel_id = msg
-		db_utils.delete_copied_message(copied_message_id, copied_channel_id)
-		forwarding_utils.delete_forwarded_message(bot, copied_channel_id, copied_message_id)
-		logging.info(f"Removed forwarded message {msg} after it was deleted from main channel {main_message_id, main_channel_id}")
-	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
-
-	ticket_data = db_utils.get_ticket_data(main_message_id, main_channel_id)
-	if ticket_data:
-		discussion_chat_id = config_utils.DISCUSSION_CHAT_DATA[str(main_channel_id)]
-		bot.send_message(chat_id=discussion_chat_id, text=f"A user manually deleted ticket {main_message_id}")
-		db_utils.delete_ticket_data(main_message_id, main_channel_id)
 
 
 @threading_utils.timeout_error_lock
