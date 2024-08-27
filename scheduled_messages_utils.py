@@ -336,21 +336,6 @@ class ScheduledMessageDispatcher:
 			utils.add_comment_to_ticket(bot, msg_data, comment_text)
 
 	@staticmethod
-	def update_scheduled_message_tags(hashtag_data: HashtagData):
-		if not hashtag_data.is_scheduled():
-			return
-
-		scheduled_datetime_str = hashtag_data.get_scheduled_datetime_str()
-		dt = utils.parse_datetime(scheduled_datetime_str, utils.SCHEDULED_DATETIME_FORMAT)
-		if not dt:
-			return
-
-		timezone = pytz.timezone(TIMEZONE_NAME)
-		dt = timezone.localize(dt)
-		is_sent = datetime.datetime.now().timestamp() > dt.timestamp()
-		hashtag_data.set_scheduled_status(is_sent)
-
-	@staticmethod
 	def scheduled_message_comparison_func(msg: ScheduledMessage):
 		return msg.send_time
 

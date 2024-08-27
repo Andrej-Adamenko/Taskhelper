@@ -678,7 +678,6 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 
 def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData,
 					   original_post_data: telebot.types.Message = None):
-	scheduled_message_dispatcher.update_scheduled_message_tags(hashtag_data)
 	post_data = hashtag_data.rearrange_hashtags(post_data)
 
 	scheduled_message_dispatcher.update_status_from_tags(bot, post_data, hashtag_data)

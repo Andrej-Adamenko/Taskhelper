@@ -2,6 +2,7 @@ from unittest import TestCase, main
 from unittest.mock import patch
 
 import telebot.types
+import datetime
 
 from hashtag_data import HashtagData
 import test_helper
@@ -433,6 +434,23 @@ class RemoveStrikethroughEntitiesTest(TestCase):
 		self.assertFalse(is_strikethrough_entity_exists)
 		self.assertEqual(len(entities), 4)
 
+	def test_remove_incomplete_scheduled_date_strikethrough_entity(self, *args):
+		hashtag_data = HashtagData()
+		scheduled_tag = "#s 2024-01-23 12:"
+		text = f"text\n#o #cc #p " + scheduled_tag
+		hashtag_data.post_data = test_helper.create_mock_message(text, [])
+		hashtag_data.post_data.message_id = 123
+
+		entities = test_helper.create_hashtag_entity_list(text)
+		entities[-1].length = len(scheduled_tag)
+		entities.append(telebot.types.MessageEntity(type="strikethrough", offset=18, length=len(scheduled_tag) - 3))
+
+		entities = hashtag_data.remove_strikethrough_entities(text, entities)
+
+		is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in entities])
+		self.assertFalse(is_strikethrough_entity_exists)
+		self.assertEqual(len(entities), 4)
+
 	def test_remove_ticket_number_strikethrough_entity(self, *args):
 		hashtag_data = HashtagData()
 		text = f"123. text\n#o #cc #p"
@@ -480,6 +498,45 @@ class FindScheduledTagInOtherHashtagsTest(TestCase):
 
 		result = hashtag_data.find_scheduled_tag_in_other_hashtags()
 		self.assertEqual(result, "2024-03-01 00:00")
+
+
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class UpdateScheduledStatusTest(TestCase):
+	@patch("time.time", return_value=1717189200)  # 2024-06-01
+	@patch("hashtag_data.HashtagData.is_scheduled", return_value=True)
+	@patch("hashtag_data.HashtagData.get_scheduled_datetime_str", return_value="2024-03-01 12:00")
+	def test_after_sent_date(self, *args):
+		hashtag_data = HashtagData()
+
+		hashtag_data.update_scheduled_status()
+		self.assertTrue(hashtag_data.is_sent)
+
+	@patch("time.time", return_value=1717189200)  # 2024-06-01
+	@patch("hashtag_data.HashtagData.is_scheduled", return_value=True)
+	@patch("hashtag_data.HashtagData.get_scheduled_datetime_str", return_value="2024-09-01 12:00")
+	def test_before_sent_date(self, *args):
+		hashtag_data = HashtagData()
+
+		hashtag_data.update_scheduled_status()
+		self.assertFalse(hashtag_data.is_sent)
+
+	@patch("hashtag_data.HashtagData.is_scheduled", return_value=False)
+	def test_not_scheduled(self, *args):
+		hashtag_data = HashtagData()
+		hashtag_data.is_sent = None
+
+		hashtag_data.update_scheduled_status()
+		self.assertFalse(hashtag_data.is_sent)
+
+	@patch("hashtag_data.HashtagData.is_scheduled", return_value=True)
+	@patch("hashtag_data.HashtagData.get_scheduled_datetime_str", return_value="2222-22-22 22:22")
+	@patch("hashtag_data.HashtagData.is_scheduled", return_value=False)
+	def test_invalid_datetime(self, *args):
+		hashtag_data = HashtagData()
+		hashtag_data.is_sent = None
+
+		hashtag_data.update_scheduled_status()
+		self.assertFalse(hashtag_data.is_sent)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 import re
+import time
 import typing
 from typing import List
 import datetime
 
+import pytz
 import telebot
 from telebot.types import MessageEntity
 
@@ -153,9 +155,6 @@ class HashtagData:
 			return
 		space_index = self.scheduled_tag.find(" ")
 		return self.scheduled_tag[space_index + 1:]
-
-	def set_scheduled_status(self, is_sent):
-		self.is_sent = is_sent
 
 	def insert_default_user(self, default_user):
 		if not self.get_assigned_user():
@@ -624,6 +623,7 @@ class HashtagData:
 
 		post_data = self.remove_duplicates(post_data)
 		self.extract_hashtags(post_data, self.main_channel_id)
+		self.update_scheduled_status()
 		post_data = self.add_strikethrough_entities(post_data)
 
 		return post_data
@@ -665,11 +665,7 @@ class HashtagData:
 			if scheduled_tag_start[:len(previous_entity_tag)].startswith(previous_entity_tag):
 				continue
 
-			self.update_scheduled_tag_entity_length(text, entities, i - 1)
-
 			if not entity.offset == (previous_entity.offset + len(scheduled_tag_start)):
-				continue
-			if not entity.length == (previous_entity.length - len(scheduled_tag_start)):
 				continue
 
 			entities_to_remove.append(entity)
@@ -679,7 +675,7 @@ class HashtagData:
 	def strike_through_scheduled_tag(self, text, entities):
 		scheduled_tag_index, _, _, _ = self.hashtag_indexes
 		if not scheduled_tag_index:
-			return text, entities
+			return entities
 		scheduled_tag_entity = entities[scheduled_tag_index]
 		scheduled_tag = self.get_tag_from_entity(scheduled_tag_entity, text)
 		datetime_offset = scheduled_tag.find(" ") + 1
@@ -711,6 +707,21 @@ class HashtagData:
 		entities.insert(0, strikethrough_entity)
 
 		return entities
+
+	def update_scheduled_status(self):
+		self.is_sent = False
+
+		if not self.is_scheduled():
+			return
+
+		scheduled_datetime_str = self.get_scheduled_datetime_str()
+		dt = utils.parse_datetime(scheduled_datetime_str, utils.SCHEDULED_DATETIME_FORMAT)
+		if not dt:
+			return
+
+		timezone = pytz.timezone(config_utils.TIMEZONE_NAME)
+		dt = timezone.localize(dt)
+		self.is_sent = time.time() > dt.timestamp()
 
 	@staticmethod
 	def get_entity_deduplication_order(text: str, entities: List[telebot.types.MessageEntity]):
