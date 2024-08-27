@@ -9,7 +9,7 @@ import test_helper
 
 @patch("hashtag_data.PRIORITY_TAG", "p")
 @patch("hashtag_data.OPENED_TAG", "o")
-class FindMentionedUsersTest(TestCase):
+class FindCopyUsersFromText(TestCase):
 	@patch("db_utils.is_user_tag_exists")
 	@patch("hashtag_data.HashtagData.__init__")
 	def test_find_mentioned_users(self, mock_hashtag_data_init, mock_is_user_tag_exists):
@@ -27,8 +27,10 @@ class FindMentionedUsersTest(TestCase):
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.hashtag_indexes = [None, 2, [3], 4]
 		hashtag_data.main_channel_id = main_channel_id
-		result = hashtag_data.find_mentioned_users(post_data)
+		hashtag_data.user_tags = ["cc"]
+		result = hashtag_data.copy_users_from_text(post_data)
 		self.assertEqual(result, ["aa", "bb"])
+		self.assertEqual(hashtag_data.user_tags, ["cc", "aa", "bb"])
 
 	@patch("db_utils.is_user_tag_exists")
 	@patch("hashtag_data.HashtagData.__init__")
@@ -48,8 +50,33 @@ class FindMentionedUsersTest(TestCase):
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.hashtag_indexes = [None, 0, [1], 2]
 		hashtag_data.main_channel_id = main_channel_id
-		result = hashtag_data.find_mentioned_users(post_data)
+		hashtag_data.user_tags = ["cc"]
+		result = hashtag_data.copy_users_from_text(post_data)
 		self.assertEqual(result, [])
+		self.assertEqual(hashtag_data.user_tags, ["cc"])
+
+	@patch("db_utils.is_user_tag_exists")
+	@patch("hashtag_data.HashtagData.__init__")
+	def test_assign_user(self, mock_hashtag_data_init, mock_is_user_tag_exists):
+		mock_hashtag_data_init.return_value = None
+
+		user_tags = ["aa", "bb"]
+		is_user_tag = lambda channel_id, user_tag: user_tag in user_tags
+		mock_is_user_tag_exists.side_effect = is_user_tag
+
+		text = f"text #aa #bb test\n#o #p"
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
+
+		main_channel_id = 123
+
+		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.hashtag_indexes = [None, 2, [], 3]
+		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.user_tags = []
+		result = hashtag_data.copy_users_from_text(post_data)
+		self.assertEqual(result, ["aa", "bb"])
+		self.assertEqual(hashtag_data.user_tags, ["aa", "bb"])
 
 
 class GetEntitiesToIgnoreTest(TestCase):

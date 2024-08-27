@@ -42,16 +42,12 @@ class HashtagData:
 		self.priority_tag = priority_tag
 		self.is_sent = None
 
-		self.other_hashtags = self.extract_other_hashtags(post_data)
+		self.other_hashtags = self.extract_other_hashtags(post_data)  # all tags found in ticket's text
+		self.mentioned_users = self.copy_users_from_text(post_data)  # user tags in ticket's text
 
 		missing_tags = self.get_assigned_user() is None or self.get_priority_number() is None or self.is_status_missing()
 		if insert_default_tags and missing_tags:
 			self.insert_default_tags()
-
-		self.mentioned_users = self.find_mentioned_users(post_data)
-		for user_tag in self.mentioned_users:
-			if user_tag not in self.user_tags:
-				self.user_tags.append(user_tag)
 
 	def is_status_missing(self):
 		return self.status_tag is None
@@ -121,7 +117,7 @@ class HashtagData:
 	def remove_from_followers(self, user: str):
 		self.user_tags.remove(user)
 
-	def add_to_followers(self, user: str):
+	def add_user(self, user: str):
 		if user not in self.user_tags:
 			self.user_tags.append(user)
 
@@ -332,7 +328,7 @@ class HashtagData:
 			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
 			return priority
 
-	def find_mentioned_users(self, post_data: telebot.types.Message):
+	def copy_users_from_text(self, post_data: telebot.types.Message):
 		text, entities = utils.get_post_content(post_data)
 		mentioned_users = []
 		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
@@ -346,7 +342,11 @@ class HashtagData:
 			tag = self.get_tag_from_entity(entities[entity_index], text)
 			if db_utils.is_user_tag_exists(self.main_channel_id, tag):
 				mentioned_users.append(tag)
+				self.add_user(tag)
 		return mentioned_users
+
+	def can_remove_user_from_followers(self, user):
+		return user not in self.mentioned_users
 
 	def is_tag_in_other_hashtags(self, tag: str):
 		if not tag.startswith("#"):

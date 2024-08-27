@@ -616,13 +616,13 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	if selected_user in hashtag_data.get_followed_users():
-		if selected_user in hashtag_data.mentioned_users:
+		if not hashtag_data.can_remove_user_from_followers(selected_user):
 			bot.answer_callback_query(call.id, "Can't remove this user because he's mentioned in the text")
 			return
 		hashtag_data.remove_from_followers(selected_user)
 		comment_text = f"{call.from_user.first_name} removed {{USER}} from ticket's followers."
 	else:
-		hashtag_data.add_to_followers(selected_user)
+		hashtag_data.add_user(selected_user)
 		comment_text = f"{call.from_user.first_name} added {{USER}} to ticket's followers."
 
 	text, entities = user_utils.insert_user_reference(main_channel_id, selected_user, comment_text)
@@ -642,16 +642,12 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 	hashtag_data = HashtagData(post_data, main_channel_id, True)
 	post_data = hashtag_data.get_post_data_without_hashtags()
 
-	ticket_user_tags = hashtag_data.get_all_users()
-
 	if new_ticket:
 		sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
 		if sender_id:
 			user_tags = db_utils.get_tags_from_user_id(sender_id)
 			for user_tag in user_tags:
-				if user_tag in ticket_user_tags:
-					continue
-				hashtag_data.add_to_followers(user_tag)
+				hashtag_data.add_user(user_tag)
 
 	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
 	comment_utils.add_next_action_comment(bot, post_data)
