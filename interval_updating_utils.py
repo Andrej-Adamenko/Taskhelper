@@ -17,11 +17,15 @@ _INTERVAL_UPDATING_THREAD: threading.Thread = None
 _UPDATE_STATUS: bool = False
 
 
-def update_older_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int):
+def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int):
+	if not db_utils.is_main_message_exists(main_channel_id, main_message_id):
+		logging.info(f"Ticket update for {main_channel_id, main_message_id} was skipped because it's not in db")
+		return
+
 	try:
-		forwarded_message = utils.get_main_message_content_by_id(bot, main_channel_id, current_msg_id)
+		forwarded_message = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
 	except ApiTelegramException:
-		forwarding_utils.delete_main_message(bot, main_channel_id, current_msg_id)
+		forwarding_utils.delete_main_message(bot, main_channel_id, main_message_id)
 		return
 
 	if forwarded_message is None:

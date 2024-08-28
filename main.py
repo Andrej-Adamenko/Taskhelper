@@ -49,6 +49,8 @@ def handle_post(post_data: telebot.types.Message):
 	recently_created.append(post_data.message_id)
 
 	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
+	if post_data.media_group_id:
+		return
 
 	user_id = user_utils.find_user_by_signature(post_data.author_signature, post_data.chat.id)
 	db_utils.insert_main_channel_message(post_data.chat.id, post_data.message_id, user_id)
@@ -62,6 +64,9 @@ def handle_post(post_data: telebot.types.Message):
 @bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(msg_data.message_id, msg_data.chat.id)
+
+	if msg_data.media_group_id:
+		return
 
 	forwarded_from_str = str(msg_data.forward_from_chat.id)
 	if forwarded_from_str not in DISCUSSION_CHAT_DATA:
