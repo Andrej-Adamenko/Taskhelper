@@ -2,7 +2,6 @@ from unittest import TestCase, main
 from unittest.mock import patch
 
 import telebot.types
-import datetime
 
 from hashtag_data import HashtagData
 import test_helper
@@ -29,7 +28,8 @@ class FindCopyUsersFromText(TestCase):
 		hashtag_data.hashtag_indexes = [None, 2, [3], 4]
 		hashtag_data.main_channel_id = main_channel_id
 		hashtag_data.user_tags = ["cc"]
-		result = hashtag_data.copy_users_from_text(post_data)
+		hashtag_data.post_data = post_data
+		result = hashtag_data.copy_users_from_text()
 		self.assertEqual(result, ["aa", "bb"])
 		self.assertEqual(hashtag_data.user_tags, ["cc", "aa", "bb"])
 
@@ -52,7 +52,8 @@ class FindCopyUsersFromText(TestCase):
 		hashtag_data.hashtag_indexes = [None, 0, [1], 2]
 		hashtag_data.main_channel_id = main_channel_id
 		hashtag_data.user_tags = ["cc"]
-		result = hashtag_data.copy_users_from_text(post_data)
+		hashtag_data.post_data = post_data
+		result = hashtag_data.copy_users_from_text()
 		self.assertEqual(result, [])
 		self.assertEqual(hashtag_data.user_tags, ["cc"])
 
@@ -75,7 +76,8 @@ class FindCopyUsersFromText(TestCase):
 		hashtag_data.hashtag_indexes = [None, 2, [], 3]
 		hashtag_data.main_channel_id = main_channel_id
 		hashtag_data.user_tags = []
-		result = hashtag_data.copy_users_from_text(post_data)
+		hashtag_data.post_data = post_data
+		result = hashtag_data.copy_users_from_text()
 		self.assertEqual(result, ["aa", "bb"])
 		self.assertEqual(hashtag_data.user_tags, ["aa", "bb"])
 
@@ -448,35 +450,39 @@ class RemoveStrikethroughEntitiesTest(TestCase):
 		hashtag_data = HashtagData()
 		scheduled_tag = "#s 2024-01-23 13:00"
 		text = f"text\n#o #cc #p " + scheduled_tag
-		hashtag_data.post_data = test_helper.create_mock_message(text, [])
-		hashtag_data.post_data.message_id = 123
 
 		entities = test_helper.create_hashtag_entity_list(text)
 		entities[-1].length = len(scheduled_tag)
 		entities.append(telebot.types.MessageEntity(type="strikethrough", offset=18, length=16))
 
-		entities = hashtag_data.remove_strikethrough_entities(text, entities)
+		hashtag_data.post_data = test_helper.create_mock_message(text, entities)
+		hashtag_data.post_data.message_id = 123
 
-		is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in entities])
+		hashtag_data.remove_strikethrough_entities()
+
+		result_entities = hashtag_data.post_data.entities
+		is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in result_entities])
 		self.assertFalse(is_strikethrough_entity_exists)
-		self.assertEqual(len(entities), 4)
+		self.assertEqual(len(result_entities), 4)
 
 	def test_remove_incomplete_scheduled_date_strikethrough_entity(self, *args):
 		hashtag_data = HashtagData()
 		scheduled_tag = "#s 2024-01-23 12:"
 		text = f"text\n#o #cc #p " + scheduled_tag
-		hashtag_data.post_data = test_helper.create_mock_message(text, [])
-		hashtag_data.post_data.message_id = 123
 
 		entities = test_helper.create_hashtag_entity_list(text)
 		entities[-1].length = len(scheduled_tag)
 		entities.append(telebot.types.MessageEntity(type="strikethrough", offset=18, length=len(scheduled_tag) - 3))
 
-		entities = hashtag_data.remove_strikethrough_entities(text, entities)
+		hashtag_data.post_data = test_helper.create_mock_message(text, entities)
+		hashtag_data.post_data.message_id = 123
 
-		is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in entities])
+		hashtag_data.remove_strikethrough_entities()
+
+		result_entities = hashtag_data.post_data.entities
+		is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in result_entities])
 		self.assertFalse(is_strikethrough_entity_exists)
-		self.assertEqual(len(entities), 4)
+		self.assertEqual(len(result_entities), 4)
 
 	def test_remove_ticket_number_strikethrough_entity(self, *args):
 		hashtag_data = HashtagData()
@@ -495,11 +501,13 @@ class RemoveStrikethroughEntitiesTest(TestCase):
 		] + test_helper.create_hashtag_entity_list(text)
 
 		for entities in [first_link_entities, first_strikethrough_entities]:
-			entities = hashtag_data.remove_strikethrough_entities(text, entities)
+			hashtag_data.post_data.entities = entities
+			hashtag_data.remove_strikethrough_entities()
 
-			is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in entities])
+			result_entities = hashtag_data.post_data.entities
+			is_strikethrough_entity_exists = any([e.type == "strikethrough" for e in result_entities])
 			self.assertFalse(is_strikethrough_entity_exists)
-			self.assertEqual(len(entities), 4)
+			self.assertEqual(len(result_entities), 4)
 
 
 @patch("hashtag_data.SCHEDULED_TAG", "s")

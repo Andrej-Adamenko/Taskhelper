@@ -1,6 +1,5 @@
 import json
 import logging
-import copy
 import threading
 import time
 from typing import List
@@ -14,7 +13,6 @@ import comment_utils
 import config_utils
 import daily_reminder
 import db_utils
-import hashtag_utils
 from scheduled_messages_utils import scheduled_message_dispatcher
 import user_utils
 import utils
@@ -542,15 +540,15 @@ def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.Callback
 		bot.answer_callback_query(call.id, "This ticket cannot be closed due to an opened tag in the text")
 		return
 
-	post_data = hashtag_data.get_post_data_without_hashtags()
-
 	state_str = "opened" if is_ticket_opened else "closed"
 	utils.add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} {state_str} the ticket.")
 
 	hashtag_data.set_status_tag(is_ticket_opened)
 
-	rearrange_hashtags(bot, post_data, hashtag_data)
-	for button in post_data.reply_markup.keyboard[0]:
+	updated_post_data = hashtag_data.get_updated_post_data()
+
+	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
+	for button in updated_post_data.reply_markup.keyboard[0]:
 		cb_type, _ = utils.parse_callback_str(button.callback_data)
 		if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
 			callback_type = CB_TYPES.CLOSE if is_ticket_opened else CB_TYPES.OPEN
@@ -558,8 +556,8 @@ def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.Callback
 			state_btn_text = config_utils.BUTTON_TEXTS["OPENED_TICKET" if is_ticket_opened else "CLOSED_TICKET"]
 			button.text = state_btn_text
 			break
-	add_control_buttons(bot, post_data, hashtag_data)
-	forward_to_subchannel(bot, post_data, hashtag_data)
+	add_control_buttons(bot, updated_post_data, hashtag_data)
+	forward_to_subchannel(bot, updated_post_data, hashtag_data)
 
 
 def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, new_subchannel_name: str):
@@ -568,9 +566,7 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 
 	subchannel_user, subchannel_priority = new_subchannel_name.split(" ")
 
-	original_post_data = copy.deepcopy(post_data)
 	hashtag_data = HashtagData(post_data, main_channel_id)
-	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	is_user_tag_changed = hashtag_data.get_assigned_user() != subchannel_user
 	is_priority_tag_changed = hashtag_data.get_priority_number() != subchannel_priority
@@ -596,16 +592,17 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 
 	hashtag_data.set_priority(subchannel_priority)
 
-	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
-	add_control_buttons(bot, post_data, hashtag_data)
-	forward_to_subchannel(bot, post_data, hashtag_data)
+	updated_post_data = hashtag_data.get_updated_post_data()
+
+	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
+	add_control_buttons(bot, updated_post_data, hashtag_data)
+	forward_to_subchannel(bot, updated_post_data, hashtag_data)
 
 
 def change_priority_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, new_priority: str):
 	post_data = call.message
 	main_channel_id = post_data.chat.id
 
-	original_post_data = copy.deepcopy(post_data)
 	hashtag_data = HashtagData(post_data, main_channel_id)
 
 	priorities = hashtag_data.find_priorities_in_other_hashtags()
@@ -613,23 +610,21 @@ def change_priority_button_event(bot: telebot.TeleBot, call: telebot.types.Callb
 		bot.answer_callback_query(call.id, "Can't change priority because of a tag with higher priority in the text")
 		return
 
-	post_data = hashtag_data.get_post_data_without_hashtags()
-
 	utils.add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} changed ticket's priority to {new_priority}. ")
 	hashtag_data.set_priority(new_priority)
 
-	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
-	add_control_buttons(bot, post_data, hashtag_data)
-	forward_to_subchannel(bot, post_data, hashtag_data)
+	updated_post_data = hashtag_data.get_updated_post_data()
+
+	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
+	add_control_buttons(bot, updated_post_data, hashtag_data)
+	forward_to_subchannel(bot, updated_post_data, hashtag_data)
 
 
 def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, selected_user: str):
 	post_data = call.message
 	main_channel_id = post_data.chat.id
 
-	original_post_data = copy.deepcopy(post_data)
 	hashtag_data = HashtagData(post_data, main_channel_id)
-	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	if selected_user in hashtag_data.get_followed_users():
 		if not hashtag_data.can_remove_user_from_followers(selected_user):
@@ -644,19 +639,18 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 	text, entities = user_utils.insert_user_reference(main_channel_id, selected_user, comment_text)
 	utils.add_comment_to_ticket(bot, post_data, text, entities)
 
-	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
-	show_cc_buttons(bot, post_data)
-	forward_to_subchannel(bot, post_data, hashtag_data)
+	updated_post_data = hashtag_data.get_updated_post_data()
+
+	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
+	show_cc_buttons(bot, updated_post_data)
+	forward_to_subchannel(bot, updated_post_data, hashtag_data)
 
 
 def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, force_forward: bool = False, new_ticket: bool = False):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
-	original_post_data = None if new_ticket else copy.deepcopy(post_data)
-
 	hashtag_data = HashtagData(post_data, main_channel_id, True)
-	post_data = hashtag_data.get_post_data_without_hashtags()
 
 	if new_ticket:
 		sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
@@ -665,21 +659,25 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 			for user_tag in user_tags:
 				hashtag_data.add_user(user_tag)
 
-	rearrange_hashtags(bot, post_data, hashtag_data, original_post_data)
-	comment_utils.add_next_action_comment(bot, post_data)
-	add_control_buttons(bot, post_data, hashtag_data)
+	updated_post_data = hashtag_data.get_updated_post_data()
+
+	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
+	comment_utils.add_next_action_comment(bot, updated_post_data)
+	add_control_buttons(bot, updated_post_data, hashtag_data)
 	if config_utils.AUTO_FORWARDING_ENABLED or force_forward:
-		forward_to_subchannel(bot, post_data, hashtag_data)
+		forward_to_subchannel(bot, updated_post_data, hashtag_data)
 
 
-def rearrange_hashtags(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData,
+def update_message_and_forward_to_subchannels(bot: telebot.TeleBot, hashtag_data: HashtagData):
+	updated_message = hashtag_data.get_updated_post_data()
+	update_main_message_content(bot, hashtag_data, updated_message)
+	add_control_buttons(bot, updated_message, hashtag_data)
+	forward_to_subchannel(bot, updated_message, hashtag_data)
+
+
+def update_main_message_content(bot: telebot.TeleBot, hashtag_data: HashtagData, post_data: telebot.types.Message,
 					   original_post_data: telebot.types.Message = None):
-	post_data = hashtag_data.rearrange_hashtags(post_data)
-
 	scheduled_message_dispatcher.update_status_from_tags(bot, post_data, hashtag_data)
-
-	text, entities = utils.get_post_content(post_data)
-	hashtag_data.hashtag_indexes = hashtag_data.find_hashtag_indexes(text, entities, post_data.chat.id)
 
 	if original_post_data and utils.is_post_data_equal(post_data, original_post_data):
 		return

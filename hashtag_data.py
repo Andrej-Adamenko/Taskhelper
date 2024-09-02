@@ -1,4 +1,4 @@
-import re
+import copy
 import time
 import typing
 from typing import List
@@ -27,16 +27,12 @@ POSSIBLE_PRIORITIES = ["1", "2", "3"]
 class HashtagData:
 	def __init__(self, post_data: telebot.types.Message, main_channel_id: int, insert_default_tags: bool = False):
 		self.hashtag_indexes = []
-		self.post_data = post_data
+		self.post_data = copy.deepcopy(post_data)
 		self.main_channel_id = main_channel_id
 
-		text, entities = utils.get_post_content(post_data)
-		for i, entity in enumerate(entities):
-			self.update_scheduled_tag_entity_length(text, entities, i)
-		entities = self.remove_strikethrough_entities(text, entities)
-		utils.set_post_content(post_data, text, entities)
+		self.remove_strikethrough_entities()
 
-		hashtags = self.extract_hashtags(post_data, main_channel_id)
+		hashtags = self.extract_hashtags(self.post_data, main_channel_id)
 		scheduled_tag, status_tag, user_tags, priority_tag = hashtags
 		self.scheduled_tag = scheduled_tag
 		self.status_tag = status_tag
@@ -44,12 +40,15 @@ class HashtagData:
 		self.priority_tag = priority_tag
 		self.is_sent = None
 
-		self.other_hashtags = self.extract_other_hashtags(post_data)  # all tags found in ticket's text
-		self.mentioned_users = self.copy_users_from_text(post_data)  # user tags in ticket's text
+		self.other_hashtags = self.extract_other_hashtags()  # all tags found in ticket's text
+		self.mentioned_users = self.copy_users_from_text()  # user tags in ticket's text
 
 		missing_tags = self.get_assigned_user() is None or self.get_priority_number() is None or self.is_status_missing()
 		if insert_default_tags and missing_tags:
 			self.insert_default_tags()
+
+		self.remove_found_hashtags()
+		self.copy_tags_from_other_hashtags()
 
 	def is_status_missing(self):
 		return self.status_tag is None
@@ -160,6 +159,14 @@ class HashtagData:
 		if self.get_priority_number() is None:
 			if not self.find_priorities_in_other_hashtags():
 				self.set_priority("")
+
+	def get_updated_post_data(self):
+		hashtags = self.get_hashtags_for_insertion()
+		hashtag_utils.insert_hashtags(self.post_data, hashtags)
+		self.post_data = self.remove_duplicates(self.post_data)
+		self.update_scheduled_status()
+		self.post_data = self.add_strikethrough_entities(self.post_data)
+		return self.post_data
 
 	def insert_default_tags(self):
 		main_channel_id_str = str(self.main_channel_id)
@@ -293,10 +300,12 @@ class HashtagData:
 				text = result if result else text
 			priority_tag = self.get_tag_from_entity(entities[priority_tag_index], text)
 
+		utils.set_post_content(post_data, text, entities)
+
 		return scheduled_tag, status_tag, user_tags, priority_tag
 
-	def extract_other_hashtags(self, post_data: telebot.types.Message):
-		text, entities = utils.get_post_content(post_data)
+	def extract_other_hashtags(self):
+		text, entities = utils.get_post_content(self.post_data)
 		if not entities:
 			return []
 		hashtags = []
@@ -320,7 +329,7 @@ class HashtagData:
 			hashtags += user_tag_indexes
 		return list(filter(lambda elem: elem is not None, hashtags))
 
-	def get_post_data_without_hashtags(self):
+	def remove_found_hashtags(self):
 		text, entities = utils.get_post_content(self.post_data)
 
 		entities_to_remove = self.get_present_hashtag_indices()
@@ -333,7 +342,6 @@ class HashtagData:
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 
 		utils.set_post_content(self.post_data, text, entities)
-		return self.post_data
 
 	def get_default_subchannel_priority(self):
 		main_channel_id_str = str(self.main_channel_id)
@@ -341,8 +349,8 @@ class HashtagData:
 			user, priority = DEFAULT_USER_DATA[main_channel_id_str].split()
 			return priority
 
-	def copy_users_from_text(self, post_data: telebot.types.Message):
-		text, entities = utils.get_post_content(post_data)
+	def copy_users_from_text(self):
+		text, entities = utils.get_post_content(self.post_data)
 		mentioned_users = []
 		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
 		ignored_indexes = [scheduled_tag_index, status_tag_index, priority_tag_index]
@@ -616,18 +624,6 @@ class HashtagData:
 		utils.set_post_content(post_data, text, entities)
 		return post_data
 
-	def rearrange_hashtags(self, post_data: telebot.types.Message):
-		self.copy_tags_from_other_hashtags()
-		hashtags = self.get_hashtags_for_insertion()
-		hashtag_utils.insert_hashtags(post_data, hashtags)
-
-		post_data = self.remove_duplicates(post_data)
-		self.extract_hashtags(post_data, self.main_channel_id)
-		self.update_scheduled_status()
-		post_data = self.add_strikethrough_entities(post_data)
-
-		return post_data
-
 	def add_strikethrough_entities(self, post_data):
 		text, entities = utils.get_post_content(post_data)
 
@@ -639,7 +635,8 @@ class HashtagData:
 		utils.set_post_content(post_data, text, entities)
 		return post_data
 
-	def remove_strikethrough_entities(self, text, entities):
+	def remove_strikethrough_entities(self):
+		text, entities = utils.get_post_content(self.post_data)
 		entities_to_ignore = self.get_entities_to_ignore(text, entities)
 		entities_to_remove = []
 		for i, entity in enumerate(entities):
@@ -660,17 +657,22 @@ class HashtagData:
 			if previous_entity.type != "hashtag":
 				continue
 
-			scheduled_tag_start = f"#{SCHEDULED_TAG} "
-			previous_entity_tag = "#" + self.get_tag_from_entity(previous_entity, text)
-			if scheduled_tag_start[:len(previous_entity_tag)].startswith(previous_entity_tag):
+			previous_entity_tag = self.get_tag_from_entity(previous_entity, text)
+			if not self.check_scheduled_tag(previous_entity_tag, SCHEDULED_TAG) and not self.check_old_scheduled_tag(previous_entity_tag):
 				continue
 
-			if not entity.offset == (previous_entity.offset + len(scheduled_tag_start)):
+			space_index = text[previous_entity.offset:].find(" ")
+			if space_index < 0:
+				continue
+			space_index += previous_entity.offset
+
+			if not entity.offset == (space_index + 1):
 				continue
 
 			entities_to_remove.append(entity)
 
-		return [e for e in entities if e not in entities_to_remove]
+		entities = [e for e in entities if e not in entities_to_remove]
+		utils.set_post_content(self.post_data, text, entities)
 
 	def strike_through_scheduled_tag(self, text, entities):
 		scheduled_tag_index, _, _, _ = self.hashtag_indexes
@@ -742,7 +744,7 @@ class HashtagData:
 	@staticmethod
 	def update_scheduled_tag_entity_length(text: str, entities: List[MessageEntity], tag_index: int):
 		scheduled_tag = entities[tag_index]
-		scheduled_tag_text = text[scheduled_tag.offset:scheduled_tag.offset + scheduled_tag.length]
+		scheduled_tag_text = HashtagData.get_tag_from_entity(scheduled_tag, text)
 
 		scheduled_parts = scheduled_tag_text.split(" ")
 		if len(scheduled_parts) == 3:
@@ -752,8 +754,8 @@ class HashtagData:
 			if parsed_date and parsed_time:
 				return True
 
-		if text[scheduled_tag.offset + 1:].startswith(SCHEDULED_TAG):
-			scheduled_tag.length = len(SCHEDULED_TAG) + 1
+		if HashtagData.check_scheduled_tag(scheduled_tag_text, SCHEDULED_TAG) or HashtagData.check_old_scheduled_tag(scheduled_tag_text):
+			scheduled_tag.length = len(scheduled_parts[0]) + 1
 			text_after_tag = text[scheduled_tag.offset + scheduled_tag.length + 1:]
 			new_line_index = text_after_tag.find("\n")
 			if new_line_index != -1:

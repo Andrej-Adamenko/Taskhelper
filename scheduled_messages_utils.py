@@ -59,13 +59,10 @@ class ScheduledMessageDispatcher:
 			utils.add_comment_to_ticket(bot, message, comment_text)
 
 			hashtag_data = HashtagData(message, main_channel_id)
-			message = hashtag_data.get_post_data_without_hashtags()
 
 			hashtag_data.set_scheduled_tag(date_str)
-			forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
-			forwarding_utils.add_control_buttons(bot, message, hashtag_data)
-			forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
+			forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
 
 			return
 
@@ -78,13 +75,9 @@ class ScheduledMessageDispatcher:
 		db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
 
 		hashtag_data = HashtagData(message, main_channel_id)
-		message = hashtag_data.get_post_data_without_hashtags()
-
 		hashtag_data.set_scheduled_tag(date_str)
-		forwarding_utils.rearrange_hashtags(bot, message, hashtag_data)
 
-		forwarding_utils.add_control_buttons(bot, message, hashtag_data)
-		forwarding_utils.forward_to_subchannel(bot, message, hashtag_data)
+		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
 
 		self.insert_scheduled_message_info(main_message_id, main_channel_id, send_time)
 
@@ -284,11 +277,8 @@ class ScheduledMessageDispatcher:
 		message.chat.id = main_channel_id
 
 		hashtag_data = HashtagData(message, main_channel_id)
-		post_data = hashtag_data.get_post_data_without_hashtags()
 
-		forwarding_utils.rearrange_hashtags(bot, post_data, hashtag_data)
-		forwarding_utils.add_control_buttons(bot, post_data, hashtag_data)
-		forwarding_utils.forward_to_subchannel(bot, post_data, hashtag_data)
+		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
 
 		current_time = int(time.time())
 		db_utils.insert_or_update_sent_scheduled_message(main_message_id, main_channel_id, current_time)
