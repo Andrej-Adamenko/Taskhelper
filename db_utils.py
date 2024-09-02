@@ -302,6 +302,15 @@ def get_copied_messages_from_main(main_message_id, main_channel_id):
 
 
 @db_thread_lock
+def get_newest_copied_message(copied_channel_id):
+	sql = "SELECT max(copied_message_id) FROM copied_messages WHERE copied_channel_id=(?)"
+	CURSOR.execute(sql, (copied_channel_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
+
+
+@db_thread_lock
 def insert_or_update_last_msg_id(last_message_id, chat_id):
 	if get_last_message_id(chat_id):
 		sql = "UPDATE last_message_ids SET last_message_id=(?) WHERE chat_id=(?)"
