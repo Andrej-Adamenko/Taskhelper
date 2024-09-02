@@ -1,5 +1,7 @@
 from unittest import TestCase, main
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+
+from telebot import TeleBot
 from telebot.types import MessageEntity, Message
 
 import forwarding_utils
@@ -107,6 +109,21 @@ class IsPostDataEqualTest(TestCase):
 		post_data2 = test_helper.create_mock_message(text2, entities2)
 
 		self.assertFalse(utils.is_post_data_equal(post_data1, post_data2))
+
+
+class DeleteMainMessageTest(TestCase):
+	@patch("db_utils.get_copied_messages_from_main", return_value=[[22, 987654321]])
+	@patch("db_utils.get_ticket_data", return_value=None)
+	@patch("db_utils.delete_scheduled_message_main")
+	@patch("forwarding_utils.delete_forwarded_message")
+	def test_delete_message(self, mock_delete_forwarded_message, mock_delete_scheduled_message_main, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = 12341234
+		main_message_id = 123
+
+		utils.delete_main_message(mock_bot, main_channel_id, main_message_id)
+		mock_delete_scheduled_message_main.assert_called_once_with(main_message_id, main_channel_id)
+		mock_delete_forwarded_message.assert_called_once_with(mock_bot, 987654321, 22)
 
 
 if __name__ == "__main__":
