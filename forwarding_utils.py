@@ -23,7 +23,7 @@ from config_utils import DISCUSSION_CHAT_DATA
 
 CALLBACK_PREFIX = "FWRD"
 
-_FORWARDING_LOCK = threading.Lock()
+_FORWARDING_LOCK = threading.RLock()
 
 
 class CB_TYPES:
@@ -97,6 +97,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			utils.edit_message_keyboard(bot, post_data, keyboard_markup, chat_id=subchannel_id, message_id=unchanged_posts[subchannel_id])
 			continue
 
+		newest_message_id = db_utils.get_newest_copied_message(subchannel_id)
+
 		try:
 			if post_data.text is None:
 				text, entities = utils.get_post_content(post_data)
@@ -117,6 +119,23 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		keyboard_markup = generate_control_buttons(hashtag_data, post_data)
 		utils.edit_message_keyboard(bot, post_data, keyboard_markup, chat_id=subchannel_id, message_id=copied_message.message_id)
 
+		# update previous newest message to remove settings button
+		update_copied_message(bot, subchannel_id, newest_message_id)
+
+
+def update_copied_message(bot: telebot.TeleBot, copied_channel_id: int, copied_message_id: int):
+	post_data = utils.get_message_content_by_id(bot, copied_channel_id, copied_message_id)
+	if not post_data:
+		return
+	main_message_id, main_channel_id = db_utils.get_main_message_from_copied(copied_message_id, copied_channel_id)
+
+	post_data.message_id = main_message_id
+	post_data.chat.id = main_channel_id
+
+	hashtag_data = HashtagData(post_data, main_channel_id)
+	keyboard = generate_control_buttons(hashtag_data, post_data)
+	utils.edit_message_keyboard(bot, post_data, keyboard, chat_id=copied_channel_id, message_id=copied_message_id)
+
 
 def delete_all_forwarded_messages(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int):
 	copied_messages = db_utils.get_all_copied_messages(main_channel_id, main_message_id)
@@ -131,6 +150,10 @@ def delete_all_forwarded_messages(bot: telebot.TeleBot, main_channel_id: int, ma
 
 
 def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	is_update_needed = False
+	if db_utils.get_newest_copied_message(chat_id) == message_id:
+		is_update_needed = True
+
 	try:
 		utils.delete_message(bot, chat_id=chat_id, message_id=message_id)
 		db_utils.delete_copied_message(message_id, chat_id)
@@ -194,6 +217,10 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 		elif E.description.endswith(utils.KICKED_FROM_CHANNEL_ERROR):
 			db_utils.delete_copied_message(message_id, chat_id)
+
+	if is_update_needed:
+		newest_message_id = db_utils.get_newest_copied_message(chat_id)
+		update_copied_message(bot, chat_id, newest_message_id)
 
 
 def delete_main_message(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int):
