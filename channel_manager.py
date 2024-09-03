@@ -75,11 +75,15 @@ def get_individual_channel_settings(channel_id: int):
 	return settings, priorities
 
 
-def add_user_tags_to_button_text(button: InlineKeyboardButton, channel_type: str, settings: Dict):
+def get_selected_users_from_settings(settings: Dict, channel_type: str):
 	if channel_type not in settings:
-		return
+		return []
 
-	user_tags = settings[channel_type]
+	return settings[channel_type]
+
+
+def add_user_tags_to_button_text(button: InlineKeyboardButton, channel_type: str, settings: Dict):
+	user_tags = get_selected_users_from_settings(settings, channel_type)
 	if len(user_tags) < 1:
 		return
 
@@ -163,6 +167,12 @@ def send_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message
 	db_utils.insert_individual_channel(main_channel_id, channel_id, settings_str, user_id)
 
 	keyboard = generate_settings_keyboard(channel_id)
+	text = generate_current_settings_text(msg_data)
+
+	bot.send_message(chat_id=channel_id, text=text, reply_markup=keyboard)
+
+
+def generate_current_settings_text(msg_data: telebot.types.Message):
 	text = '''
 		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. You can call this settings menu using "/show_settings" command. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
 		1) Assigned to - include tickets that is assigned to the selected users
@@ -172,7 +182,37 @@ def send_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message
 		5) Due - if this option is enabled, regular(NOT scheduled) tickets will be included in this channel
 		6) Deferred - if this option is enabled, scheduled tickets will be included in this channel
 	'''
-	bot.send_message(chat_id=channel_id, text=text, reply_markup=keyboard)
+
+	text += "\nCURRENT SETTINGS"
+
+	channel_id = msg_data.chat.id
+	settings, priorities = get_individual_channel_settings(channel_id)
+
+	for setting_type in [SETTING_TYPES.ASSIGNED, SETTING_TYPES.REPORTED, SETTING_TYPES.FOLLOWED]:
+		text += "\n" + MENU_TITLES[setting_type] + " "
+		selected_users = get_selected_users_from_settings(settings, setting_type)
+		if len(selected_users) < 1:
+			continue
+
+		user_tags = [f"#{user_tag}" for user_tag in selected_users if user_tag != NEW_USER_TYPE]
+		if NEW_USER_TYPE in selected_users:
+			user_tags.append("<new users>")
+		text += ", ".join(user_tags)
+
+	text += "\n" + MENU_TITLES[SETTING_TYPES.REMIND] + " "
+	selected_options = get_selected_users_from_settings(settings, SETTING_TYPES.REMIND)
+	text += ", ".join(selected_options)
+
+	due_flag = bool(get_selected_users_from_settings(settings, SETTING_TYPES.DUE))
+	text += "\nInclude due tickets: " + ("yes" if due_flag else "no")
+
+	deferred_flag = bool(get_selected_users_from_settings(settings, SETTING_TYPES.DEFERRED))
+	text += "\nInclude deferred tickets: " + ("yes" if deferred_flag else "no")
+
+	priority_tags = [f"#{hashtag_data.PRIORITY_TAG}{p}" for p in priorities]
+	text += "\nPriorities: " + ", ".join(priority_tags)
+
+	return text
 
 
 def generate_user_keyboard(main_channel_id: int, channel_id: int, setting_type: str):
@@ -214,7 +254,8 @@ def open_user_selection(bot: telebot.TeleBot, call: CallbackQuery, setting_type:
 	channel_id = call.message.chat.id
 
 	keyboard = generate_user_keyboard(main_channel_id, channel_id, setting_type)
-	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard)
+	text = generate_current_settings_text(call.message)
+	bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard, text=text)
 
 
 def generate_remind_keyboard(channel_id):
@@ -260,7 +301,8 @@ def open_remind_selection(bot: telebot.TeleBot, call: CallbackQuery):
 	channel_id = call.message.chat.id
 
 	keyboard = generate_remind_keyboard(channel_id)
-	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard)
+	text = generate_current_settings_text(call.message)
+	bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard, text=text)
 
 
 def toggle_user_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, cb_data: str):
@@ -304,7 +346,8 @@ def update_settings_keyboard(bot: telebot.TeleBot, message: Message):
 	channel_id = message.chat.id
 	message_id = message.id
 	keyboard = generate_settings_keyboard(channel_id)
-	bot.edit_message_reply_markup(chat_id=channel_id, message_id=message_id, reply_markup=keyboard)
+	text = generate_current_settings_text(message)
+	bot.edit_message_text(chat_id=channel_id, message_id=message_id, reply_markup=keyboard, text=text)
 
 
 def save_remind_settings(call: CallbackQuery):
