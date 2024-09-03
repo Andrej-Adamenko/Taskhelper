@@ -3,7 +3,7 @@ from typing import List, Dict
 
 import telebot
 from telebot.apihelper import ApiTelegramException
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberOwner
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberOwner, Message
 
 import config_utils
 import db_utils
@@ -278,7 +278,7 @@ def toggle_user_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, 
 	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=reply_markup)
 
 
-def save_user_settings(bot: telebot.TeleBot, call: CallbackQuery, setting_type: str):
+def save_user_settings(call: CallbackQuery, setting_type: str):
 	channel_id = call.message.chat.id
 	settings, priorities = get_individual_channel_settings(channel_id)
 
@@ -299,11 +299,15 @@ def save_user_settings(bot: telebot.TeleBot, call: CallbackQuery, setting_type: 
 	settings_str = json.dumps(settings)
 	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
+
+def update_settings_keyboard(bot: telebot.TeleBot, message: Message):
+	channel_id = message.chat.id
+	message_id = message.id
 	keyboard = generate_settings_keyboard(channel_id)
-	bot.edit_message_reply_markup(chat_id=channel_id, message_id=call.message.id, reply_markup=keyboard)
+	bot.edit_message_reply_markup(chat_id=channel_id, message_id=message_id, reply_markup=keyboard)
 
 
-def save_remind_settings(bot: telebot.TeleBot, call: CallbackQuery):
+def save_remind_settings(call: CallbackQuery):
 	channel_id = call.message.chat.id
 	settings, priorities = get_individual_channel_settings(channel_id)
 
@@ -324,28 +328,34 @@ def save_remind_settings(bot: telebot.TeleBot, call: CallbackQuery):
 	settings_str = json.dumps(settings)
 	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
-	keyboard = generate_settings_keyboard(channel_id)
-	bot.edit_message_reply_markup(chat_id=channel_id, message_id=call.message.id, reply_markup=keyboard)
-
 
 def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 	callback_type, other_data = utils.parse_callback_str(call.data)
+	message = call.message
 
 	if callback_type == CB_TYPES.ASSIGNED_SELECTED:
+		save_channel_settings(bot, call)
 		open_user_selection(bot, call, SETTING_TYPES.ASSIGNED)
 	elif callback_type == CB_TYPES.REPORTED_SELECTED:
+		save_channel_settings(bot, call)
 		open_user_selection(bot, call, SETTING_TYPES.REPORTED)
 	elif callback_type == CB_TYPES.FOLLOWED_SELECTED:
+		save_channel_settings(bot, call)
 		open_user_selection(bot, call, SETTING_TYPES.FOLLOWED)
 	elif callback_type == CB_TYPES.REMIND_SELECTED:
+		save_channel_settings(bot, call)
 		open_remind_selection(bot, call)
 	elif callback_type == CB_TYPES.SAVE_SELECTED_USERS:
 		setting_type, = other_data
-		save_user_settings(bot, call, setting_type)
+		save_user_settings(call, setting_type)
+		update_settings_keyboard(bot, message)
 	elif callback_type == CB_TYPES.SAVE_REMIND_SETTINGS:
-		save_remind_settings(bot, call)
+		save_remind_settings(call)
+		update_settings_keyboard(bot, message)
 	elif callback_type == CB_TYPES.SAVE:
 		save_channel_settings(bot, call)
+		forwarding_utils.delete_forwarded_message(bot, message.chat.id, message.id)
+		interval_updating_utils.start_interval_updating(bot)
 	elif callback_type == CB_TYPES.NOP:
 		bot.answer_callback_query(call.id)
 	elif callback_type in _TOGGLE_CALLBACKS:
@@ -424,10 +434,6 @@ def save_channel_settings(bot: telebot.TeleBot, call: CallbackQuery):
 	settings_str = json.dumps(settings)
 
 	db_utils.update_individual_channel(channel_id, settings_str, priorities_str)
-
-	forwarding_utils.delete_forwarded_message(bot, call.message.chat.id, call.message.id)
-
-	interval_updating_utils.start_interval_updating(bot)
 
 
 def add_new_user_tag_to_channels(main_channel_id: int, user_tag: str):
