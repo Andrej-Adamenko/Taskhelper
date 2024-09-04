@@ -23,7 +23,6 @@ db_utils.initialize_db()
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
 
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
-recently_created = []
 
 config_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
@@ -46,8 +45,6 @@ subchannel_filter = lambda message_data: db_utils.is_individual_channel_exists(m
 
 @bot.channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_post(post_data: telebot.types.Message):
-	recently_created.append(post_data.message_id)
-
 	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
 
 	user_id = user_utils.find_user_by_signature(post_data.author_signature, post_data.chat.id)
@@ -98,10 +95,14 @@ def handle_discussion_message(msg_data: telebot.types.Message):
 
 @bot.edited_channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_edited_post(post_data: telebot.types.Message):
-	if post_data.message_id not in recently_created:
+	"""
+		After post is created in the main channel it will be edited by the telegram after it was copied to
+		discussion channel and there is no way to determine if user edited the post or the telegram itself
+		so if post was edited in first 5 seconds after it was created the notification will not be sent
+	"""
+	if (post_data.edit_date - post_data.date) > 5:
 		utils.add_comment_to_ticket(bot, post_data, "A user edited the ticket.")
-	else:
-		recently_created.remove(post_data.message_id)
+
 	post_link_utils.update_post_link(bot, post_data)
 	forwarding_utils.forward_and_add_inline_keyboard(bot, post_data)
 
