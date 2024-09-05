@@ -7,7 +7,6 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQu
 
 import config_utils
 import db_utils
-import forwarding_utils
 import hashtag_data
 import interval_updating_utils
 import utils
@@ -24,12 +23,13 @@ class CB_TYPES:
 	PRIORITY_SELECTED = "PR"
 	DEFERRED_SELECTED = "DFR"
 	DUE_SELECTED = "DUE"
-	SAVE = "SV"
+	SAVE_AND_HIDE_SETTINGS_MENU = "SVHS"
 	TOGGLE_USER = "USR"
 	TOGGLE_REMIND_SETTING = "TRM"
 	SAVE_SELECTED_USERS = "SVU"
 	SAVE_REMIND_SETTINGS = "SVR"
-	SEND_CHANNEL_SETTINGS = "STT"
+	OPEN_CHANNEL_SETTINGS = "OCS"
+	CREATE_CHANNEL_SETTINGS = "CCS"
 	NOP = "NOP"  # No operation
 
 
@@ -150,42 +150,71 @@ def generate_settings_keyboard(channel_id: int):
 		buttons.append(priority_btn)
 
 	save_btn = InlineKeyboardButton(f"Save")
-	save_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE)
+	save_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU)
 	buttons.append(save_btn)
 
 	rows = [[btn] for btn in buttons]
 	return InlineKeyboardMarkup(rows)
 
 
-def send_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message):
+def show_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 	channel_id = msg_data.chat.id
-	channel_admins = bot.get_chat_administrators(channel_id)
-
-	channel_owner = next((user for user in channel_admins if type(user) == ChatMemberOwner), None)
-	user_id = channel_owner.user.id
-	main_channel_id = db_utils.get_main_channel_from_user(user_id)
-	if not main_channel_id:
-		bot.send_message(chat_id=channel_id, text="Can't recognize the user who called this command")
-		return
-
-	settings_str = json.dumps(_DEFAULT_SETTINGS)
-	db_utils.insert_individual_channel(main_channel_id, channel_id, settings_str, user_id)
-
-	settings, priorities = get_individual_channel_settings(channel_id)
-	settings_message_id = settings.get(SETTING_TYPES.SETTINGS_MESSAGE_ID)
-	if settings_message_id:
-		forwarding_utils.delete_forwarded_message(bot, channel_id, settings_message_id)
+	message_id = msg_data.id
 
 	keyboard = generate_settings_keyboard(channel_id)
-	text = generate_current_settings_text(msg_data)
+	text = generate_current_settings_text(channel_id)
 
-	settings_message = bot.send_message(chat_id=channel_id, text=text, reply_markup=keyboard)
-	settings[SETTING_TYPES.SETTINGS_MESSAGE_ID] = settings_message.id
+	bot.edit_message_text(chat_id=channel_id, message_id=message_id, text=text, reply_markup=keyboard)
+
+
+def get_settings_message_id(channel_id):
+	settings, priorities = get_individual_channel_settings(channel_id)
+	return settings.get(SETTING_TYPES.SETTINGS_MESSAGE_ID)
+
+
+def set_settings_message_id(channel_id, message_id):
+	settings, priorities = get_individual_channel_settings(channel_id)
+	settings[SETTING_TYPES.SETTINGS_MESSAGE_ID] = message_id
 	settings_str = json.dumps(settings)
 	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
 
-def generate_current_settings_text(msg_data: telebot.types.Message):
+def initialize_channel(bot: telebot.TeleBot, channel_id: int):
+	if not db_utils.is_individual_channel_exists(channel_id):
+		channel_admins = bot.get_chat_administrators(channel_id)
+
+		channel_owner = next((user for user in channel_admins if type(user) == ChatMemberOwner), None)
+		user_id = channel_owner.user.id
+		main_channel_id = db_utils.get_main_channel_from_user(user_id)
+		if not main_channel_id:
+			bot.send_message(chat_id=channel_id, text="Can't recognize the user who called this command")
+			return
+
+		settings_str = json.dumps(_DEFAULT_SETTINGS)
+		db_utils.insert_individual_channel(main_channel_id, channel_id, settings_str, user_id)
+
+	create_settings_message(bot, channel_id)
+
+
+def create_settings_message(bot: telebot.TeleBot, channel_id: int):
+	if get_settings_message_id(channel_id):
+		return
+
+	oldest_message_id = db_utils.get_oldest_copied_message(channel_id)
+	if oldest_message_id:
+		main_message_id, main_channel_id = db_utils.get_main_message_from_copied(oldest_message_id, channel_id)
+		db_utils.delete_copied_message(oldest_message_id, channel_id)
+		update_settings_message(bot, channel_id, oldest_message_id)
+		set_settings_message_id(channel_id, oldest_message_id)
+		interval_updating_utils.update_older_message(bot, main_channel_id, main_message_id)
+	else:
+		keyboard = generate_settings_keyboard(channel_id)
+		text = generate_current_settings_text(channel_id)
+		msg = bot.send_message(chat_id=channel_id, reply_markup=keyboard, text=text)
+		set_settings_message_id(channel_id, msg.id)
+
+
+def generate_current_settings_text(channel_id: int):
 	text = '''
 		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. You can call this settings menu using "/show_settings" command. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
 		1) Assigned to - include tickets that is assigned to the selected users
@@ -198,7 +227,6 @@ def generate_current_settings_text(msg_data: telebot.types.Message):
 
 	text += "\nCURRENT SETTINGS"
 
-	channel_id = msg_data.chat.id
 	settings, priorities = get_individual_channel_settings(channel_id)
 
 	for setting_type in [SETTING_TYPES.ASSIGNED, SETTING_TYPES.REPORTED, SETTING_TYPES.FOLLOWED]:
@@ -267,7 +295,7 @@ def open_user_selection(bot: telebot.TeleBot, call: CallbackQuery, setting_type:
 	channel_id = call.message.chat.id
 
 	keyboard = generate_user_keyboard(main_channel_id, channel_id, setting_type)
-	text = generate_current_settings_text(call.message)
+	text = generate_current_settings_text(channel_id)
 	bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard, text=text)
 
 
@@ -314,7 +342,7 @@ def open_remind_selection(bot: telebot.TeleBot, call: CallbackQuery):
 	channel_id = call.message.chat.id
 
 	keyboard = generate_remind_keyboard(channel_id)
-	text = generate_current_settings_text(call.message)
+	text = generate_current_settings_text(channel_id)
 	bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard, text=text)
 
 
@@ -359,8 +387,16 @@ def update_settings_keyboard(bot: telebot.TeleBot, message: Message):
 	channel_id = message.chat.id
 	message_id = message.id
 	keyboard = generate_settings_keyboard(channel_id)
-	text = generate_current_settings_text(message)
+	text = generate_current_settings_text(channel_id)
 	bot.edit_message_text(chat_id=channel_id, message_id=message_id, reply_markup=keyboard, text=text)
+
+
+def update_settings_message(bot: telebot.TeleBot, channel_id: int, message_id: int):
+	text = generate_current_settings_text(channel_id)
+	settings_button = telebot.types.InlineKeyboardButton("Edit channel settings ⚙️")
+	settings_button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.OPEN_CHANNEL_SETTINGS)
+	keyboard_markup = telebot.types.InlineKeyboardMarkup([[settings_button]])
+	bot.edit_message_text(text=text, reply_markup=keyboard_markup, chat_id=channel_id, message_id=message_id)
 
 
 def save_remind_settings(call: CallbackQuery):
@@ -408,17 +444,18 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 	elif callback_type == CB_TYPES.SAVE_REMIND_SETTINGS:
 		save_remind_settings(call)
 		update_settings_keyboard(bot, message)
-	elif callback_type == CB_TYPES.SAVE:
+	elif callback_type == CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU:
 		save_channel_settings(bot, call)
-		forwarding_utils.delete_forwarded_message(bot, message.chat.id, message.id)
+		update_settings_message(bot, message.chat.id, message.id)
 		interval_updating_utils.start_interval_updating(bot)
 	elif callback_type == CB_TYPES.NOP:
 		bot.answer_callback_query(call.id)
 	elif callback_type in _TOGGLE_CALLBACKS:
 		toggle_button(bot, call, callback_type, other_data)
-	elif callback_type == CB_TYPES.SEND_CHANNEL_SETTINGS:
-		send_settings_keyboard(bot, call.message)
-		bot.answer_callback_query(call.id)
+	elif callback_type == CB_TYPES.OPEN_CHANNEL_SETTINGS:
+		show_settings_keyboard(bot, message)
+	elif callback_type == CB_TYPES.CREATE_CHANNEL_SETTINGS:
+		create_settings_message(bot, message.chat.id)
 
 
 def is_button_checked(buttons: List[InlineKeyboardButton], target_cb_type: str):
@@ -490,7 +527,6 @@ def save_channel_settings(bot: telebot.TeleBot, call: CallbackQuery):
 		settings[setting_name] = new_settings[setting_name]
 
 	priorities_str = _TYPE_SEPARATOR.join(priorities)
-	settings.pop(SETTING_TYPES.SETTINGS_MESSAGE_ID, None)
 	settings_str = json.dumps(settings)
 
 	db_utils.update_individual_channel(channel_id, settings_str, priorities_str)
