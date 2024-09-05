@@ -201,10 +201,16 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 		newest_message_id = db_utils.get_newest_copied_message(chat_id)
 		if message_id == newest_message_id:
 			settings_button = telebot.types.InlineKeyboardButton("Settings ⚙️")
-			settings_button.callback_data = create_callback_str(
-				channel_manager.CALLBACK_PREFIX,
-				channel_manager.CB_TYPES.SEND_CHANNEL_SETTINGS
-			)
+			settings_message_id = channel_manager.get_settings_message_id(chat_id)
+			if settings_message_id:
+				chat_id_str = str(chat_id)
+				chat_id_str = chat_id_str[4:] if chat_id_str[:4] == "-100" else chat_id_str
+				settings_button.url = f"https://t.me/c/{chat_id_str}/{settings_message_id}"
+			else:
+				settings_button.callback_data = create_callback_str(
+					channel_manager.CALLBACK_PREFIX,
+					channel_manager.CB_TYPES.CREATE_CHANNEL_SETTINGS
+				)
 			keyboard.keyboard.append([telebot.types.InlineKeyboardButton(" ", callback_data="_")])
 			keyboard.keyboard.append([settings_button])
 
@@ -406,3 +412,14 @@ def get_main_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_i
 		return
 
 	return forwarded_message
+
+
+@threading_utils.timeout_error_lock
+def mark_message_for_deletion(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	try:
+		bot.edit_message_text(text=config_utils.TO_DELETE_MSG_TEXT, chat_id=chat_id, message_id=message_id)
+	except ApiTelegramException as E:
+		if E.error_code == 429:
+			raise E
+		logging.info(f"Error during marking message{chat_id, message_id} for deletion {E}")
+
