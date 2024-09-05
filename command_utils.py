@@ -30,7 +30,7 @@ def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message
 
 	if command == "/show_settings" or command == "/start":
 		forwarding_utils.delete_forwarded_message(bot, msg_data.chat.id, msg_data.message_id)
-		channel_manager.send_settings_keyboard(bot, msg_data)
+		channel_manager.initialize_channel(bot, msg_data.chat.id)
 	elif command == "/set_channel_hashtag":
 		if len(arguments) != 1:
 			bot.send_message(chat_id=msg_data.chat.id, text="You should specify only one hashtag.")
