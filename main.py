@@ -103,6 +103,9 @@ def handle_discussion_message(msg_data: telebot.types.Message):
 
 @bot.edited_channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
 def handle_edited_post(post_data: telebot.types.Message):
+	if post_data.media_group_id:
+		return
+
 	if post_data.message_id not in recently_created:
 		utils.add_comment_to_ticket(bot, post_data, "A user edited the ticket.")
 	else:
