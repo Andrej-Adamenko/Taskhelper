@@ -237,7 +237,7 @@ class HashtagData:
 			entity = entities[entity_index]
 			if entity.type == "hashtag":
 				tag = text[entity.offset + 1:entity.offset + entity.length]
-				if config_utils.HASHTAGS_BEFORE_UPDATE and self.check_old_scheduled_tag(tag):
+				if self.check_old_scheduled_tag(tag):
 					scheduled_tag_index = entity_index
 					continue
 
@@ -245,7 +245,7 @@ class HashtagData:
 					scheduled_tag_index = entity_index
 					continue
 
-				if config_utils.HASHTAGS_BEFORE_UPDATE and self.check_old_status_tag(tag):
+				if self.check_old_status_tag(tag):
 					status_tag_index = entity_index
 					continue
 
@@ -257,7 +257,7 @@ class HashtagData:
 					user_tag_indexes.insert(0, entity_index)
 					continue
 
-				if config_utils.HASHTAGS_BEFORE_UPDATE and self.check_old_priority_tag(tag):
+				if self.check_old_priority_tag(tag):
 					priority_tag_index = entity_index
 					continue
 
@@ -274,17 +274,13 @@ class HashtagData:
 
 		scheduled_tag = None
 		if scheduled_tag_index is not None:
-			if config_utils.HASHTAGS_BEFORE_UPDATE:
-				result = self.replace_old_scheduled_tag(text, entities, scheduled_tag_index)
-				text = result if result else text
+			text, entities = self.replace_old_scheduled_tag(text, entities, scheduled_tag_index)
 			self.update_scheduled_tag_entity_length(text, entities, scheduled_tag_index)
 			scheduled_tag = self.get_tag_from_entity(entities[scheduled_tag_index], text)
 
 		status_tag = None
 		if status_tag_index is not None:
-			if config_utils.HASHTAGS_BEFORE_UPDATE:
-				result = self.replace_old_status_tag(text, entities, status_tag_index)
-				text = result if result else text
+			text, entities = self.replace_old_status_tag(text, entities, status_tag_index)
 			status_tag = self.get_tag_from_entity(entities[status_tag_index], text)
 
 		user_tags = []
@@ -295,9 +291,7 @@ class HashtagData:
 
 		priority_tag = None
 		if priority_tag_index is not None:
-			if config_utils.HASHTAGS_BEFORE_UPDATE:
-				result = self.replace_old_priority_tag(text, entities, priority_tag_index)
-				text = result if result else text
+			text, entities = self.replace_old_priority_tag(text, entities, priority_tag_index)
 			priority_tag = self.get_tag_from_entity(entities[priority_tag_index], text)
 
 		utils.set_post_content(post_data, text, entities)
@@ -320,7 +314,7 @@ class HashtagData:
 			entity_text = self.get_tag_from_entity(entities[entity_index], text)
 			hashtags.append("#" + entity_text)
 		return hashtags
-	
+
 	def get_present_hashtag_indices(self):
 		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
 
@@ -793,30 +787,40 @@ class HashtagData:
 
 	@staticmethod
 	def check_old_status_tag(tag: str):
-		old_opened_tag = config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]
-		old_closed_tag = config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]
+		if not config_utils.HASHTAGS_BEFORE_UPDATE:
+			return False
+		old_opened_tag = config_utils.HASHTAGS_BEFORE_UPDATE.get("OPENED")
+		old_closed_tag = config_utils.HASHTAGS_BEFORE_UPDATE.get("CLOSED")
 		if tag == old_opened_tag or tag == old_closed_tag:
 			return True
 		return False
 
 	@staticmethod
 	def check_old_scheduled_tag(tag: str):
-		old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]
-		if HashtagData.check_scheduled_tag(tag, old_scheduled_tag):
+		if not config_utils.HASHTAGS_BEFORE_UPDATE:
+			return False
+		old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE.get("SCHEDULED")
+		if old_scheduled_tag and HashtagData.check_scheduled_tag(tag, old_scheduled_tag):
 			return True
 		return False
 
 	@staticmethod
 	def check_old_priority_tag(tag: str):
-		if HashtagData.check_priority_tag(tag, config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]):
+		if not config_utils.HASHTAGS_BEFORE_UPDATE:
+			return False
+		old_priority_tag = config_utils.HASHTAGS_BEFORE_UPDATE.get("PRIORITY")
+		if old_priority_tag and HashtagData.check_priority_tag(tag, old_priority_tag):
 			return True
 		return False
 
 	@staticmethod
 	def replace_old_status_tag(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+		if not config_utils.HASHTAGS_BEFORE_UPDATE:
+			return text, entities
+
 		tag = text[entities[entity_index].offset + 1:entities[entity_index].offset + entities[entity_index].length]
-		old_opened_tag = config_utils.HASHTAGS_BEFORE_UPDATE["OPENED"]
-		old_closed_tag = config_utils.HASHTAGS_BEFORE_UPDATE["CLOSED"]
+		old_opened_tag = config_utils.HASHTAGS_BEFORE_UPDATE.get("OPENED")
+		old_closed_tag = config_utils.HASHTAGS_BEFORE_UPDATE.get("CLOSED")
 		if tag == old_opened_tag or tag == old_closed_tag:
 			position = entities[entity_index].offset
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
@@ -825,27 +829,33 @@ class HashtagData:
 			else:
 				new_hashtag = CLOSED_TAG
 			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, "#" + new_hashtag, position)
-			return text
+		return text, entities
 
 	@staticmethod
 	def replace_old_scheduled_tag(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+		if not config_utils.HASHTAGS_BEFORE_UPDATE:
+			return text, entities
+
 		tag = text[entities[entity_index].offset + 1:entities[entity_index].offset + entities[entity_index].length]
-		old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]
-		if tag.startswith(old_scheduled_tag):
+		old_scheduled_tag = config_utils.HASHTAGS_BEFORE_UPDATE.get("SCHEDULED")
+		if old_scheduled_tag and tag.startswith(old_scheduled_tag):
 			scheduled_date = tag[len(old_scheduled_tag):]
 			position = entities[entity_index].offset
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 			updated_tag_text = "#" + SCHEDULED_TAG + scheduled_date
 			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, updated_tag_text, position)
-			return text
+		return text, entities
 
 	@staticmethod
 	def replace_old_priority_tag(text: str, entities: List[telebot.types.MessageEntity], entity_index: int):
+		if not config_utils.HASHTAGS_BEFORE_UPDATE:
+			return text, entities
+
 		tag = text[entities[entity_index].offset + 1:entities[entity_index].offset + entities[entity_index].length]
-		old_priority_tag = config_utils.HASHTAGS_BEFORE_UPDATE["PRIORITY"]
-		if tag.startswith(old_priority_tag):
+		old_priority_tag = config_utils.HASHTAGS_BEFORE_UPDATE.get("PRIORITY")
+		if old_priority_tag and tag.startswith(old_priority_tag):
 			position = entities[entity_index].offset
 			text, entities = utils.cut_entity_from_post(text, entities, entity_index)
 			new_hashtag = PRIORITY_TAG + tag[len(old_priority_tag):]
 			text, entities = hashtag_utils.insert_hashtag_in_post(text, entities, "#" + new_hashtag, position)
-			return text
+		return text, entities

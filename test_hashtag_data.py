@@ -574,5 +574,73 @@ class UpdateScheduledStatusTest(TestCase):
 		self.assertFalse(hashtag_data.is_sent)
 
 
+@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"CLOSED": "old_c", "OPENED": "old_o", "PRIORITY": "old_p", "SCHEDULED": "old_sch"})
+@patch("hashtag_data.OPENED_TAG", "opened")
+@patch("hashtag_data.CLOSED_TAG", "closed")
+@patch("hashtag_data.SCHEDULED_TAG", "sch")
+@patch("hashtag_data.PRIORITY_TAG", "priority")
+class OldTagReplacementTest(TestCase):
+	def test_replace_old_status_tag(self, *args):
+		text = "test\n#old_o #ab #priority1"
+		entities = test_helper.create_hashtag_entity_list(text)
+
+		updated_text, updated_entities = HashtagData.replace_old_status_tag(text, entities, 0)
+		self.assertEqual(updated_text, "test\n#opened #ab #priority1")
+		self.assertEqual(updated_entities[0].length, 7)
+
+	def test_replace_old_scheduled_tag(self, *args):
+		scheduled_tag = "#old_sch 2024-05-01 19:00"
+		text = f"test\n#opened #ab #priority1 {scheduled_tag}"
+		entities = test_helper.create_hashtag_entity_list(text)
+		entities[3].length = len(scheduled_tag)
+
+		updated_text, updated_entities = HashtagData.replace_old_scheduled_tag(text, entities, 3)
+		self.assertEqual(updated_text, "test\n#opened #ab #priority1 #sch 2024-05-01 19:00")
+		self.assertEqual(updated_entities[3].length, 21)
+
+	def test_replace_old_priority_tag(self, *args):
+		text = f"test\n#opened #ab #old_p1"
+		entities = test_helper.create_hashtag_entity_list(text)
+
+		priority_tag_index = 2
+		updated_text, updated_entities = HashtagData.replace_old_priority_tag(text, entities, priority_tag_index)
+		self.assertEqual(updated_text, "test\n#opened #ab #priority1")
+		self.assertEqual(updated_entities[priority_tag_index].length, 10)
+
+
+	def test_tags_to_replace_not_found(self, *args):
+		scheduled_tag = "#sch 2024-05-01 19:00"
+		text = f"test\n#opened #ab #priority1 {scheduled_tag}"
+		entities = test_helper.create_hashtag_entity_list(text)
+
+		for i in range(len(entities)):
+			text, entities = HashtagData.replace_old_status_tag(text, entities, i)
+			text, entities = HashtagData.replace_old_scheduled_tag(text, entities, i)
+			text, entities = HashtagData.replace_old_priority_tag(text, entities, i)
+
+		self.assertEqual(text, "test\n#opened #ab #priority1 #sch 2024-05-01 19:00")
+
+
+class OldTagCheckTest(TestCase):
+	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", None)
+	def test_without_updated_hashtags(self, *args):
+		self.assertFalse(HashtagData.check_old_status_tag("test"))
+		self.assertFalse(HashtagData.check_old_scheduled_tag("test"))
+		self.assertFalse(HashtagData.check_old_priority_tag("test"))
+
+	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"TEST": "tag"})
+	def test_missing_hashtag_values(self, *args):
+		self.assertFalse(HashtagData.check_old_status_tag("test"))
+		self.assertFalse(HashtagData.check_old_scheduled_tag("test"))
+		self.assertFalse(HashtagData.check_old_priority_tag("test"))
+
+	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"CLOSED": "old_c", "OPENED": "old_o", "PRIORITY": "old_p", "SCHEDULED": "old_sch"})
+	def test_hashtag_check(self, *args):
+		self.assertTrue(HashtagData.check_old_status_tag("old_o"))
+		self.assertTrue(HashtagData.check_old_status_tag("old_c"))
+		self.assertTrue(HashtagData.check_old_scheduled_tag("old_sch"))
+		self.assertTrue(HashtagData.check_old_priority_tag("old_p"))
+
+
 if __name__ == "__main__":
 	main()
