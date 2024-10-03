@@ -13,6 +13,7 @@ import test_helper
 @patch("db_utils.update_previous_next_action")
 @patch("comment_utils._NEXT_ACTION_TEXT_PREFIX", "::")
 class UpdateNextActionTest(TestCase):
+	@patch("hashtag_data.HashtagData.is_last_line_contains_only_hashtags", return_value=False)
 	@patch("utils.get_post_content", return_value=("test::qwe", []))
 	@patch("utils.set_post_content")
 	@patch("utils.edit_message_content")
@@ -27,6 +28,7 @@ class UpdateNextActionTest(TestCase):
 		mock_edit_message_content.assert_called_once_with(mock_bot, ANY, chat_id=main_channel_id,
 	                           message_id=main_message_id, reply_markup=ANY)
 
+	@patch("hashtag_data.HashtagData.is_last_line_contains_only_hashtags", return_value=True)
 	@patch("utils.get_post_content")
 	@patch("utils.set_post_content")
 	@patch("utils.edit_message_content")
@@ -45,6 +47,7 @@ class UpdateNextActionTest(TestCase):
 		mock_edit_message_content.assert_called_once_with(mock_bot, ANY, chat_id=main_channel_id,
 	                           message_id=main_message_id, reply_markup=ANY)
 
+	@patch("hashtag_data.HashtagData.is_last_line_contains_only_hashtags", return_value=True)
 	@patch("utils.get_post_content")
 	@patch("utils.set_post_content")
 	@patch("utils.edit_message_content")
@@ -119,6 +122,7 @@ class AddNextActionCommentTest(TestCase):
 		comment_utils.add_next_action_comment(mock_bot, post_data)
 		mock_add_comment_to_ticket.assert_called_once_with(mock_bot, post_data, ":current next action")
 
+	@patch("hashtag_data.HashtagData.is_last_line_contains_only_hashtags", return_value=True)
 	@patch("db_utils.get_next_action_text", return_value="next action")
 	@patch("db_utils.insert_or_update_current_next_action")
 	@patch("utils.get_post_content")

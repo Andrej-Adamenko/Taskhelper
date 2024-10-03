@@ -57,10 +57,10 @@ def update_next_action(bot: telebot.TeleBot, main_message_id: int, main_channel_
 	for i in range(len(entities)):
 		HashtagData.update_scheduled_tag_entity_length(text, entities, i)
 
-	is_hashtag_line_present = hashtag_utils.is_last_line_contains_only_hashtags(text, entities)
+	hashtag_data = HashtagData(post_data, main_channel_id)
 	if _NEXT_ACTION_TEXT_PREFIX in text:
 		prefix_position = text.find(_NEXT_ACTION_TEXT_PREFIX)
-		if is_hashtag_line_present:
+		if hashtag_data.is_last_line_contains_only_hashtags():
 			last_line_start = text.rfind("\n")
 			is_entity_in_next_action = lambda e: (e.offset > prefix_position) and (e.offset + e.length <= last_line_start)
 
@@ -77,7 +77,7 @@ def update_next_action(bot: telebot.TeleBot, main_message_id: int, main_channel_
 			text = text[:prefix_position]
 
 	next_action_with_prefix = _NEXT_ACTION_TEXT_PREFIX + next_action
-	if is_hashtag_line_present:
+	if hashtag_data.is_last_line_contains_only_hashtags():
 		last_line_start = text.rfind("\n")
 		entities_to_update = [e for e in entities if e.offset > last_line_start]
 		utils.offset_entities(entities_to_update, len(next_action_with_prefix))
@@ -109,10 +109,10 @@ def add_next_action_comment(bot: telebot.TeleBot, post_data: telebot.types.Messa
 			db_utils.insert_or_update_current_next_action(main_message_id, main_channel_id, "")
 		return
 
-	is_hashtag_line_present = hashtag_utils.is_last_line_contains_only_hashtags(text, entities)
+	hashtag_data = HashtagData(post_data, main_channel_id)
 
 	next_action_index = text.find(_NEXT_ACTION_TEXT_PREFIX)
-	if is_hashtag_line_present:
+	if hashtag_data.is_last_line_contains_only_hashtags():
 		last_line_start = text.rfind("\n")
 		current_next_action = text[next_action_index + len(_NEXT_ACTION_TEXT_PREFIX):last_line_start]
 	else:

@@ -64,7 +64,7 @@ class InsertHashtagsTest(TestCase):
 
 		mock_message = Mock(spec=Message)
 		tag = "tag"
-		result = insert_hashtags(mock_message, [tag])
+		result = insert_hashtags(mock_message, [tag], False)
 
 		mock_get_post_content.assert_called_once_with(mock_message)
 		mock_insert_hashtag_in_post.assert_called_once_with(
@@ -82,7 +82,7 @@ class InsertHashtagsTest(TestCase):
 
 		mock_message = Mock(spec=Message)
 		tag = "test"
-		result = insert_hashtags(mock_message, [tag])
+		result = insert_hashtags(mock_message, [tag], True)
 
 		mock_set_post_content.assert_called_once_with(
 			mock_message, "text\n#test #hashtag", entities)

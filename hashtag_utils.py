@@ -44,27 +44,10 @@ def insert_hashtag_in_post(text: str, entities: List[telebot.types.MessageEntity
 	return text, entities
 
 
-def is_last_line_contains_only_hashtags(text: str, entities: List[telebot.types.MessageEntity]):
-	last_line_start = text.rfind("\n")
-	if last_line_start < 0:
-		return False
-
-	last_line_start += 1  # skip new line character
-	for entity in entities:
-		if entity.offset >= last_line_start and entity.type == "hashtag":
-			# replace all hashtags in the last line with spaces
-			replacement = " " * entity.length
-			text = text[:entity.offset] + replacement + text[entity.offset + entity.length:]
-
-	# check if every character in the last line is a space
-	last_line_text = text[last_line_start:]
-	return all([c == ' ' for c in last_line_text])
-
-
-def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str]):
+def insert_hashtags(post_data: telebot.types.Message, hashtags: List[str], is_hashtag_line_present: bool):
 	text, entities = utils.get_post_content(post_data)
 
-	if is_last_line_contains_only_hashtags(text, entities):
+	if is_hashtag_line_present:
 		last_line_start = text.rfind("\n") + 1
 		for hashtag in hashtags[::-1]:
 			if hashtag is None:

@@ -83,70 +83,108 @@ class FindCopyUsersFromText(TestCase):
 
 
 class GetEntitiesToIgnoreTest(TestCase):
-	@patch("hashtag_data.HashtagData.__init__")
-	def test_middle_and_back_entities(self, mock_hashtag_data_init):
-		mock_hashtag_data_init.return_value = None
-
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
+	def test_middle_and_back_entities(self, *args):
 		text = f"text #aa #bb\n#o #cc #p #user_tag"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.get_entities_to_ignore(text, entities)
 		self.assertEqual(result, range(0, 2))
 
-	@patch("hashtag_data.HashtagData.__init__")
-	def test_front_entities(self, mock_hashtag_data_init):
-		mock_hashtag_data_init.return_value = None
-
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
+	def test_front_entities(self, *args):
 		text = f"#aa #bb test #cc test"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.is_hashtag_line_present = False
 		result = hashtag_data.get_entities_to_ignore(text, entities)
 		self.assertEqual(result, range(2, 3))
 
-	@patch("hashtag_data.HashtagData.__init__")
-	def test_back_entities(self, mock_hashtag_data_init):
-		mock_hashtag_data_init.return_value = None
-
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
+	def test_back_entities(self, *args):
 		text = f"test text\n#o #cc #p #user_tag"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.get_entities_to_ignore(text, entities)
 		self.assertEqual(result, range(0, 0))
 
-	@patch("hashtag_data.HashtagData.__init__")
-	def test_middle_and_front_entities(self, mock_hashtag_data_init):
-		mock_hashtag_data_init.return_value = None
-
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
+	def test_middle_and_front_entities(self, *args):
 		text = f"#o #cc #p test #aa #bb text"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.is_hashtag_line_present = False
 		result = hashtag_data.get_entities_to_ignore(text, entities)
 		self.assertEqual(result, range(3, 5))
 
-	@patch("hashtag_data.HashtagData.__init__")
-	def test_end_of_line_entities(self, mock_hashtag_data_init):
-		mock_hashtag_data_init.return_value = None
-
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
+	def test_end_of_line_entities(self, *args):
 		text = f"#aa text #bb #user_tag"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.is_hashtag_line_present = False
 		result = hashtag_data.get_entities_to_ignore(text, entities)
 		self.assertEqual(result, range(1, 3))
+
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	@patch("hashtag_data.HashtagData.is_service_tag")
+	def test_other_tags_at_the_start(self, mock_is_service_tag, *args):
+		service_hashtags = ["open", "aa", "bb", "p"]
+		mock_is_service_tag.side_effect = lambda tag: tag in service_hashtags
+
+		text = f"#test #open #aa #bb #p1"
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
+		main_channel_id = 123
+
+		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.is_hashtag_line_present = True
+		result = hashtag_data.get_entities_to_ignore(text, entities)
+		self.assertEqual(result, range(0, 5))
+
+	@patch("post_link_utils.is_ticket_number_entity", return_value=True)
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	@patch("hashtag_data.HashtagData.is_service_tag")
+	def test_strikethrough_ticket_number(self, mock_is_service_tag, *args):
+		service_hashtags = ["open", "aa", "bb", "p"]
+		mock_is_service_tag.side_effect = lambda tag: tag in service_hashtags
+
+		text = f"45. test\n #open #aa #bb #p1"
+		entities = [
+			telebot.types.MessageEntity(type="text_link", offset=0, length=2, url="https://t.me/c/1234567890/45"),
+			telebot.types.MessageEntity(type="strikethrough", offset=0, length=2)
+		]
+		entities += test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
+		main_channel_id = 1234567890
+
+		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.post_data = post_data
+		hashtag_data.is_hashtag_line_present = True
+		result = hashtag_data.get_entities_to_ignore(text, entities)
+		self.assertEqual(result, range(2, 2))
 
 
 class RemoveDuplicatesTest(TestCase):
@@ -165,6 +203,7 @@ class RemoveDuplicatesTest(TestCase):
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.is_sent = False
 		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_duplicates(post_data)
 		self.assertEqual(result.text, "text\n#aa #bb #cc")
 
@@ -183,6 +222,7 @@ class RemoveRedundantPriorityTagsTest(TestCase):
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
 		hashtag_data.hashtag_indexes = [None, None, [], 0]
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_priority_tags(text, entities)
 		self.assertEqual(result[0], f"text\n#aa #bb #p1")
 
@@ -197,6 +237,7 @@ class RemoveRedundantPriorityTagsTest(TestCase):
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
 		hashtag_data.hashtag_indexes = [None, None, [], 0]
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_priority_tags(text, entities)
 		self.assertEqual(result[0], f"text\n#aa #bb #p1")
 
@@ -215,6 +256,7 @@ class RemoveRedundantStatusTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_status_tags(text, entities)
 		self.assertEqual(result[0], f"text\n#o #aa #bb #p1")
 
@@ -228,6 +270,7 @@ class RemoveRedundantStatusTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_status_tags(text, entities)
 		self.assertEqual(result[0], f"text\n#o #aa #bb #p1")
 
@@ -261,6 +304,7 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
 		hashtag_data.scheduled_tag = None
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
 		self.assertEqual(result[0], "text\n#o #aa #bb #p1 #s 2023-06-25 17:00")
 
@@ -273,6 +317,7 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
 		self.assertEqual(result[0], "text\n#o #aa #bb #p1")
 		self.assertIsNone(hashtag_data.scheduled_tag)
@@ -287,6 +332,7 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
 		self.assertEqual(result[0], "text\n#o #aa #bb #p1 #s 2023-06-25")
 
@@ -301,6 +347,7 @@ class RemoveRedundantScheduledTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_scheduled_tags(text, entities)
 		self.assertEqual(result[0], "text\n#o #aa #bb #p1 #s 2023-06-25 17:00 #test")
 
@@ -445,6 +492,7 @@ class StrikeThroughTicketNumberTest(TestCase):
 
 @patch("hashtag_data.SCHEDULED_TAG", "s")
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("hashtag_data.HashtagData.get_entities_to_ignore", return_value=range(0, 0))
 class RemoveStrikethroughEntitiesTest(TestCase):
 	def test_remove_scheduled_date_strikethrough_entity(self, *args):
 		hashtag_data = HashtagData()
@@ -465,6 +513,7 @@ class RemoveStrikethroughEntitiesTest(TestCase):
 		self.assertFalse(is_strikethrough_entity_exists)
 		self.assertEqual(len(result_entities), 4)
 
+	@patch("hashtag_data.HashtagData.get_entities_to_ignore", return_value=range(0,0))
 	def test_remove_incomplete_scheduled_date_strikethrough_entity(self, *args):
 		hashtag_data = HashtagData()
 		scheduled_tag = "#s 2024-01-23 12:"
@@ -484,6 +533,7 @@ class RemoveStrikethroughEntitiesTest(TestCase):
 		self.assertFalse(is_strikethrough_entity_exists)
 		self.assertEqual(len(result_entities), 4)
 
+	@patch("hashtag_data.HashtagData.get_entities_to_ignore", return_value=range(2,2))
 	def test_remove_ticket_number_strikethrough_entity(self, *args):
 		hashtag_data = HashtagData()
 		text = f"123. text\n#o #cc #p"
@@ -640,6 +690,45 @@ class OldTagCheckTest(TestCase):
 		self.assertTrue(HashtagData.check_old_status_tag("old_c"))
 		self.assertTrue(HashtagData.check_old_scheduled_tag("old_sch"))
 		self.assertTrue(HashtagData.check_old_priority_tag("old_p"))
+
+
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class CheckLastLineTest(TestCase):
+	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
+	@patch("utils.get_post_content")
+	def test_last_line_with_text(self, mock_get_post_content, *args):
+		text = "text\n #open #bb #p2 test"
+		entities = test_helper.create_hashtag_entity_list(text)
+		mock_get_post_content.return_value = (text, entities)
+
+		hashtag_data = HashtagData()
+		hashtag_data.post_data = test_helper.create_mock_message(text, [])
+		result = hashtag_data.check_last_line()
+		self.assertFalse(result)
+
+	@patch("hashtag_data.HashtagData.is_service_tag", return_value=True)
+	@patch("utils.get_post_content")
+	def test_with_service_hashtags(self, mock_get_post_content, *args):
+		text = "text\n #open #bb #p2"
+		entities = test_helper.create_hashtag_entity_list(text)
+		mock_get_post_content.return_value = (text, entities)
+
+		hashtag_data = HashtagData()
+		hashtag_data.post_data = test_helper.create_mock_message(text, [])
+		result = hashtag_data.check_last_line()
+		self.assertTrue(result)
+
+	@patch("hashtag_data.HashtagData.is_service_tag", return_value=False)
+	@patch("utils.get_post_content")
+	def test_no_service_hashtags(self, mock_get_post_content, *args):
+		text = "text\n #test #asdf"
+		entities = test_helper.create_hashtag_entity_list(text)
+		mock_get_post_content.return_value = (text, entities)
+
+		hashtag_data = HashtagData()
+		hashtag_data.post_data = test_helper.create_mock_message(text, [])
+		result = hashtag_data.check_last_line()
+		self.assertFalse(result)
 
 
 if __name__ == "__main__":

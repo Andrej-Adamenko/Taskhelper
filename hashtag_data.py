@@ -30,6 +30,8 @@ class HashtagData:
 		self.post_data = copy.deepcopy(post_data)
 		self.main_channel_id = main_channel_id
 
+		self.update_scheduled_tag_entities()
+		self.is_hashtag_line_present = self.check_last_line()
 		self.remove_strikethrough_entities()
 
 		hashtags = self.extract_hashtags(self.post_data, main_channel_id)
@@ -49,6 +51,9 @@ class HashtagData:
 
 		self.remove_found_hashtags()
 		self.copy_tags_from_other_hashtags()
+
+	def is_last_line_contains_only_hashtags(self):
+		return self.is_hashtag_line_present
 
 	def is_status_missing(self):
 		return self.status_tag is None
@@ -162,7 +167,7 @@ class HashtagData:
 
 	def get_updated_post_data(self):
 		hashtags = self.get_hashtags_for_insertion()
-		hashtag_utils.insert_hashtags(self.post_data, hashtags)
+		hashtag_utils.insert_hashtags(self.post_data, hashtags, self.is_hashtag_line_present)
 		self.post_data = self.remove_duplicates(self.post_data)
 		self.update_scheduled_status()
 		self.post_data = self.add_strikethrough_entities(self.post_data)
@@ -176,11 +181,32 @@ class HashtagData:
 			self.insert_default_user(user)
 			self.insert_default_priority()
 
+	def is_service_tag(self, tag: str):
+		if self.check_scheduled_tag(tag, SCHEDULED_TAG):
+			return True
+		if self.check_priority_tag(tag, PRIORITY_TAG):
+			return True
+		if tag == OPENED_TAG or tag == CLOSED_TAG:
+			return True
+		if db_utils.is_user_tag_exists(self.main_channel_id, tag):
+			return True
+		return False
+
 	def get_entities_to_ignore(self, text: str, entities: List[telebot.types.MessageEntity]):
 		front_index = 0
 		current_offset = 0
 		while front_index < (len(entities)):
 			next_entity = entities[front_index]
+
+			if next_entity.type == "text_link" or next_entity.type == "strikethrough":
+				if post_link_utils.is_ticket_number_entity(self.post_data, text, next_entity):
+					current_offset = next_entity.offset + next_entity.length + len(post_link_utils.LINK_ENDING)
+					front_index += 1
+					continue
+
+			tag = self.get_tag_from_entity(next_entity, text)
+			if not self.is_service_tag(tag):
+				break
 
 			text_in_between = text[current_offset:next_entity.offset]
 			spaces_only = all([i == ' ' for i in text_in_between])
@@ -188,18 +214,15 @@ class HashtagData:
 			if not spaces_only:
 				break
 
-			if next_entity.type == "text_link":
-				if post_link_utils.is_ticket_number_entity(self.post_data, text, next_entity):
-					current_offset += next_entity.length + len(post_link_utils.LINK_ENDING)
-					front_index += 1
-					continue
-
 			current_offset = next_entity.offset + next_entity.length
 			front_index += 1
 
+		back_index = len(entities) - 1
+		if not self.is_hashtag_line_present:
+			return range(front_index, back_index + 1)
+
 		last_new_line = text.rfind("\n")
 		last_new_line = last_new_line if last_new_line >= 0 else len(text)
-		back_index = len(entities) - 1
 		current_offset = 0
 		while back_index >= 0:
 			previous_entity = entities[back_index]
@@ -719,9 +742,8 @@ class HashtagData:
 		dt = timezone.localize(dt)
 		self.is_sent = time.time() > dt.timestamp()
 
-	@staticmethod
-	def get_entity_deduplication_order(text: str, entities: List[telebot.types.MessageEntity]):
-		if not hashtag_utils.is_last_line_contains_only_hashtags(text, entities):
+	def get_entity_deduplication_order(self, text: str, entities: List[telebot.types.MessageEntity]):
+		if not self.is_hashtag_line_present:
 			return range(len(entities))
 
 		last_line_start = text.rfind("\n")
@@ -734,6 +756,37 @@ class HashtagData:
 				other_entities.append(i)
 
 		return last_line_entities + other_entities
+
+	def update_scheduled_tag_entities(self):
+		text, entities = utils.get_post_content(self.post_data)
+		for i in range(len(entities)):
+			self.update_scheduled_tag_entity_length(text, entities, i)
+
+	def check_last_line(self):
+		text, entities = utils.get_post_content(self.post_data)
+
+		last_line_start = text.rfind("\n")
+		if last_line_start < 0:
+			return False
+
+		service_tag_exists = False
+		last_line_start += 1  # skip new line character
+		for entity in entities:
+			if entity.offset >= last_line_start and entity.type == "hashtag":
+				tag = text[entity.offset + 1:entity.offset + entity.length]
+				service_tag_exists |= self.is_service_tag(tag)
+
+				# replace all hashtags in the last line with spaces
+				replacement = " " * entity.length
+				text = text[:entity.offset] + replacement + text[entity.offset + entity.length:]
+
+		if not service_tag_exists:
+			return False
+
+		# check if every character in the last line is a space
+		last_line_text = text[last_line_start:]
+		return all([c == ' ' for c in last_line_text])
+
 
 	@staticmethod
 	def update_scheduled_tag_entity_length(text: str, entities: List[MessageEntity], tag_index: int):
