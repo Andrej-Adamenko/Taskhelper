@@ -46,19 +46,21 @@ class ScheduledMessageDispatcher:
 		if not db_utils.is_main_channel_exists(main_channel_id):
 			return
 
+		hashtag_data = HashtagData(message, main_channel_id)
+		current_datetime_str = hashtag_data.find_scheduled_tag_in_other_hashtags()
+		if current_datetime_str:
+			current_datetime = datetime.datetime.strptime(current_datetime_str, SCHEDULED_DATETIME_FORMAT)
+			if current_datetime.timestamp() < send_time:
+				bot.answer_callback_query(callback_query_id=call.id, text="Can't reschedule to this date because there is an earlier date in the text")
+				return
+
 		date_str = dt.strftime(SCHEDULED_DATETIME_FORMAT)
 
 		if db_utils.is_message_scheduled(main_message_id, main_channel_id):
 			self.update_scheduled_time(main_message_id, main_channel_id, send_time)
-			# for msg in self.__scheduled_messages_list:
-			# 	if msg.main_message_id == main_message_id and msg.main_channel_id == main_channel_id:
-			# 		msg.send_time = send_time
-			# self.__scheduled_messages_list.sort(key=self.scheduled_message_comparison_func)
 
 			comment_text = f"{call.from_user.first_name} rescheduled the ticket to be sent on {date_str}."
 			utils.add_comment_to_ticket(bot, message, comment_text)
-
-			hashtag_data = HashtagData(message, main_channel_id)
 
 			hashtag_data.set_scheduled_tag(date_str)
 
@@ -69,13 +71,12 @@ class ScheduledMessageDispatcher:
 		if send_time <= 0:
 			return
 
+		hashtag_data.set_scheduled_tag(date_str)
+
 		comment_text = f"{call.from_user.first_name} scheduled the ticket to be sent on {date_str}."
 		utils.add_comment_to_ticket(bot, message, comment_text)
 
 		db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
-
-		hashtag_data = HashtagData(message, main_channel_id)
-		hashtag_data.set_scheduled_tag(date_str)
 
 		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
 
