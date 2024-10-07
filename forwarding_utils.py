@@ -239,9 +239,11 @@ def delete_main_message(bot: telebot.TeleBot, main_channel_id: int, main_message
 
 	ticket_data = db_utils.get_ticket_data(main_message_id, main_channel_id)
 	if ticket_data:
-		discussion_chat_id = config_utils.DISCUSSION_CHAT_DATA[str(main_channel_id)]
-		bot.send_message(chat_id=discussion_chat_id, text=f"A user manually deleted ticket {main_message_id}")
+		discussion_chat_id = config_utils.DISCUSSION_CHAT_DATA.get(str(main_channel_id))
+		if discussion_chat_id:
+			bot.send_message(chat_id=discussion_chat_id, text=f"A user manually deleted ticket {main_message_id}")
 		db_utils.delete_ticket_data(main_message_id, main_channel_id)
+		logging.info(f"Deleted ticket {main_message_id, main_channel_id} that doesn't exists in main channel anymore")
 
 
 def deferred_filter(channel):

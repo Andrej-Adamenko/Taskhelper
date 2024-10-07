@@ -377,21 +377,6 @@ def parse_datetime(datetime_str, template_str):
 		return
 
 
-def delete_main_message(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int):
-	messages = db_utils.get_copied_messages_from_main(main_message_id, main_channel_id)
-	for msg in messages:
-		copied_message_id, copied_channel_id = msg
-		forwarding_utils.delete_forwarded_message(bot, copied_channel_id, copied_message_id)
-		logging.info(f"Removed forwarded message {msg} after it was deleted from main channel {main_message_id, main_channel_id}")
-	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
-
-	ticket_data = db_utils.get_ticket_data(main_message_id, main_channel_id)
-	if ticket_data:
-		discussion_chat_id = config_utils.DISCUSSION_CHAT_DATA[str(main_channel_id)]
-		bot.send_message(chat_id=discussion_chat_id, text=f"A user manually deleted ticket {main_message_id}")
-		db_utils.delete_ticket_data(main_message_id, main_channel_id)
-
-
 @threading_utils.timeout_error_lock
 def get_main_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	try:
