@@ -111,5 +111,17 @@ class IsPostDataEqualTest(TestCase):
 		self.assertFalse(utils.is_post_data_equal(post_data1, post_data2))
 
 
+class ReplaceWhitespacesTest(TestCase):
+	def test_replace_whitespaces(self):
+		text = "test 0991234567 test\n#o\xa0#bb\xa0#p2"
+		result = utils.replace_whitespaces(text)
+		self.assertEqual(result, "test 0991234567 test\n#o #bb #p2")
+
+	def test_ignored_whitespace_characters(self):
+		text = "test\t0991234567\tasdf\naaaa\n#o #bb #p2"
+		result = utils.replace_whitespaces(text)
+		self.assertEqual(result, text)
+
+
 if __name__ == "__main__":
 	main()
