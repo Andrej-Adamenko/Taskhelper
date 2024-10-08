@@ -93,15 +93,24 @@ def get_forwarded_from_id(message_data):
 	return None
 
 
-def get_post_content(post_data: telebot.types.Message):
-	if post_data.text is not None:
-		aligned_entities = align_entities_to_utf8(post_data.text, post_data.entities)
-		return post_data.text, aligned_entities
-	elif post_data.caption is not None:
-		aligned_entities = align_entities_to_utf8(post_data.caption, post_data.caption_entities)
-		return post_data.caption, aligned_entities
+def replace_whitespaces(text):
+	result = ""
+	for c in text:
+		result += " " if (c not in ['\n', '\t'] and c.isspace()) else c
+	return result
 
-	return "", []
+
+def get_post_content(post_data: telebot.types.Message):
+	text = ""
+	entities = []
+	if post_data.text is not None:
+		entities = align_entities_to_utf8(post_data.text, post_data.entities)
+		text = post_data.text
+	elif post_data.caption is not None:
+		entities = align_entities_to_utf8(post_data.caption, post_data.caption_entities)
+		text = post_data.caption
+
+	return replace_whitespaces(text), entities
 
 
 def set_post_content(post_data: telebot.types.Message, text: str, entities: List[telebot.types.MessageEntity]):
