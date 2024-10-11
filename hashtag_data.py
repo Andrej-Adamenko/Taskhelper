@@ -469,7 +469,11 @@ class HashtagData:
 
 		if priority_tag_index is None:
 			return text, entities
-		highest_priority = [int(self.get_priority_number_or_default()), priority_tag_index]
+
+		priority_number = self.get_priority_number_or_default()
+		priority_number = int(priority_number) if priority_number else None
+		highest_priority = [priority_number, priority_tag_index]
+
 		priority_entity_indexes = []
 		for i in self.get_entity_deduplication_order(text, entities):
 			entity = entities[i]

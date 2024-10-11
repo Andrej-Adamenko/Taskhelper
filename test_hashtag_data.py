@@ -221,7 +221,7 @@ class RemoveRedundantPriorityTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
-		hashtag_data.hashtag_indexes = [None, None, [], 0]
+		hashtag_data.hashtag_indexes = [None, None, [0, 1], 2]
 		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_priority_tags(text, entities)
 		self.assertEqual(result[0], f"text\n#aa #bb #p1")
@@ -236,10 +236,25 @@ class RemoveRedundantPriorityTagsTest(TestCase):
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		hashtag_data.main_channel_id = main_channel_id
-		hashtag_data.hashtag_indexes = [None, None, [], 0]
+		hashtag_data.hashtag_indexes = [None, None, [0, 1], 2]
 		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.remove_redundant_priority_tags(text, entities)
 		self.assertEqual(result[0], f"text\n#aa #bb #p1")
+
+	@patch("hashtag_data.HashtagData.get_priority_number_or_default", return_value=None)
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	def test_no_default_priority_tag(self, *args):
+		text = f"text\n#aa #bb #p"
+		entities = test_helper.create_hashtag_entity_list(text)
+		post_data = test_helper.create_mock_message(text, entities)
+		main_channel_id = 123
+
+		hashtag_data = HashtagData(post_data, main_channel_id)
+		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.hashtag_indexes = [None, None, [0, 1], 2]
+		hashtag_data.is_hashtag_line_present = True
+		result = hashtag_data.remove_redundant_priority_tags(text, entities)
+		self.assertEqual(result[0], f"text\n#aa #bb #p")
 
 
 @patch("hashtag_data.PRIORITY_TAG", "p")
