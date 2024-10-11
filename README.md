@@ -39,14 +39,13 @@ ADMIN_USERS **(MANDATORY)**:
 * to use commands in the bot's private chat
 * example: ["@username"]
 
-CHANNEL_IDS:
-* chat ids of main channels where tickets will be created and managed
-* example: [-100123123123, -100456456456]
+APP_API_ID **(MANDATORY)**:
+* app id of your telegram application, needed for exporting comments from discussion chat 
+* example: 12345
 
-SUBCHANNEL_DATA:
-* data for forwarding tickets to channels
-* structure: "MAIN_CHANNEL_ID": {"NAME": {"PRIORITY": SUBCHANNEL_ID, "PRIORITY": SUBCHANNEL_ID, ...} 
-* example: "-100123123123": {"ak": {"1": -100345345345, "2": -100567567567, "3": -100678678678}}
+APP_API_HASH **(MANDATORY)**:
+* app hash of your telegram application, needed for exporting comments from discussion chat 
+* example: "42f28ff2118430bdff5f9a189e0034ec"
 
 DEFAULT_USER_DATA:
 * name and priority of a channel that messages forwarded to by default
@@ -72,21 +71,9 @@ DELAY_AFTER_ONE_SCAN:
 * delay(in seconds) before next message check during interval checking
 * example: 5
 
-APP_API_ID:
-* app id of your telegram application, needed for exporting comments from discussion chat 
-* example: 12345
-
-APP_API_HASH:
-* app hash of your telegram application, needed for exporting comments from discussion chat 
-* example: "42f28ff2118430bdff5f9a189e0034ec"
-
 TIMEZONE_NAME:
 * timezone for scheduled messages
 * example: "Europe/Kiev"
-
-SCHEDULED_STORAGE_CHAT_IDS:
-* data about storage channels for scheduled messages, keys are main channel ids, values are storage channel ids 
-* example: {"-1001234234134": -1001234234134}
 
 ## FAQ
 How to create bot and get bot token:
@@ -97,6 +84,13 @@ What is dump chat:
 
 What is ticket's followed users:
 * If ticket have more than one user assigned than ticket will be forwarded to all of them
+
+How to get chat id of a channel or chat:
+1) Right click on any post in the channel
+2) In the opened menu select "Copy Post Link" or "Copy Message Link"
+3) After that you will have a link in your clipboard, example: "https://t.me/c/2497828750/123"
+4) You should copy the first number from this link, in this example it will be 2497828750
+5) Insert -100 before the number that you copied before, in this example final chat id will be -1002497828750
 
 ## How to run
 When you installed Python, dependencies and filled config.json you should invite bot to your channels(dump chat, main channel, all subchannels) and run:
