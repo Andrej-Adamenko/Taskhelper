@@ -83,11 +83,20 @@ def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str)
 
 	highest_priority = 3
 	for ticket in filtered_ticket_data:
-		priority = int(ticket[5])
-		if priority < highest_priority:
-			highest_priority = priority
+		priority = ticket[5]
+		if not priority:
+			continue
 
-	filtered_ticket_data = list(filter(lambda ticket: int(ticket[5]) == highest_priority, filtered_ticket_data))
+		priority_number = int(priority)
+		if priority_number < highest_priority:
+			highest_priority = priority_number
+
+	filtered_by_priority = []
+	for ticket in filtered_ticket_data:
+		priority = ticket[5]
+		if priority and int(priority) == highest_priority:
+			filtered_by_priority.append(ticket)
+	filtered_ticket_data = filtered_by_priority
 
 	if not filtered_ticket_data:
 		logging.info(f"No forwarded tickets for reminding were found in {user_tag, main_channel_id}")

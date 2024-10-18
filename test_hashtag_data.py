@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import telebot.types
 
+import hashtag_data as hashtag_data_module
 from hashtag_data import HashtagData
 import test_helper
 
@@ -744,6 +745,36 @@ class CheckLastLineTest(TestCase):
 		hashtag_data.post_data = test_helper.create_mock_message(text, [])
 		result = hashtag_data.check_last_line()
 		self.assertFalse(result)
+
+
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class InsertDefaultTagsTest(TestCase):
+	def setUp(self):
+		hashtag_data_module.OPENED_TAG = "open"
+		hashtag_data_module.CLOSED_TAG = "closed"
+		hashtag_data_module.PRIORITY_TAG = "p"
+		hashtag_data_module.SCHEDULED_TAG = "sch"
+
+	@patch("hashtag_data.HashtagData.is_status_missing", return_value=True)
+	def test_missing_status_tag(self, *args):
+		hashtag_data_module.DEFAULT_USER_DATA = {}
+		hashtag_data = HashtagData()
+		hashtag_data.main_channel_id = 12345678
+		hashtag_data.insert_default_tags()
+		self.assertEqual(hashtag_data.status_tag, "open")
+
+	@patch("hashtag_data.HashtagData.is_status_missing", return_value=True)
+	@patch("hashtag_data.HashtagData.insert_default_user")
+	@patch("hashtag_data.HashtagData.insert_default_priority")
+	def test_insert_user_and_priority(self, mock_insert_default_priority, mock_insert_default_user, *args):
+		main_channel_id = 12345678
+		hashtag_data_module.DEFAULT_USER_DATA = {"12345678": "ab 1"}
+		hashtag_data = HashtagData()
+		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.user_tags = []
+		hashtag_data.insert_default_tags()
+		mock_insert_default_priority.assert_called_once()
+		mock_insert_default_user.assert_called_once()
 
 
 if __name__ == "__main__":
