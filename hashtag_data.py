@@ -168,6 +168,7 @@ class HashtagData:
 	def get_updated_post_data(self):
 		hashtags = self.get_hashtags_for_insertion()
 		hashtag_utils.insert_hashtags(self.post_data, hashtags, self.is_hashtag_line_present)
+		self.is_hashtag_line_present = self.check_last_line()
 		self.post_data = self.remove_duplicates(self.post_data)
 		self.update_scheduled_status()
 		self.post_data = self.add_strikethrough_entities(self.post_data)
@@ -440,11 +441,7 @@ class HashtagData:
 
 		other_tags_date_str = self.find_scheduled_tag_in_other_hashtags()
 		if other_tags_date_str:
-			current_timestamp = self.get_scheduled_timestamp()
-
-			other_tags_date = datetime.datetime.strptime(other_tags_date_str, SCHEDULED_DATETIME_FORMAT)
-			other_tags_timestamp = other_tags_date.timestamp()
-			if current_timestamp is None or other_tags_timestamp < current_timestamp:
+			if not self.get_scheduled_datetime():
 				self.set_scheduled_tag(other_tags_date_str)
 
 		priorities = self.find_priorities_in_other_hashtags()

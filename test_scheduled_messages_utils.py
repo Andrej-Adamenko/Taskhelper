@@ -192,22 +192,6 @@ class ScheduleMessageTest(TestCase):
 		self.scheduled_message_dispatcher.schedule_message(mock_bot, mock_call, send_time)
 		mock_update_scheduled_time.assert_called_once()
 
-	@patch("db_utils.is_main_channel_exists", return_value=True)
-	@patch("hashtag_data.HashtagData.find_scheduled_tag_in_other_hashtags", return_value="2024-01-01 12:00")
-	@patch("hashtag_data.HashtagData.__init__", return_value=None)
-	def test_earlier_date_in_other_tags(self, *args):
-		mock_bot = Mock(spec=TeleBot)
-		mock_call = Mock(spec=CallbackQuery)
-
-		mock_call.message = test_helper.create_mock_message("", [])
-		mock_call.message.message_id = 152
-		mock_call.message.chat = Mock(id=12345678)
-		mock_call.id = 111111111
-
-		send_time = 1722517200
-
-		self.scheduled_message_dispatcher.schedule_message(mock_bot, mock_call, send_time)
-		mock_bot.answer_callback_query.assert_called_once()
 
 if __name__ == "__main__":
 	main()

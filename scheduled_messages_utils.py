@@ -45,12 +45,6 @@ class ScheduledMessageDispatcher:
 			return
 
 		hashtag_data = HashtagData(message, main_channel_id)
-		current_datetime_str = hashtag_data.find_scheduled_tag_in_other_hashtags()
-		if current_datetime_str:
-			current_datetime = datetime.datetime.strptime(current_datetime_str, SCHEDULED_DATETIME_FORMAT)
-			if current_datetime.timestamp() < send_time:
-				bot.answer_callback_query(callback_query_id=call.id, text="Can't reschedule to this date because there is an earlier date in the text")
-				return
 
 		send_datetime = datetime.datetime.fromtimestamp(send_time, pytz.timezone(config_utils.TIMEZONE_NAME))
 		date_str = send_datetime.strftime(SCHEDULED_DATETIME_FORMAT)
