@@ -139,7 +139,7 @@ def check_main_messages(bot: telebot.TeleBot, main_channel_id: int, start_from_m
 				continue
 			logging.error(f"Telegram error during main channel check ({main_channel_id, current_msg_id}) - {E}")
 		except Exception as E:
-			logging.error(f"Discussion channel check stopped ({main_channel_id, current_msg_id}) - {E}")
+			logging.error(f"Main channel check stopped ({main_channel_id, current_msg_id}) - {E}")
 			return
 
 	db_utils.insert_or_update_channel_update_progress(main_channel_id, 0)

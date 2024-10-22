@@ -458,6 +458,7 @@ class StrikeThroughScheduledTagTest(TestCase):
 		strikethrough_entity = entities[-1]
 
 		self.assertEqual(strikethrough_entity.type, "strikethrough")
+		self.assertEqual(strikethrough_entity.aligned_to_utf8, True)
 		self.assertEqual(strikethrough_entity.length, 16)
 		self.assertEqual(strikethrough_entity.offset, 18)
 
@@ -481,6 +482,7 @@ class StrikeThroughScheduledTagTest(TestCase):
 				strikethrough_entity = entity
 
 		self.assertEqual(strikethrough_entity.type, "strikethrough")
+		self.assertEqual(strikethrough_entity.aligned_to_utf8, True)
 		self.assertEqual(strikethrough_entity.length, 16)
 		self.assertEqual(strikethrough_entity.offset, 18)
 
@@ -502,6 +504,7 @@ class StrikeThroughTicketNumberTest(TestCase):
 		first_entity = entities[0]
 
 		self.assertEqual(first_entity.type, "strikethrough")
+		self.assertEqual(first_entity.aligned_to_utf8, True)
 		self.assertEqual(first_entity.length, 3)
 		self.assertEqual(first_entity.offset, 0)
 

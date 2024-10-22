@@ -704,6 +704,7 @@ class HashtagData:
 		strikethrough_offset = scheduled_tag_entity.offset + 1 + datetime_offset  # +1 because of the hashtag
 
 		strikethrough_entity = MessageEntity(type="strikethrough", offset=strikethrough_offset, length=len(datetime_str))
+		strikethrough_entity.aligned_to_utf8 = True
 		entities.append(strikethrough_entity)
 		entities.sort(key=lambda e: e.offset)
 
@@ -724,6 +725,7 @@ class HashtagData:
 			offset=ticket_number_entity.offset,
 			length=ticket_number_entity.length,
 		)
+		strikethrough_entity.aligned_to_utf8 = True
 		entities.insert(0, strikethrough_entity)
 
 		return entities
