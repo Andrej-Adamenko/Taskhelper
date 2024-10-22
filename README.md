@@ -59,10 +59,6 @@ INTERVAL_UPDATE_START_DELAY:
 * delay(in seconds) before start of an interval check since bot was started
 * example: 60
 
-AUTO_FORWARDING_ENABLED:
-* if true during interval checks bot will automatically forward tickets to subchannels 
-* example: false
-
 MAX_BUTTONS_IN_ROW:
 * max amount of buttons in one row, won't affect control buttons
 * example: 3
@@ -191,23 +187,9 @@ Remove main channel:
 * /remove_main_channel (CHANNEL_ID)
 * Example: /remove_main_channel  -100987987987
 
-Enables auto forwarding tickets found during scanning:
-* /enable_auto_forwarding
-
-Disables auto forwarding tickets found during scanning:
-* /disable_auto_forwarding
-
 Changes timezone identifier:
 * /set_timezone (TIMEZONE) 
 * Example: /set_timezone Europe/Kiev
-
-Add subchannel to main channel with specified tag and priority:
-* /set_subchannel (MAIN_CHANNEL_ID) (TAG) (PRIORITY) (SUBCHANNEL_ID)
-* Example: /set_subchannel -100987987987 aa 1 -100123321123
-
-Removes all subchannels with specified tag in main channel:
-* /remove_subchannel_tag (MAIN_CHANNEL_ID) (TAG)
-* Example: /remove_subchannel_tag -100987987987 aa
 
 Add or change username or user id of the tag:
 * /set_user_tag (MAIN_CHANNEL_ID) (TAG) (USERNAME_OR_USER_ID)
@@ -218,27 +200,24 @@ Remove user assigned to specified tag:
 * /remove_user_tag (MAIN_CHANNEL_ID) (TAG)
 * Example with username: /remove_user_tag -100987987987 aa
 
-Changes default subchannel:
+Changes default user and priority:
 * /set_default_subchannel (MAIN_CHANNEL_ID) (DEFAULT_USER_TAG) (DEFAULT_PRIORITY)
-* Example: /set_user_tag -100987987987 aa 1
+* Example: /set_default_subchannel -100987987987 aa 1
 
-Changes storage channel for scheduled messages:
-* /set_storage_channel (MAIN_CHANNEL_ID) (STORAGE_CHANNEL_ID) (TAG)
-* Example: /set_storage_channel -100987987987 -100432423423 aa
-
-Changes storage channel for scheduled messages:
+Changes button text:
 * /set_button_text (BUTTON_NAME) (NEW_VALUE)
 * Available buttons: opened, closed, assigned, cc, schedule, check, priority
-* Example: /set_button_text opened 🟩
-* /set_button_text priority - 1 2 3
+* Example: /set_button_text opened OPEN
+* Priority button text will have 4 values, first for missing priority and 3 others for each priority, for example: /set_button_text priority NO_PRIORITY FIRST SECOND THIRD
 
-Changes storage channel for scheduled messages:
+Changes the text of the service hashtags:
 * /set_hashtag_text (HASHTAG_NAME) (NEW_VALUE)
 * Available hashtags: opened, closed, scheduled, priority
 * Example: /set_hashtag_text opened Op
+* Important: after this is executed the bot will start interval update to replace every old hashtag with the new hashtag 
 
 Changes timeout for skipping daily reminder if user is interacted with tickets within this time:
-* /set_remind_without_interaction<MINUTES>
+* /set_remind_without_interaction (MINUTES)
 * Example: /set_remind_without_interaction 1440
 
 ### ***Individual channel structure for every user***

@@ -23,7 +23,6 @@ DISCUSSION_CHAT_DATA: dict = {}
 DEFAULT_USER_DATA: dict = {}
 UPDATE_INTERVAL: int = 60
 INTERVAL_UPDATE_START_DELAY: int = 10
-AUTO_FORWARDING_ENABLED: bool = False
 MAX_BUTTONS_IN_ROW: int = 3
 DELAY_AFTER_ONE_SCAN: int = 4
 SUPPORTED_CONTENT_TYPES: list = ["animation", "audio", "photo", "voice", "video", "document", "text"]

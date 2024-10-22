@@ -64,9 +64,6 @@ def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, a
 	help_text += "/set_interval_check_time <MINUTES> — changes delay between interval checks\n\n"
 	help_text += "/add_main_channel <CHANNEL_ID> — add main channel\n\n"
 	help_text += "/remove_main_channel <CHANNEL_ID> — remove main channel\n\n"
-	help_text += "/enable_auto_forwarding — enables auto forwarding tickets found during scanning\n\n"
-	help_text += "/disable_auto_forwarding — disables auto forwarding tickets found during scanning\n\n"
-
 	help_text += "/set_timezone <TIMEZONE> — changes timezone identifier\n"
 	help_text += "Example: /set_timezone Europe/Kiev\n\n"
 	help_text += "/set_user_tag <MAIN_CHANNEL_ID> <TAG> <USERNAME_OR_USER_ID> — add or change username or user id of the tag\n"
@@ -243,16 +240,6 @@ def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.
 	config_utils.update_config({"DEFAULT_USER_DATA": config_utils.DEFAULT_USER_DATA})
 
 
-def handle_change_auto_forwarding(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
-	if msg_data.text.startswith("/enable"):
-		config_utils.AUTO_FORWARDING_ENABLED = True
-	elif msg_data.text.startswith("/disable"):
-		config_utils.AUTO_FORWARDING_ENABLED = False
-	state = "enabled" if config_utils.AUTO_FORWARDING_ENABLED else "disabled"
-	bot.send_message(chat_id=msg_data.chat.id, text=f"Auto forwarding now is {state}.")
-	config_utils.update_config({"AUTO_FORWARDING_ENABLED": config_utils.AUTO_FORWARDING_ENABLED})
-
-
 def handle_change_button_text(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
 	space_index = arguments.find(" ")
 	button_name = arguments[:space_index]
@@ -353,8 +340,6 @@ COMMAND_LIST = [
 	["/set_user_tag", "Add user id", handle_user_change],
 	["/remove_user_tag", "Remove user id", handle_user_change],
 	["/set_default_subchannel", "Set default subchannel", handle_set_default_subchannel],
-	["/enable_auto_forwarding", "Enables auto forwarding during scanning", handle_change_auto_forwarding],
-	["/disable_auto_forwarding", "Enables auto forwarding during scanning", handle_change_auto_forwarding],
 	["/set_button_text", "Set text of specified button", handle_change_button_text],
 	["/set_hashtag_text", "Set text of specified hashtag", handle_change_hashtag_text],
 	["/set_remind_without_interaction", "Set time for reminding users", handle_change_remind_without_interaction],

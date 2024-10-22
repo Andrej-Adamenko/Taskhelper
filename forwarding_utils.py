@@ -509,7 +509,7 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, cur
 	elif callback_type == CB_TYPES.OPEN:
 		change_state_button_event(bot, call, True)
 	elif callback_type == CB_TYPES.SAVE:
-		forward_and_add_inline_keyboard(bot, call.message, force_forward=True)
+		forward_and_add_inline_keyboard(bot, call.message)
 	elif callback_type == CB_TYPES.SHOW_SUBCHANNELS:
 		show_subchannel_buttons(bot, call.message, current_channel_id, current_message_id)
 	elif callback_type == CB_TYPES.SHOW_PRIORITIES:
@@ -680,7 +680,7 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 	forward_to_subchannel(bot, updated_post_data, hashtag_data)
 
 
-def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, force_forward: bool = False, new_ticket: bool = False):
+def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, new_ticket: bool = False):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
@@ -698,8 +698,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
 	comment_utils.add_next_action_comment(bot, updated_post_data)
 	add_control_buttons(bot, updated_post_data, hashtag_data)
-	if config_utils.AUTO_FORWARDING_ENABLED or force_forward:
-		forward_to_subchannel(bot, updated_post_data, hashtag_data)
+	forward_to_subchannel(bot, updated_post_data, hashtag_data)
 
 
 def update_message_and_forward_to_subchannels(bot: telebot.TeleBot, hashtag_data: HashtagData):
