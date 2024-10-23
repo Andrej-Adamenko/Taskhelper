@@ -780,5 +780,36 @@ class InsertDefaultTagsTest(TestCase):
 		mock_insert_default_user.assert_called_once()
 
 
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+class ExtractScheduledTagFromTextTest(TestCase):
+	def test_invalid_minutes(self, *args):
+		hashtag_data = HashtagData()
+		text = "#s 2024-05-16 14:77"
+		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s 2024-05-16"))
+		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
+		self.assertEqual(result, "s 2024-05-16 14:00")
+
+	def test_normal_scheduled_tag(self, *args):
+		hashtag_data = HashtagData()
+		text = "#s 2024-05-16 14:30"
+		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s 2024-05-16 14:30"))
+		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
+		self.assertEqual(result, "s 2024-05-16 14:30")
+
+	def test_without_time(self, *args):
+		hashtag_data = HashtagData()
+		text = "#s 2024-05-16 asdf"
+		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s 2024-05-16"))
+		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
+		self.assertEqual(result, "s 2024-05-16")
+
+	def test_incorrect_tag(self, *args):
+		hashtag_data = HashtagData()
+		text = "#s test text"
+		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s"))
+		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
+		self.assertEqual(result, "s")
+
+
 if __name__ == "__main__":
 	main()
