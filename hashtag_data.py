@@ -332,12 +332,35 @@ class HashtagData:
 		ignored_indexes += user_tag_indexes
 
 		for entity_index in range(len(entities)):
-			if entity_index in ignored_indexes or entities[entity_index].type != "hashtag":
+			entity = entities[entity_index]
+			if entity_index in ignored_indexes or entity.type != "hashtag":
 				continue
 
-			entity_text = self.get_tag_from_entity(entities[entity_index], text)
+			entity_text = self.get_tag_from_entity(entity, text)
+
+			if self.check_scheduled_tag(entity_text, SCHEDULED_TAG):
+				entity_text = self.extract_scheduled_tag_from_text(text, entity)
+
 			hashtags.append("#" + entity_text)
 		return hashtags
+
+	def extract_scheduled_tag_from_text(self, text, entity):
+		entity_text = self.get_tag_from_entity(entity, text)
+		tag_parts = entity_text.split(" ")
+		if len(tag_parts) != 2:
+			return entity_text
+
+		text_after_tag = text[entity.offset + entity.length + 1:]
+		colon_index = text_after_tag.find(":")
+		if colon_index < 0:
+			return entity_text
+
+		hours = text_after_tag[:colon_index]
+		if not utils.parse_datetime(hours, "%H"):
+			return entity_text
+
+		return f"{entity_text} {hours}:00"
+
 
 	def get_present_hashtag_indices(self):
 		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
@@ -737,7 +760,7 @@ class HashtagData:
 			return
 
 		scheduled_datetime_str = self.get_scheduled_datetime_str()
-		dt = utils.parse_datetime(scheduled_datetime_str, utils.SCHEDULED_DATETIME_FORMAT)
+		dt = utils.parse_datetime(scheduled_datetime_str, SCHEDULED_DATETIME_FORMAT)
 		if not dt:
 			return
 
