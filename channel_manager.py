@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import List, Dict
 
 import telebot
@@ -11,6 +12,7 @@ import forwarding_utils
 import hashtag_data
 import interval_updating_utils
 import utils
+from db_utils import update_individual_channel_settings
 
 CALLBACK_PREFIX = "CHNN"
 NEW_USER_TYPE = "+"
@@ -397,7 +399,10 @@ def update_settings_message(bot: telebot.TeleBot, channel_id: int, message_id: i
 	settings_button = telebot.types.InlineKeyboardButton("Edit channel settings ⚙️")
 	settings_button.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.OPEN_CHANNEL_SETTINGS)
 	keyboard_markup = telebot.types.InlineKeyboardMarkup([[settings_button]])
-	bot.edit_message_text(text=text, reply_markup=keyboard_markup, chat_id=channel_id, message_id=message_id)
+	try:
+		bot.edit_message_text(text=text, reply_markup=keyboard_markup, chat_id=channel_id, message_id=message_id)
+	except ApiTelegramException as E:
+		logging.error(f"Error during channel settings message update - {E}")
 
 
 def save_remind_settings(call: CallbackQuery):
@@ -533,7 +538,7 @@ def save_channel_settings(bot: telebot.TeleBot, call: CallbackQuery):
 	db_utils.update_individual_channel(channel_id, settings_str, priorities_str)
 
 
-def add_new_user_tag_to_channels(main_channel_id: int, user_tag: str):
+def add_new_user_tag_to_channels(bot: telebot.TeleBot, main_channel_id: int, user_tag: str):
 	channel_data = db_utils.get_all_individual_channels(main_channel_id)
 	for channel in channel_data:
 		channel_id, settings = channel
@@ -541,6 +546,9 @@ def add_new_user_tag_to_channels(main_channel_id: int, user_tag: str):
 		assigned = settings.get(SETTING_TYPES.ASSIGNED) or []
 		reported = settings.get(SETTING_TYPES.REPORTED) or []
 		followed = settings.get(SETTING_TYPES.FOLLOWED) or []
+
+		if not NEW_USER_TYPE in (assigned + reported + followed):
+			continue
 
 		if NEW_USER_TYPE in assigned:
 			settings[SETTING_TYPES.ASSIGNED].append(user_tag)
@@ -552,18 +560,33 @@ def add_new_user_tag_to_channels(main_channel_id: int, user_tag: str):
 		settings_str = json.dumps(settings)
 		db_utils.update_individual_channel_settings(channel_id, settings_str)
 
+		settings_message_id = settings.get(SETTING_TYPES.SETTINGS_MESSAGE_ID)
+		if settings_message_id:
+			update_settings_message(bot, channel_id, settings_message_id)
 
-def remove_user_tag_from_channels(main_channel_id: int, user_tag: str):
+
+def remove_user_tag_from_channels(bot: telebot.TeleBot, main_channel_id: int, user_tag: str):
 	channel_data = db_utils.get_all_individual_channels(main_channel_id)
 	for channel in channel_data:
 		channel_id, settings = channel
 		settings = json.loads(settings)
 
 		tag_filter = lambda t: t != user_tag
+		update_needed = False
 		for setting_type in [SETTING_TYPES.ASSIGNED, SETTING_TYPES.REPORTED, SETTING_TYPES.FOLLOWED]:
 			if setting_type not in settings:
 				continue
+
+			if user_tag in settings[setting_type]:
+				update_needed = True
 			settings[setting_type] = list(filter(tag_filter, settings[setting_type]))
+
+		if not update_needed:
+			continue
 
 		settings_str = json.dumps(settings)
 		db_utils.update_individual_channel_settings(channel_id, settings_str)
+
+		settings_message_id = settings.get(SETTING_TYPES.SETTINGS_MESSAGE_ID)
+		if settings_message_id:
+			update_settings_message(bot, channel_id, settings_message_id)
