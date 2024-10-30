@@ -1,3 +1,4 @@
+import copy
 import logging
 from typing import List
 import time
@@ -197,13 +198,13 @@ def place_buttons_in_rows(buttons: List[telebot.types.InlineKeyboardButton]):
 
 @threading_utils.timeout_error_lock
 def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message,
-                          keyboard: telebot.types.InlineKeyboardMarkup = None, chat_id: int = None, message_id: int = None):
+                          keyboard_markup: telebot.types.InlineKeyboardMarkup = None, chat_id: int = None, message_id: int = None):
 	if chat_id is None and message_id is None:
 		chat_id = post_data.chat.id
 		message_id = post_data.message_id
 
-	if keyboard is None:
-		keyboard = post_data.reply_markup
+	if keyboard_markup is None:
+		keyboard_markup = post_data.reply_markup
 
 	if db_utils.is_individual_channel_exists(chat_id):
 		newest_message_id = db_utils.get_newest_copied_message(chat_id)
@@ -219,11 +220,14 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 					channel_manager.CALLBACK_PREFIX,
 					channel_manager.CB_TYPES.CREATE_CHANNEL_SETTINGS
 				)
-			keyboard.keyboard.append([telebot.types.InlineKeyboardButton(" ", callback_data="_")])
-			keyboard.keyboard.append([settings_button])
+
+			# copy keyboard markup object to prevent modification of an original object
+			keyboard_markup = copy.deepcopy(keyboard_markup)
+			keyboard_markup.keyboard.append([telebot.types.InlineKeyboardButton(" ", callback_data="_")])
+			keyboard_markup.keyboard.append([settings_button])
 
 	try:
-		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard)
+		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard_markup)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
