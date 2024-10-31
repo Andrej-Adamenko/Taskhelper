@@ -26,6 +26,7 @@ POSSIBLE_PRIORITIES = ["1", "2", "3"]
 
 class HashtagData:
 	def __init__(self, post_data: telebot.types.Message, main_channel_id: int, insert_default_tags: bool = False):
+		self.ignore_comments = False
 		self.hashtag_indexes = []
 		self.post_data = copy.deepcopy(post_data)
 		self.main_channel_id = main_channel_id

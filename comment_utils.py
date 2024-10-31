@@ -107,6 +107,7 @@ class CommentDispatcher:
 
 				hashtag_data.set_scheduled_tag(date_str + " " + time_str)
 
+		hashtag_data.ignore_comments = True
 		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
 
 	def update_next_action(self, bot: telebot.TeleBot, main_message_id: int, main_channel_id: int, next_action: str):

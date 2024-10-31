@@ -309,16 +309,19 @@ class ScheduledMessageDispatcher:
 		if not db_utils.is_message_scheduled(main_message_id, main_channel_id) and tag_send_time > time.time():
 			db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, tag_send_time)
 			self.insert_scheduled_message_info(main_message_id, main_channel_id, tag_send_time)
-			comment_text = f"Ticket was scheduled to be sent on {datetime_str}."
-			utils.add_comment_to_ticket(bot, msg_data, comment_text)
+
+			if not hashtag_data.ignore_comments:
+				comment_text = f"Ticket was scheduled to be sent on {datetime_str}."
+				utils.add_comment_to_ticket(bot, msg_data, comment_text)
 			return
 
 		ticket_send_time = db_utils.get_scheduled_message_send_time(main_message_id, main_channel_id)
 		if ticket_send_time is not None and ticket_send_time != tag_send_time:
 			self.update_scheduled_time(main_message_id, main_channel_id, tag_send_time)
 
-			comment_text = f"Ticket was rescheduled to {datetime_str}."
-			utils.add_comment_to_ticket(bot, msg_data, comment_text)
+			if not hashtag_data.ignore_comments:
+				comment_text = f"Ticket was rescheduled to {datetime_str}."
+				utils.add_comment_to_ticket(bot, msg_data, comment_text)
 
 	def update_timezone(self, current_timezone: datetime.tzinfo, new_timezone: datetime.tzinfo):
 		scheduled_messages = db_utils.get_all_scheduled_messages()
