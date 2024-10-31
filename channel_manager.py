@@ -200,8 +200,11 @@ def initialize_channel(bot: telebot.TeleBot, channel_id: int):
 
 
 def create_settings_message(bot: telebot.TeleBot, channel_id: int):
-	if get_settings_message_id(channel_id):
-		return
+	settings_message_id = get_settings_message_id(channel_id)
+	if settings_message_id:
+		settings_message = utils.get_message_content_by_id(bot, channel_id, settings_message_id)
+		if settings_message:
+			return
 
 	oldest_message_id = db_utils.get_oldest_copied_message(channel_id)
 	if oldest_message_id:
@@ -219,7 +222,7 @@ def create_settings_message(bot: telebot.TeleBot, channel_id: int):
 
 def generate_current_settings_text(channel_id: int):
 	text = '''
-		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. You can call this settings menu using "/show_settings" command. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
+		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. If the message with settings was deleted you can call "/settings" command to create it. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
 		1) Assigned to - include tickets that is assigned to the selected users
 		2) Reported by - include tickets that is created by the selected users
 		3) CCed to - include tickets where the selected users in CC
@@ -430,6 +433,10 @@ def save_remind_settings(call: CallbackQuery):
 def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 	callback_type, other_data = utils.parse_callback_str(call.data)
 	message = call.message
+
+	if not db_utils.is_individual_channel_exists(message.chat.id):
+		bot.answer_callback_query(call.id)
+		return
 
 	if callback_type == CB_TYPES.ASSIGNED_SELECTED:
 		save_channel_settings(bot, call)

@@ -244,7 +244,9 @@ In addition to user tags, there is also a "New User" option that will automatica
 
 After selecting the desired settings, you should press the "Save" button to save and apply the settings.
 
-If you need to change the channel settings, you can use the command "/show_settings" to call the parameter selection menu again.
+You can open this menu by pressing "Settings ⚙️" button on the last ticket in channel, it will redirect you to the message with current channel settings which will have "Edit channel settings ⚙️" button that you can use to open the menu for changing channel settings.
+
+If message with "Edit channel settings ⚙️" was deleted you can use "/settings" command to create it again.
 
 ### ***Custom hashtags for specific channels***
 

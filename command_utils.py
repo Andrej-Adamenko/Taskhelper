@@ -29,7 +29,7 @@ def handle_channel_command(bot: telebot.TeleBot, msg_data: telebot.types.Message
 	command = command_parts[0]
 	arguments = command_parts[1:]
 
-	if command == "/show_settings" or command == "/start":
+	if command == "/settings" or command == "/start":
 		forwarding_utils.delete_forwarded_message(bot, msg_data.chat.id, msg_data.message_id)
 		channel_manager.initialize_channel(bot, msg_data.chat.id)
 	elif command == "/set_channel_hashtag":
