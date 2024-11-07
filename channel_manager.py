@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 from typing import List, Dict
 
 import telebot
@@ -17,6 +18,7 @@ from db_utils import update_individual_channel_settings
 CALLBACK_PREFIX = "CHNN"
 NEW_USER_TYPE = "+"
 
+DEFERRED_INTERVAL_CHECK_TIMER = None
 
 class CB_TYPES:
 	ASSIGNED_SELECTED = "AS"
@@ -430,6 +432,14 @@ def save_remind_settings(call: CallbackQuery):
 	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
 
+def start_deferred_interval_check(bot: telebot.TeleBot):
+	global DEFERRED_INTERVAL_CHECK_TIMER
+	if DEFERRED_INTERVAL_CHECK_TIMER and DEFERRED_INTERVAL_CHECK_TIMER.is_alive():
+		DEFERRED_INTERVAL_CHECK_TIMER.cancel()
+	DEFERRED_INTERVAL_CHECK_TIMER = threading.Timer(30, interval_updating_utils.start_interval_updating, (bot,))
+	DEFERRED_INTERVAL_CHECK_TIMER.start()
+
+
 def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 	callback_type, other_data = utils.parse_callback_str(call.data)
 	message = call.message
@@ -454,13 +464,15 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		setting_type, = other_data
 		save_user_settings(call, setting_type)
 		update_settings_keyboard(bot, message)
+		start_deferred_interval_check(bot)
 	elif callback_type == CB_TYPES.SAVE_REMIND_SETTINGS:
 		save_remind_settings(call)
 		update_settings_keyboard(bot, message)
+		start_deferred_interval_check(bot)
 	elif callback_type == CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU:
 		save_channel_settings(bot, call)
 		update_settings_message(bot, message.chat.id, message.id)
-		interval_updating_utils.start_interval_updating(bot)
+		start_deferred_interval_check(bot)
 	elif callback_type == CB_TYPES.NOP:
 		bot.answer_callback_query(call.id)
 	elif callback_type in _TOGGLE_CALLBACKS:
