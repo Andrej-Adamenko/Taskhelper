@@ -68,6 +68,31 @@ class RemoveUserTagFromChannelsTest(TestCase):
 
 		mock_update_settings_message.assert_called_once_with(mock_bot, channel_id, 3079)
 
+	@patch("db_utils.get_individual_channel_settings")
+	def test_generate_current_settings_text(self, mock_get_individual_channel_settings, *args):
+		channel_settings = '{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}'
+		priorities = '1,2'
+		channel_id = -10012345678
+		mock_get_individual_channel_settings.return_value = [channel_settings, priorities]
+
+		text = channel_manager.generate_current_settings_text(channel_id)
+		self.assertIn("\"/settings\"", text)
+
+		self.assertIn("Assigned to -", text)
+		self.assertIn("Reported by -", text)
+		self.assertIn("CCed to -", text)
+		self.assertIn("Remind me when -", text)
+		self.assertIn("Due -", text)
+		self.assertIn("Deferred -", text)
+		self.assertIn("Priority 1/2/3 -", text)
+
+		self.assertIn("CURRENT SETTINGS", text)
+		self.assertIn("Assigned to: #FF, #NN", text)
+		self.assertIn("Reported by: <new users>", text)
+		self.assertIn("CCed to: #NN", text)
+		self.assertIn("Include due tickets: yes", text)
+		self.assertIn("Include deferred tickets: no", text)
+		self.assertIn("Priorities: #п1, #п2", text)
 
 if __name__ == "__main__":
 	main()

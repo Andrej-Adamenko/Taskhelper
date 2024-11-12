@@ -231,6 +231,7 @@ def generate_current_settings_text(channel_id: int):
 		4) Remind me when - regulates what tickets can be reminded in this channel
 		5) Due - if this option is enabled, regular(NOT scheduled) tickets will be included in this channel
 		6) Deferred - if this option is enabled, scheduled tickets will be included in this channel
+		7) Priority 1/2/3 - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel
 	'''
 
 	text += "\nCURRENT SETTINGS"
