@@ -82,30 +82,23 @@ class CommentDispatcher:
 			if hashtag in user_tags:
 				hashtag_data.add_user(hashtag)
 		if scheduled_hashtag in comment_hashtags:
+			for i, entity in enumerate(entities):
+				hashtag_data.update_scheduled_tag_entity_length(text, entities, i)
+
 			for entity in entities:
 				if entity.type != "hashtag":
 					continue
 
-				tag = text[entity.offset + 1:entity.offset + entity.length]
-				if tag != scheduled_hashtag:
+				tag = hashtag_data.get_tag_from_entity(entity, text)
+				if not hashtag_data.check_scheduled_tag(tag, scheduled_hashtag):
 					continue
 
-				scheduled_parts = text[entity.offset:].split(" ")[:3]
-				if len(scheduled_parts) < 2:
+				entity_text = hashtag_data.get_tag_from_entity(entity, text)
+				tag_parts = entity_text.split(" ")
+				if len(tag_parts) < 2:
 					continue
 
-				date_str = scheduled_parts[1]
-				if not utils.parse_datetime(date_str, "%Y-%m-%d"):
-					continue
-
-				if len(scheduled_parts) < 3:
-					time_str = "00:00"
-				else:
-					time_str = scheduled_parts[2]
-					if not utils.parse_datetime(time_str, "%H:%M"):
-						time_str = "00:00"
-
-				hashtag_data.set_scheduled_tag(date_str + " " + time_str)
+				hashtag_data.set_scheduled_tag(hashtag_data.extract_scheduled_tag_from_text(text, entity)[len(scheduled_hashtag) + 1:])
 
 		hashtag_data.ignore_comments = True
 		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)

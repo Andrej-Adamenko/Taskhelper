@@ -789,6 +789,13 @@ class ExtractScheduledTagFromTextTest(TestCase):
 		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
 		self.assertEqual(result, "s 2024-05-16 14:00")
 
+	def test_invalid_hours(self, *args):
+		hashtag_data = HashtagData()
+		text = "#s 2024-05-16 26:77"
+		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s 2024-05-16"))
+		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
+		self.assertEqual(result, "s 2024-05-16 00:00")
+
 	def test_normal_scheduled_tag(self, *args):
 		hashtag_data = HashtagData()
 		text = "#s 2024-05-16 14:30"
@@ -801,7 +808,7 @@ class ExtractScheduledTagFromTextTest(TestCase):
 		text = "#s 2024-05-16 asdf"
 		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s 2024-05-16"))
 		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
-		self.assertEqual(result, "s 2024-05-16")
+		self.assertEqual(result, "s 2024-05-16 00:00")
 
 	def test_incorrect_tag(self, *args):
 		hashtag_data = HashtagData()

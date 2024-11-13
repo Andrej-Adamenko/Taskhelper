@@ -146,6 +146,7 @@ class AddNextActionCommentTest(TestCase):
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
 @patch("db_utils.get_channel_user_tags", return_value=["aa", "bb", "cc"])
 @patch("comment_utils.HASHTAGS", {"OPENED": "o", "CLOSED": "x", "SCHEDULED": "s"})
+@patch("hashtag_data.SCHEDULED_TAG", "s")
 class ApplyHashtagsTest(TestCase):
 	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
 	@patch("hashtag_data.HashtagData.set_status_tag")
@@ -248,6 +249,23 @@ class ApplyHashtagsTest(TestCase):
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
 		mock_set_scheduled_tag.assert_called_once_with("2024-01-02 00:00")
+		mock_update_message_and_forward_to_subchannels.assert_called_once()
+
+	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
+	@patch("hashtag_data.HashtagData.set_scheduled_tag")
+	@patch("utils.get_post_content")
+	def test_reschedule_incorrect_minutes(self, mock_get_post_content, mock_set_scheduled_tag, mock_update_message_and_forward_to_subchannels, *args):
+		text = "reschedule to #s 2024-01-02 12:235 asdf qwe"
+		entities = test_helper.create_hashtag_entity_list(text)
+		mock_get_post_content.return_value = (text, entities)
+
+		mock_bot = Mock(spec=TeleBot)
+		msg_data = test_helper.create_mock_message(text, [])
+		main_message_id = 123
+		main_channel_id = 987654321
+
+		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
+		mock_set_scheduled_tag.assert_called_once_with("2024-01-02 12:00")
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
 	@patch("forwarding_utils.update_message_and_forward_to_subchannels")

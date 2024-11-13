@@ -354,11 +354,11 @@ class HashtagData:
 		text_after_tag = text[entity.offset + entity.length + 1:]
 		colon_index = text_after_tag.find(":")
 		if colon_index < 0:
-			return entity_text
+			return f"{entity_text} 00:00"
 
 		hours = text_after_tag[:colon_index]
 		if not utils.parse_datetime(hours, "%H"):
-			return entity_text
+			hours = "00"
 
 		return f"{entity_text} {hours}:00"
 
