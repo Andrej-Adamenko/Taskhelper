@@ -817,6 +817,20 @@ class ExtractScheduledTagFromTextTest(TestCase):
 		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
 		self.assertEqual(result, "s")
 
+	def test_time_without_zeros_invalid_minute(self, *args):
+		hashtag_data = HashtagData()
+		text = "#s 2024-05-16 2:82"
+		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s 2024-05-16"))
+		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
+		self.assertEqual(result, "s 2024-05-16 02:00")
+
+	def test_time_without_zeros(self, *args):
+		hashtag_data = HashtagData()
+		text = "#s 2024-05-16 2:5"
+		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s 2024-05-16 2:2"))
+		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
+		self.assertEqual(result, "s 2024-05-16 02:05")
+
 
 if __name__ == "__main__":
 	main()
