@@ -209,17 +209,7 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 	if db_utils.is_individual_channel_exists(chat_id):
 		newest_message_id = db_utils.get_newest_copied_message(chat_id)
 		if message_id == newest_message_id:
-			settings_button = telebot.types.InlineKeyboardButton("Settings ⚙️")
-			settings_message_id = channel_manager.get_settings_message_id(chat_id)
-			if settings_message_id:
-				chat_id_str = str(chat_id)
-				chat_id_str = chat_id_str[4:] if chat_id_str[:4] == "-100" else chat_id_str
-				settings_button.url = f"https://t.me/c/{chat_id_str}/{settings_message_id}"
-			else:
-				settings_button.callback_data = create_callback_str(
-					channel_manager.CALLBACK_PREFIX,
-					channel_manager.CB_TYPES.CREATE_CHANNEL_SETTINGS
-				)
+			settings_button = forwarding_utils.add_button_settings(chat_id)
 
 			# copy keyboard markup object to prevent modification of an original object
 			keyboard_markup = copy.deepcopy(keyboard_markup)

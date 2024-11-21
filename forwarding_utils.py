@@ -77,6 +77,7 @@ def forwarding_thread_lock(func):
 def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message, hashtag_data: HashtagData):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
+	copied_message = None
 
 	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
@@ -98,17 +99,24 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			continue
 
 		newest_message_id = db_utils.get_newest_copied_message(subchannel_id)
+		keyboard_markup = generate_control_buttons(hashtag_data, post_data, newest=True, subchannel_id=subchannel_id)
 
+		db_utils.CURSOR.execute('begin')
 		try:
 			if post_data.text is None:
 				text, entities = utils.get_post_content(post_data)
-				copied_message = bot.send_message(chat_id=subchannel_id, text=text, entities=entities)
+				copied_message = bot.send_message(chat_id=subchannel_id, text=text, entities=entities, reply_markup=keyboard_markup)
 			else:
 				copied_message = utils.copy_message(bot, chat_id=subchannel_id, message_id=main_message_id,
-			                                    from_chat_id=main_channel_id)
+			                                    from_chat_id=main_channel_id, reply_markup=keyboard_markup)
 			logging.info(f"Successfully forwarded post [{main_message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
 			db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
+			db_utils.CURSOR.execute('commit')
 		except ApiTelegramException as E:
+			db_utils.CURSOR.execute('rollback')
+			if not copied_message is None:
+				delete_forwarded_message(bot, subchannel_id, copied_message.message_id)
+
 			if E.error_code == 429:
 				raise E
 			if E.error_code == 403 and E.description.endswith(utils.KICKED_FROM_CHANNEL_ERROR):
@@ -116,10 +124,9 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			logging.warning(f"Exception during forwarding post to subchannel {hashtag_data.get_hashtag_list()} - {E}")
 			continue
 
+		# add to the newest settings button and remove it from previous message
 		keyboard_markup = generate_control_buttons(hashtag_data, post_data)
 		utils.edit_message_keyboard(bot, post_data, keyboard_markup, chat_id=subchannel_id, message_id=copied_message.message_id)
-
-		# update previous newest message to remove settings button
 		update_copied_message(bot, subchannel_id, newest_message_id)
 
 
@@ -350,7 +357,7 @@ def filter_creator_channels(channel_data: List, main_channel_id: int, main_messa
 	return result_channels
 
 
-def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types.Message):
+def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types.Message, newest: bool = False, subchannel_id: int = None):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
@@ -401,8 +408,27 @@ def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types
 			buttons.append(comments_button)
 
 	keyboard_markup = InlineKeyboardMarkup([buttons])
+
+	if newest:
+		keyboard_markup.keyboard.append([telebot.types.InlineKeyboardButton(" ", callback_data="_")])
+		keyboard_markup.keyboard.append([add_button_settings(subchannel_id)])
+
 	return keyboard_markup
 
+def add_button_settings(channel_id: int):
+	settings_button = telebot.types.InlineKeyboardButton("Settings ⚙️")
+	settings_message_id = channel_manager.get_settings_message_id(channel_id)
+	if settings_message_id:
+		chat_id_str = str(channel_id)
+		chat_id_str = chat_id_str[4:] if chat_id_str[:4] == "-100" else chat_id_str
+		settings_button.url = f"https://t.me/c/{chat_id_str}/{settings_message_id}"
+	else:
+		settings_button.callback_data = utils.create_callback_str(
+			channel_manager.CALLBACK_PREFIX,
+			channel_manager.CB_TYPES.CREATE_CHANNEL_SETTINGS
+		)
+
+	return settings_button
 
 def generate_subchannel_buttons(post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
