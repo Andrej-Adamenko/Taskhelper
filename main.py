@@ -119,6 +119,7 @@ def handle_edited_post(post_data: telebot.types.Message):
 def handle_bot_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
 	has_permissions = member_update.new_chat_member.can_edit_messages and member_update.new_chat_member.can_post_messages
 	if has_permissions:
+		channel_manager.initialize_channel(bot, member_update.chat.id)
 		logging.info(f"Bot received permissions for channel {member_update.chat.id}")
 	else:
 		logging.info(f"Bot permissions for channel {member_update.chat.id} was removed")

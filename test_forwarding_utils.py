@@ -88,18 +88,12 @@ class ForwardForSubchannelTest(TestCase):
 		test = "test item"
 		mock_bot = Mock(spec=TeleBot)
 
-		mock_message = test_helper.create_mock_message(test, [])
-		mock_message.chat = Mock(spec=Chat)
-		mock_message.chat.id = main_chat_id
-		mock_message.message_id = main_message_id
+		mock_message = test_helper.create_mock_message(test, [], main_chat_id, main_message_id)
 
 		sub_chat_id = 87654321
 		sub_message_id = 167
 
-		mock_copied_message = test_helper.create_mock_message(test, [])
-		mock_copied_message.chat = Mock(spec=Chat)
-		mock_copied_message.chat.id = sub_chat_id
-		mock_copied_message.message_id = sub_message_id
+		mock_copied_message = test_helper.create_mock_message(test, [], sub_chat_id, sub_message_id)
 		mock_copy_message.return_value = mock_copied_message
 		mock_get_subchannel_ids_from_hashtags.return_value = [sub_chat_id]
 
@@ -130,18 +124,12 @@ class ForwardForSubchannelTest(TestCase):
 		test = "test item"
 		mock_bot = Mock(spec=TeleBot)
 
-		mock_message = test_helper.create_mock_message(test, [])
-		mock_message.chat = Mock(spec=Chat)
-		mock_message.chat.id = main_chat_id
-		mock_message.message_id = main_message_id
+		mock_message = test_helper.create_mock_message(test, [], main_chat_id, main_message_id)
 
 		sub_chat_id = 87654321
 		sub_message_id = 167
 
-		mock_copied_message = test_helper.create_mock_message(test, [])
-		mock_copied_message.chat = Mock(spec=Chat)
-		mock_copied_message.chat.id = sub_chat_id
-		mock_copied_message.message_id = sub_message_id
+		mock_copied_message = test_helper.create_mock_message(test, [], sub_chat_id, sub_message_id)
 		mock_copy_message.return_value = mock_copied_message
 		mock_get_subchannel_ids_from_hashtags.return_value = [sub_chat_id]
 

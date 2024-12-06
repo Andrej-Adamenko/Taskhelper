@@ -184,6 +184,32 @@ def set_settings_message_id(channel_id, message_id):
 	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
 
+def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
+	last_message = utils.get_last_message(bot, channel_id)
+	if last_message > 0:
+		string_information_message = get_text_information_text().strip()
+		for current_msg_id in range(1, last_message + 1):
+			try:
+				forwarded_message = utils.get_main_message_content_by_id(bot, channel_id, current_msg_id)
+			except ApiTelegramException:
+				continue
+
+			if forwarded_message is not None and string_information_message in forwarded_message.text:
+				update_settings_message(bot, channel_id, current_msg_id)
+				set_settings_message_id(channel_id, current_msg_id)
+
+				newest_message_id = db_utils.get_newest_copied_message(channel_id)
+				post_data = utils.get_main_message_content_by_id(bot, channel_id, newest_message_id)
+
+				hashtag = hashtag_data.HashtagData(post_data, channel_id)
+				keyboard_markup = forwarding_utils.generate_control_buttons(hashtag, post_data)
+
+				utils.edit_message_keyboard(bot, post_data, keyboard_markup, channel_id, newest_message_id)
+				return True
+
+	return False
+
+
 def initialize_channel(bot: telebot.TeleBot, channel_id: int):
 	if not db_utils.is_individual_channel_exists(channel_id):
 		channel_admins = bot.get_chat_administrators(channel_id)
@@ -208,6 +234,9 @@ def create_settings_message(bot: telebot.TeleBot, channel_id: int):
 		if settings_message:
 			return
 
+	if get_exist_settings_message(bot, channel_id):
+		return
+
 	oldest_message_id = db_utils.get_oldest_copied_message(channel_id)
 	if oldest_message_id:
 		main_message_id, main_channel_id = db_utils.get_main_message_from_copied(oldest_message_id, channel_id)
@@ -222,17 +251,21 @@ def create_settings_message(bot: telebot.TeleBot, channel_id: int):
 		set_settings_message_id(channel_id, msg.id)
 
 
+def get_text_information_text():
+	return '''
+Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. If the message with settings was deleted you can call "/settings" command to create it. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
+   1) Assigned to - include tickets that is assigned to the selected users
+   2) Reported by - include tickets that is created by the selected users
+   3) CCed to - include tickets where the selected users in CC
+   4) Remind me when - regulates what tickets can be reminded in this channel
+   5) Due - if this option is enabled, regular(NOT scheduled) tickets will be included in this channel
+   6) Deferred - if this option is enabled, scheduled tickets will be included in this channel
+   7) Priority 1/2/3 - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel
+'''
+
+
 def generate_current_settings_text(channel_id: int):
-	text = '''
-		Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. If the message with settings was deleted you can call "/settings" command to create it. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
-		1) Assigned to - include tickets that is assigned to the selected users
-		2) Reported by - include tickets that is created by the selected users
-		3) CCed to - include tickets where the selected users in CC
-		4) Remind me when - regulates what tickets can be reminded in this channel
-		5) Due - if this option is enabled, regular(NOT scheduled) tickets will be included in this channel
-		6) Deferred - if this option is enabled, scheduled tickets will be included in this channel
-		7) Priority 1/2/3 - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel
-	'''
+	text = get_text_information_text()
 
 	text += "\nCURRENT SETTINGS"
 
