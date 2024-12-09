@@ -185,7 +185,11 @@ def set_settings_message_id(channel_id, message_id):
 
 
 def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
-	last_message = utils.get_last_message(bot, channel_id)
+	last_message = db_utils.get_oldest_copied_message(channel_id)
+
+	if not last_message:
+		last_message = utils.get_last_message(bot, channel_id)
+
 	if last_message > 0:
 		string_information_message = get_text_information_text().strip()
 		for current_msg_id in range(1, last_message + 1):
@@ -199,23 +203,28 @@ def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
 				set_settings_message_id(channel_id, current_msg_id)
 
 				newest_message_id = db_utils.get_newest_copied_message(channel_id)
-				post_data = utils.get_main_message_content_by_id(bot, channel_id, newest_message_id)
+				if newest_message_id is not None:
+					post_data = utils.get_main_message_content_by_id(bot, channel_id, newest_message_id)
+					hashtag = hashtag_data.HashtagData(post_data, channel_id)
+					keyboard_markup = forwarding_utils.generate_control_buttons(hashtag, post_data)
+					utils.edit_message_keyboard(bot, post_data, keyboard_markup, channel_id, newest_message_id)
 
-				hashtag = hashtag_data.HashtagData(post_data, channel_id)
-				keyboard_markup = forwarding_utils.generate_control_buttons(hashtag, post_data)
-
-				utils.edit_message_keyboard(bot, post_data, keyboard_markup, channel_id, newest_message_id)
 				return True
 
 	return False
 
 
-def initialize_channel(bot: telebot.TeleBot, channel_id: int):
+def initialize_channel(bot: telebot.TeleBot, channel_id: int, user_id: int = None):
 	if not db_utils.is_individual_channel_exists(channel_id):
-		channel_admins = bot.get_chat_administrators(channel_id)
+		try:
+			channel_admins = bot.get_chat_administrators(channel_id)
+			channel_owner = next((user for user in channel_admins if type(user) == ChatMemberOwner), None)
+			user_id = channel_owner.user.id
+		except Exception as E:
+			logging.warning(f"Can't get owner_id from channel, use user #{user_id} in channel #{channel_id}")
+			if user_id is None:
+				raise E
 
-		channel_owner = next((user for user in channel_admins if type(user) == ChatMemberOwner), None)
-		user_id = channel_owner.user.id
 		main_channel_id = db_utils.get_main_channel_from_user(user_id)
 		if not main_channel_id:
 			bot.send_message(chat_id=channel_id, text="Can't recognize the user who called this command")
@@ -249,6 +258,7 @@ def create_settings_message(bot: telebot.TeleBot, channel_id: int):
 		text = generate_current_settings_text(channel_id)
 		msg = bot.send_message(chat_id=channel_id, reply_markup=keyboard, text=text)
 		set_settings_message_id(channel_id, msg.id)
+		db_utils.insert_or_update_last_msg_id(msg.id, channel_id)
 
 
 def get_text_information_text():

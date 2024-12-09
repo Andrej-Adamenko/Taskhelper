@@ -111,6 +111,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			                                    from_chat_id=main_channel_id, reply_markup=keyboard_markup)
 			logging.info(f"Successfully forwarded post [{main_message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
 			db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
+			db_utils.insert_or_update_last_msg_id(copied_message.message_id, subchannel_id)
 			db_utils.CURSOR.execute('commit')
 		except ApiTelegramException as E:
 			db_utils.CURSOR.execute('rollback')

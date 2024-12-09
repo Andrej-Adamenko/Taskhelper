@@ -78,11 +78,12 @@ class ForwardForSubchannelTest(TestCase):
 	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
 	@patch("utils.copy_message")
 	@patch("db_utils.insert_copied_message")
+	@patch("db_utils.insert_or_update_last_msg_id")
 	@patch("forwarding_utils.update_copied_message")
 	@patch("utils.edit_message_keyboard")
-	def test_order_add_remove_settings_button(self, mock_edit_message_keyboard, mock_update_copied_message, mock_insert_copied_message,
-									mock_copy_message, mock_get_subchannel_ids_from_hashtags,
-									mock_generate_control_buttons, *args):
+	def test_order_add_remove_settings_button(self, mock_edit_message_keyboard, mock_update_copied_message, mock_insert_or_update_last_msg_id,
+											  mock_insert_copied_message, mock_copy_message, mock_get_subchannel_ids_from_hashtags,
+											  mock_generate_control_buttons, *args):
 		main_chat_id = 12345678
 		main_message_id = 157
 		test = "test item"
@@ -103,13 +104,14 @@ class ForwardForSubchannelTest(TestCase):
 		manager.attach_mock(mock_insert_copied_message, 'a')
 		manager.attach_mock(mock_edit_message_keyboard, 'b')
 		manager.attach_mock(mock_update_copied_message, 'c')
+		manager.attach_mock(mock_insert_or_update_last_msg_id, 'd')
 
-		keyboard_markup = mock_generate_control_buttons(hashtag_data, mock_message)
 		forwarding_utils.forward_to_subchannel(mock_bot, mock_message, hashtag_data)
 
 		expected_calls = [
 			call.a(main_message_id, main_chat_id, sub_message_id, sub_chat_id),
-			call.b(mock_bot, mock_message, keyboard_markup, chat_id=sub_chat_id, message_id=sub_message_id),
+			call.d(sub_message_id, sub_chat_id),
+			call.b(mock_bot, mock_message, mock_generate_control_buttons.return_value, chat_id=sub_chat_id, message_id=sub_message_id),
 			call.c(mock_bot, sub_chat_id, 166),
 		]
 		self.assertEqual(manager.mock_calls, expected_calls)
@@ -134,12 +136,13 @@ class ForwardForSubchannelTest(TestCase):
 		mock_get_subchannel_ids_from_hashtags.return_value = [sub_chat_id]
 
 		hashtag_data = HashtagData()
-		keyboard_markup = mock_generate_control_buttons(hashtag_data, mock_message, newest=True, subchannel_id=sub_chat_id)
 		forwarding_utils.forward_to_subchannel(mock_bot, mock_message, hashtag_data)
 
 		mock_generate_control_buttons.assert_has_calls([unittest.mock.call(hashtag_data, mock_message, newest=True, subchannel_id=sub_chat_id),
 														unittest.mock.call(hashtag_data, mock_message)])
-		mock_copy_message.assert_called_once_with(mock_bot, chat_id=sub_chat_id, message_id=main_message_id, from_chat_id=main_chat_id, reply_markup=keyboard_markup)
+
+		mock_copy_message.assert_called_once_with(mock_bot, chat_id=sub_chat_id, message_id=main_message_id,
+												  from_chat_id=main_chat_id, reply_markup=mock_generate_control_buttons.return_value)
 
 if __name__ == "__main__":
 	main()

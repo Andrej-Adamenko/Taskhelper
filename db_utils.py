@@ -318,7 +318,7 @@ def insert_or_update_last_msg_id(last_message_id, chat_id):
 		sql = "INSERT INTO last_message_ids (last_message_id, chat_id) VALUES (?, ?)"
 
 	CURSOR.execute(sql, (last_message_id, chat_id,))
-	DB_CONNECTION.commit()
+	# DB_CONNECTION.commit()
 
 
 @db_thread_lock
