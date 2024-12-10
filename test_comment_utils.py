@@ -20,23 +20,23 @@ class UpdateNextActionTest(TestCase):
 	@patch("hashtag_data.HashtagData.is_last_line_contains_only_hashtags", return_value=False)
 	@patch("utils.get_post_content", return_value=("test::qwe", []))
 	@patch("utils.set_post_content")
-	@patch("utils.edit_message_content")
-	def test_update_next_action(self, mock_edit_message_content, mock_set_post_content, *args):
+	@patch("comment_utils.CommentDispatcher.apply_hashtags")
+	def test_update_next_action(self, mock_apply_hashtags, mock_set_post_content, *args):
 		main_channel_id = 123
 		main_message_id = 34
 		next_action = "next"
 		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message(":next", [])
 
-		comment_dispatcher.update_next_action(mock_bot, main_message_id, main_channel_id, next_action)
+		comment_dispatcher.update_next_action(mock_bot, main_message_id, main_channel_id, next_action, mock_message)
 		mock_set_post_content.assert_called_once_with(ANY, "test::next", [])
-		mock_edit_message_content.assert_called_once_with(mock_bot, ANY, chat_id=main_channel_id,
-	                           message_id=main_message_id, reply_markup=ANY)
+		mock_apply_hashtags.assert_called_once_with(mock_bot, mock_message, main_message_id, main_channel_id, ANY)
 
 	@patch("hashtag_data.HashtagData.is_last_line_contains_only_hashtags", return_value=True)
 	@patch("utils.get_post_content")
 	@patch("utils.set_post_content")
-	@patch("utils.edit_message_content")
-	def test_last_line_hashtags(self, mock_edit_message_content, mock_set_post_content, mock_get_post_content, *args):
+	@patch("comment_utils.CommentDispatcher.apply_hashtags")
+	def test_last_line_hashtags(self, mock_apply_hashtags, mock_set_post_content, mock_get_post_content, *args):
 		text = f"text::asdf\n#o #cc #p"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -45,17 +45,17 @@ class UpdateNextActionTest(TestCase):
 		main_message_id = 34
 		next_action = "next"
 		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message(":next", [])
 
-		comment_dispatcher.update_next_action(mock_bot, main_message_id, main_channel_id, next_action)
+		comment_dispatcher.update_next_action(mock_bot, main_message_id, main_channel_id, next_action, mock_message)
 		mock_set_post_content.assert_called_once_with(ANY, "text::next\n#o #cc #p", entities)
-		mock_edit_message_content.assert_called_once_with(mock_bot, ANY, chat_id=main_channel_id,
-	                           message_id=main_message_id, reply_markup=ANY)
+		mock_apply_hashtags.assert_called_once_with(mock_bot, mock_message, main_message_id, main_channel_id, ANY)
 
 	@patch("hashtag_data.HashtagData.is_last_line_contains_only_hashtags", return_value=True)
 	@patch("utils.get_post_content")
 	@patch("utils.set_post_content")
-	@patch("utils.edit_message_content")
-	def test_update_entity_offsets(self, mock_edit_message_content, mock_set_post_content, mock_get_post_content, *args):
+	@patch("comment_utils.CommentDispatcher.apply_hashtags")
+	def test_update_entity_offsets(self, mock_apply_hashtags, mock_set_post_content, mock_get_post_content, *args):
 		text = f"text::previous next action\n#o #cc #p"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -64,14 +64,14 @@ class UpdateNextActionTest(TestCase):
 		main_message_id = 34
 		next_action = "next"
 		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message(":next", [])
 
-		comment_dispatcher.update_next_action(mock_bot, main_message_id, main_channel_id, next_action)
+		comment_dispatcher.update_next_action(mock_bot, main_message_id, main_channel_id, next_action, mock_message)
 		mock_set_post_content.assert_called_once_with(ANY, "text::next\n#o #cc #p", entities)
 		self.assertEqual(entities[0].offset, 11)
 		self.assertEqual(entities[1].offset, 14)
 		self.assertEqual(entities[2].offset, 18)
-		mock_edit_message_content.assert_called_once_with(mock_bot, ANY, chat_id=main_channel_id,
-	                           message_id=main_message_id, reply_markup=ANY)
+		mock_apply_hashtags.assert_called_once_with(mock_bot, mock_message, main_message_id, main_channel_id, ANY)
 
 
 @patch("comment_utils.DISCUSSION_CHAT_DATA", {3333: 1111})
@@ -83,8 +83,9 @@ class SaveCommentTest(TestCase):
 	@patch("db_utils.set_ticket_update_time")
 	@patch("interval_updating_utils.update_older_message")
 	@patch("comment_utils.CommentDispatcher.update_user_last_interaction")
+	@patch("comment_utils.CommentDispatcher.apply_hashtags")
 	@patch("comment_utils.CommentDispatcher.update_next_action")
-	def test_update_next_action(self, mock_update_next_action, *args):
+	def test_update_next_action(self, mock_update_next_action, mock_apply_hashtag, *args):
 		mock_bot = Mock(spec=TeleBot)
 		msg_data = test_helper.create_mock_message(":next action", [])
 		msg_data.chat = Mock(id=1111)
@@ -93,8 +94,29 @@ class SaveCommentTest(TestCase):
 		msg_data.from_user = Mock(id=12345)
 
 		comment_dispatcher.save_comment(mock_bot, msg_data)
-		mock_update_next_action.assert_called_once_with(mock_bot, 33, 3333, "next action")
+		mock_update_next_action.assert_called_once_with(mock_bot, 33, 3333, "next action", msg_data)
+		mock_apply_hashtag.assert_not_called()
 
+	@patch("utils.get_main_message_content_by_id")
+	@patch("db_utils.insert_comment_message")
+	@patch("db_utils.get_comment_top_parent")
+	@patch("db_utils.get_main_from_discussion_message", return_value=33)
+	@patch("db_utils.set_ticket_update_time")
+	@patch("interval_updating_utils.update_older_message")
+	@patch("comment_utils.CommentDispatcher.update_user_last_interaction")
+	@patch("comment_utils.CommentDispatcher.apply_hashtags")
+	@patch("comment_utils.CommentDispatcher.update_next_action")
+	def test_apply_hashtag(self, mock_update_next_action, mock_apply_hashtag, *args):
+		mock_bot = Mock(spec=TeleBot)
+		msg_data = test_helper.create_mock_message("next action", [])
+		msg_data.chat = Mock(id=1111)
+		msg_data.message_id = 11
+		msg_data.reply_to_message = Mock(message_id=22)
+		msg_data.from_user = Mock(id=12345)
+
+		comment_dispatcher.save_comment(mock_bot, msg_data)
+		mock_apply_hashtag.assert_called_once_with(mock_bot, msg_data, 33, 3333)
+		mock_update_next_action.assert_not_called()
 
 class AddNextActionCommentTest(TestCase):
 	@patch("db_utils.get_next_action_text", return_value="test action")
@@ -216,6 +238,22 @@ class ApplyHashtagsTest(TestCase):
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
 
 		mock_update_message_and_forward_to_subchannels.assert_not_called()
+
+	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
+	@patch("utils.get_post_content")
+	def test_no_service_tags_with_post_data(self, mock_get_post_content, mock_update_message_and_forward_to_subchannels, *args):
+		text = "add to followers #test_tag"
+		entities = test_helper.create_hashtag_entity_list(text)
+		mock_get_post_content.return_value = (text, entities)
+
+		mock_bot = Mock(spec=TeleBot)
+		msg_data = test_helper.create_mock_message(text, [], 1, 1)
+		main_message_id = 123
+		main_channel_id = 987654321
+
+		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id, msg_data)
+
+		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
 	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
 	@patch("hashtag_data.HashtagData.set_scheduled_tag")

@@ -37,19 +37,20 @@ class CommentDispatcher:
 		main_message_id = db_utils.get_main_from_discussion_message(top_discussion_message_id, main_channel_id)
 
 		if main_message_id:
-			self.apply_hashtags(bot, msg_data, main_message_id, main_channel_id)
-
 			msg_text = msg_data.text or msg_data.caption or ""
 			if msg_text.startswith(self.__NEXT_ACTION_COMMENT_PREFIX):
 				next_action_text = msg_text[len(self.__NEXT_ACTION_COMMENT_PREFIX):]
-				self.update_next_action(bot, main_message_id, main_channel_id, next_action_text)
+				self.update_next_action(bot, main_message_id, main_channel_id, next_action_text, msg_data)
+			else:
+				self.apply_hashtags(bot, msg_data, main_message_id, main_channel_id)
 			interval_updating_utils.update_older_message(bot, main_channel_id, main_message_id)
 
 			self.update_user_last_interaction(main_message_id, main_channel_id, msg_data)
 			db_utils.set_ticket_update_time(main_message_id, main_channel_id, int(time.time()))
 
 	@staticmethod
-	def apply_hashtags(bot: telebot.TeleBot, msg_data: telebot.types.Message, main_message_id: int, main_channel_id: int):
+	def apply_hashtags(bot: telebot.TeleBot, msg_data: telebot.types.Message, main_message_id: int, main_channel_id: int,
+					   main_message_data:telebot.types.Message = None):
 		text, entities = utils.get_post_content(msg_data)
 		comment_hashtags = [text[e.offset + 1:e.offset + e.length] for e in entities if e.type == "hashtag"]
 
@@ -65,45 +66,48 @@ class CommentDispatcher:
 				is_service_hashtag_exists = True
 				break
 
-		if not is_service_hashtag_exists:
+		if not is_service_hashtag_exists and not main_message_data:
 			return
 
-		main_message_data = utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
 		if not main_message_data:
-			return
+			main_message_data = utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+			if not main_message_data:
+				return
 
 		main_message_data.chat.id = main_channel_id
 		main_message_data.message_id = main_message_id
 		hashtag_data = HashtagData(main_message_data, main_channel_id)
 
-		if opened_hashtag in comment_hashtags or closed_hashtag in comment_hashtags:
-			hashtag_data.set_status_tag(opened_hashtag in comment_hashtags)
-		for hashtag in comment_hashtags:
-			if hashtag in user_tags:
-				hashtag_data.add_user(hashtag)
-		if scheduled_hashtag in comment_hashtags:
-			for i, entity in enumerate(entities):
-				hashtag_data.update_scheduled_tag_entity_length(text, entities, i)
+		if is_service_hashtag_exists:
+			if opened_hashtag in comment_hashtags or closed_hashtag in comment_hashtags:
+				hashtag_data.set_status_tag(opened_hashtag in comment_hashtags)
+			for hashtag in comment_hashtags:
+				if hashtag in user_tags:
+					hashtag_data.add_user(hashtag)
+			if scheduled_hashtag in comment_hashtags:
+				for i, entity in enumerate(entities):
+					hashtag_data.update_scheduled_tag_entity_length(text, entities, i)
 
-			for entity in entities:
-				if entity.type != "hashtag":
-					continue
+				for entity in entities:
+					if entity.type != "hashtag":
+						continue
 
-				tag = hashtag_data.get_tag_from_entity(entity, text)
-				if not hashtag_data.check_scheduled_tag(tag, scheduled_hashtag):
-					continue
+					tag = hashtag_data.get_tag_from_entity(entity, text)
+					if not hashtag_data.check_scheduled_tag(tag, scheduled_hashtag):
+						continue
 
-				entity_text = hashtag_data.get_tag_from_entity(entity, text)
-				tag_parts = entity_text.split(" ")
-				if len(tag_parts) < 2:
-					continue
+					entity_text = hashtag_data.get_tag_from_entity(entity, text)
+					tag_parts = entity_text.split(" ")
+					if len(tag_parts) < 2:
+						continue
 
-				hashtag_data.set_scheduled_tag(hashtag_data.extract_scheduled_tag_from_text(text, entity)[len(scheduled_hashtag) + 1:])
+					hashtag_data.set_scheduled_tag(hashtag_data.extract_scheduled_tag_from_text(text, entity)[len(scheduled_hashtag) + 1:])
 
 		hashtag_data.ignore_comments = True
 		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
 
-	def update_next_action(self, bot: telebot.TeleBot, main_message_id: int, main_channel_id: int, next_action: str):
+	def update_next_action(self, bot: telebot.TeleBot, main_message_id: int, main_channel_id: int, next_action: str,
+						   comment_msg_data: telebot.types.Message):
 		try:
 			post_data = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
 		except ApiTelegramException:
@@ -144,10 +148,9 @@ class CommentDispatcher:
 		utils.set_post_content(post_data, text, entities)
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
-		keyboard_markup = forwarding_utils.generate_control_buttons(hashtag_data, post_data)
+		post_data.reply_markup = forwarding_utils.generate_control_buttons(hashtag_data, post_data)
 
-		utils.edit_message_content(bot, post_data, chat_id=main_channel_id,
-								   message_id=main_message_id, reply_markup=keyboard_markup)
+		self.apply_hashtags(bot, comment_msg_data, main_message_id, main_channel_id, post_data)
 
 		# for compatibility with older versions
 		db_utils.insert_or_update_current_next_action(main_message_id, main_channel_id, next_action)
