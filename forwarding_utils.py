@@ -101,7 +101,6 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		newest_message_id = db_utils.get_newest_copied_message(subchannel_id)
 		keyboard_markup = generate_control_buttons(hashtag_data, post_data, newest=True, subchannel_id=subchannel_id)
 
-		db_utils.CURSOR.execute('begin')
 		try:
 			if post_data.text is None:
 				text, entities = utils.get_post_content(post_data)
@@ -112,9 +111,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			logging.info(f"Successfully forwarded post [{main_message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
 			db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
 			db_utils.insert_or_update_last_msg_id(copied_message.message_id, subchannel_id)
-			db_utils.CURSOR.execute('commit')
 		except ApiTelegramException as E:
-			db_utils.CURSOR.execute('rollback')
 			if not copied_message is None:
 				delete_forwarded_message(bot, subchannel_id, copied_message.message_id)
 
@@ -240,8 +237,8 @@ def delete_main_message(bot: telebot.TeleBot, main_channel_id: int, main_message
 	messages = db_utils.get_copied_messages_from_main(main_message_id, main_channel_id)
 	for msg in messages:
 		copied_message_id, copied_channel_id = msg
-		db_utils.delete_copied_message(copied_message_id, copied_channel_id)
 		delete_forwarded_message(bot, copied_channel_id, copied_message_id)
+		db_utils.delete_copied_message(copied_message_id, copied_channel_id)
 		logging.info(f"Removed forwarded message {msg} after it was deleted from main channel {main_message_id, main_channel_id}")
 	db_utils.delete_scheduled_message_main(main_message_id, main_channel_id)
 

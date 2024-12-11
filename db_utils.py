@@ -250,7 +250,7 @@ def get_main_from_discussion_message(discussion_message_id, main_channel_id):
 def insert_copied_message(main_message_id, main_channel_id, copied_message_id, copied_channel_id):
 	sql = "INSERT INTO copied_messages (copied_message_id, copied_channel_id, main_message_id, main_channel_id) VALUES (?, ?, ?, ?)"
 	CURSOR.execute(sql, (copied_message_id, copied_channel_id, main_message_id, main_channel_id,))
-	# DB_CONNECTION.commit()
+	DB_CONNECTION.commit()
 
 
 @db_thread_lock
@@ -318,7 +318,7 @@ def insert_or_update_last_msg_id(last_message_id, chat_id):
 		sql = "INSERT INTO last_message_ids (last_message_id, chat_id) VALUES (?, ?)"
 
 	CURSOR.execute(sql, (last_message_id, chat_id,))
-	# DB_CONNECTION.commit()
+	DB_CONNECTION.commit()
 
 
 @db_thread_lock
