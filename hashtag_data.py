@@ -353,7 +353,7 @@ class HashtagData:
 		elif len(tag_parts) > 2:
 			time_part = tag_parts[2]
 			time_parts = time_part.split(':')
-			return entity_text.replace(time_part, f"{"{:02d}".format(int(time_parts[0]))}:{"{:02d}".format(int(time_parts[1]))}")
+			return entity_text.replace(time_part, "{:02d}".format(int(time_parts[0])) + ":" + "{:02d}".format(int(time_parts[1])))
 
 		text_after_tag = text[entity.offset + entity.length + 1:]
 		colon_index = text_after_tag.find(":")
@@ -364,7 +364,7 @@ class HashtagData:
 		if not utils.parse_datetime(hours, "%H"):
 			hours = "00"
 
-		return f"{entity_text} {"{:02d}".format(int(hours))}:00"
+		return entity_text + " " + "{:02d}".format(int(hours)) + ":00"
 
 
 	def get_present_hashtag_indices(self):
