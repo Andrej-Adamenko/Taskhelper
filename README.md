@@ -68,7 +68,7 @@ DELAY_AFTER_ONE_SCAN:
 * example: 5
 
 TIMEZONE_NAME:
-* timezone for scheduled messages
+* timezone for deferred messages
 * example: "Europe/Kiev"
 
 ## FAQ
@@ -149,7 +149,7 @@ There are 5 control buttons:
 2) Reassign ticket to different subchannel
 3) Change ticket's followed users
 4) Change ticket's priority
-5) Make a scheduled message
+5) Make a deferred message
 6) Go to ticket's comments (appears only if discussion chat is connected to your channel)
 
 ## User guide
@@ -162,10 +162,10 @@ In the main channel you can perform the following actions with the ticket:
 * Reassign the ticket to another channel: you can reassign the main user behind the ticket to another channel
 * Change the users following the ticket: you can change the list of users following the ticket
 * Change the priority of the ticket: you can change the priority level of the ticket
-* Scheduled message: You can select a date and time, then the ticket will change its tag and move to the pending message channel for each tracked user. After a specified time, the message will be removed from the reserved message channel and delivered to specific users
+* Deferred message: You can select a date and time, then the ticket will change its tag and move to the pending message channel for each tracked user. After a specified time, the message will be removed from the reserved message channel and delivered to specific users
 * Go to Ticket Comments: If your channel has a discussion chat, a button will be available that allows you to go directly to the comment section of the ticket. This simplifies discussion and collaboration related to the ticket. (You can add a channel for discussion in the main channel settings)
 
-The same steps can be performed in the channel for users and the channel for scheduled messages.
+The same steps can be performed in the channel for users and the channel for deferred messages.
 
 ### ***Chat commands for customization***
 
@@ -206,13 +206,13 @@ Changes default user and priority:
 
 Changes button text:
 * /set_button_text (BUTTON_NAME) (NEW_VALUE)
-* Available buttons: opened, closed, assigned, cc, schedule, check, priority
+* Available buttons: opened, closed, assigned, cc, defer, check, priority
 * Example: /set_button_text opened OPEN
 * Priority button text will have 4 values, first for missing priority and 3 others for each priority, for example: /set_button_text priority NO_PRIORITY FIRST SECOND THIRD
 
 Changes the text of the service hashtags:
 * /set_hashtag_text (HASHTAG_NAME) (NEW_VALUE)
-* Available hashtags: opened, closed, scheduled, priority
+* Available hashtags: opened, closed, deferred, priority
 * Example: /set_hashtag_text opened Op
 * Important: after this is executed the bot will start interval update to replace every old hashtag with the new hashtag 
 
@@ -230,8 +230,8 @@ The settings menu gives you the option to select or deselect certain settings fr
 * "Reported by" - include tickets that is created by the selected users.
 * "CCed to" - include tickets where the selected users in CC.
 * "Remind me when" - regulates what tickets can be reminded in this channel.
-* "Due" - if this option is enabled, regular(NOT scheduled) tickets will be included in this channel.
-* "Deferred" - if this option is enabled, scheduled tickets will be included in this channel.
+* "Due" - if this option is enabled, regular(NOT deferred) tickets and also tickets deferred until a date, but that date is in the past now, will all be included in this channel.
+* "Deferred" - if this option is enabled, tickets, deferred until now will be included in this channel.
 * "Priority 1/2/3" - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel.
 
 The "Assigned to", "Reported by", and "CCed to" buttons open a menu of user tags where multiple user tags can be selected at once.

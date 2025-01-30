@@ -861,7 +861,7 @@ def get_user_individual_channels(main_channel_id, user_id):
 @db_thread_lock
 def get_tickets_for_reminding(main_channel_id, user_id, user_tag):
 	# finds all forwarded tickets from every channel where user is channel's owner
-	# that match priority and is opened (scheduled tickets is ignored)
+	# that match priority and is opened (deferred tickets is ignored)
 	sql = '''
 		SELECT copied_messages.copied_channel_id, copied_messages.copied_message_id, copied_messages.main_channel_id,
 		copied_messages.main_message_id, tickets_data.user_tags, tickets_data.priority, tickets_data.update_time,
