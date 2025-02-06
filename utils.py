@@ -5,6 +5,7 @@ import time
 import datetime
 
 import telebot.types
+from pyrogram.types import InlineKeyboardButton
 from telebot.apihelper import ApiTelegramException
 
 import config_utils
@@ -409,4 +410,20 @@ def mark_message_for_deletion(bot: telebot.TeleBot, chat_id: int, message_id: in
 		if E.error_code == 429:
 			raise E
 		logging.info(f"Error during marking message{chat_id, message_id} for deletion {E}")
+
+def merge_keyboard_markup(
+		keyboard: telebot.types.InlineKeyboardMarkup,
+		*keyboard2: telebot.types.InlineKeyboardMarkup,
+		empty_button = telebot.types.InlineKeyboardButton(" ", callback_data="_")):
+
+	result = keyboard.keyboard.copy()
+
+	for board in keyboard2:
+		if len(board.keyboard) > 0 and len(result) > 0 and empty_button:
+			result += [[empty_button]]
+
+		result += board.keyboard
+
+	return telebot.types.InlineKeyboardMarkup(result)
+
 

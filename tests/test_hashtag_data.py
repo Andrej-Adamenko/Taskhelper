@@ -5,7 +5,7 @@ import telebot.types
 
 import hashtag_data as hashtag_data_module
 from hashtag_data import HashtagData
-import test_helper
+from tests import test_helper
 
 
 @patch("hashtag_data.PRIORITY_TAG", "p")

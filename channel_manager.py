@@ -34,6 +34,7 @@ class CB_TYPES:
 	SAVE_SELECTED_USERS = "SVU"
 	SAVE_REMIND_SETTINGS = "SVR"
 	OPEN_CHANNEL_SETTINGS = "OCS"
+	OPEN_CHANNEL_SETTINGS_BUTTON = "OCSB"
 	CREATE_CHANNEL_SETTINGS = "CCS"
 	NOP = "NOP"  # No operation
 
@@ -106,7 +107,7 @@ def add_user_tags_to_button_text(button: InlineKeyboardButton, channel_type: str
 		button.text += f", {user_tag}"
 
 
-def generate_settings_keyboard(channel_id: int):
+def generate_settings_keyboard(channel_id: int, add_help = False):
 	settings, priorities = get_individual_channel_settings(channel_id)
 
 	assigned_to_btn = InlineKeyboardButton("Assigned to:")
@@ -158,9 +159,26 @@ def generate_settings_keyboard(channel_id: int):
 	save_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU)
 	buttons.append(save_btn)
 
+	if add_help:
+		buttons.append(add_help_button(channel_id))
+
 	rows = [[btn] for btn in buttons]
 	return InlineKeyboardMarkup(rows)
 
+def add_help_button(channel_id):
+	settings_button = telebot.types.InlineKeyboardButton("Help")
+	settings_message_id = get_settings_message_id(channel_id)
+	if settings_message_id:
+		chat_id_str = str(channel_id)
+		chat_id_str = chat_id_str[4:] if chat_id_str[:4] == "-100" else chat_id_str
+		settings_button.url = f"https://t.me/c/{chat_id_str}/{settings_message_id}"
+	else:
+		settings_button.callback_data = utils.create_callback_str(
+			CALLBACK_PREFIX,
+			CB_TYPES.CREATE_CHANNEL_SETTINGS
+		)
+
+	return settings_button
 
 def show_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 	channel_id = msg_data.chat.id
@@ -170,6 +188,20 @@ def show_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message
 	text = generate_current_settings_text(channel_id)
 
 	bot.edit_message_text(chat_id=channel_id, message_id=message_id, text=text, reply_markup=keyboard)
+
+
+def show_settings_keyboard_for_button(bot: telebot.TeleBot, msg_data: telebot.types.Message):
+	channel_id = msg_data.chat.id
+	message_id = msg_data.id
+	main_message_id, main_channel_id = db_utils.get_main_message_from_copied(msg_data.id, msg_data.chat.id)
+	msg_data.chat.id = main_channel_id
+	msg_data.message_id = main_message_id
+
+	hash_data = hashtag_data.HashtagData(msg_data, main_channel_id)
+	keyboard = forwarding_utils.generate_control_buttons(hash_data, msg_data)
+	keyboard2 = generate_settings_keyboard(channel_id, add_help=True)
+	keyboard_merge = utils.merge_keyboard_markup(keyboard, keyboard2)
+	bot.edit_message_reply_markup(chat_id=channel_id, message_id=message_id, reply_markup=keyboard_merge)
 
 
 def get_settings_message_id(channel_id):
@@ -523,6 +555,8 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		toggle_button(bot, call, callback_type, other_data)
 	elif callback_type == CB_TYPES.OPEN_CHANNEL_SETTINGS:
 		show_settings_keyboard(bot, message)
+	elif callback_type == CB_TYPES.OPEN_CHANNEL_SETTINGS_BUTTON:
+		show_settings_keyboard_for_button(bot, message)
 	elif callback_type == CB_TYPES.CREATE_CHANNEL_SETTINGS:
 		create_settings_message(bot, message.chat.id)
 

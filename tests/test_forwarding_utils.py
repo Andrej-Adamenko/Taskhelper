@@ -3,12 +3,11 @@ from unittest import TestCase, main
 from unittest.mock import patch, Mock, ANY, call
 
 from telebot import TeleBot
-from telebot.types import Message, Chat, InlineKeyboardMarkup, InlineKeyboardButton
 
-import test_helper
+import channel_manager
+from tests import test_helper
 from hashtag_data import HashtagData
 
-import scheduled_messages_utils
 import forwarding_utils
 
 
@@ -149,17 +148,19 @@ class ForwardForSubchannelTest(TestCase):
 		]
 		self.assertEqual(manager.mock_calls, expected_calls)
 
+	@patch("db_utils.get_main_message_from_copied")
 	@patch("forwarding_utils.generate_control_buttons")
 	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
 	@patch("utils.copy_message")
 	def test_create_message_with_keyboard(self, mock_copy_message, mock_get_subchannel_ids_from_hashtags,
-										  mock_generate_control_buttons, *args):
+										  mock_generate_control_buttons, mock_get_main_message_from_copied, *args):
 		main_chat_id = 12345678
 		main_message_id = 157
 		test = "test item"
 		mock_bot = Mock(spec=TeleBot)
 
 		mock_message = test_helper.create_mock_message(test, [], main_chat_id, main_message_id)
+		mock_get_main_message_from_copied.return_value = [main_message_id, main_chat_id]
 
 		sub_chat_id = 87654321
 		sub_message_id = 167
@@ -176,6 +177,17 @@ class ForwardForSubchannelTest(TestCase):
 
 		mock_copy_message.assert_called_once_with(mock_bot, chat_id=sub_chat_id, message_id=main_message_id,
 												  from_chat_id=main_chat_id, reply_markup=mock_generate_control_buttons.return_value)
+
+@patch("utils.create_callback_str")
+class AddButtonSettingsTest(TestCase):
+	def test_add_button_settings(self, mock_create_callback_str, *args):
+		channel_id = 125
+		forwarding_utils.add_button_settings(channel_id)
+		mock_create_callback_str.assert_called_once_with(
+			channel_manager.CALLBACK_PREFIX,
+			channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS_BUTTON
+		)
+
 
 if __name__ == "__main__":
 	main()

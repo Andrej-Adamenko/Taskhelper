@@ -1,11 +1,11 @@
+import unittest
 from unittest import TestCase, main
-from unittest.mock import patch, Mock, call
+from unittest.mock import patch, Mock, call, ANY
 from telebot import TeleBot
-from telebot.types import Message
+from telebot.types import Message, InlineKeyboardButton
 
-
+from tests import test_helper
 import channel_manager
-import test_helper
 
 
 @patch("channel_manager.NEW_USER_TYPE", "+")
@@ -355,6 +355,54 @@ class TestChannelSettingsMessage(TestCase):
 		mock_set_settings_message_id.assert_not_called()
 		self.assertFalse(result)
 
+@patch("db_utils.get_oldest_copied_message", return_value=False)
+@patch("db_utils.get_individual_channel_settings",
+	   return_value=['{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}',
+					 '1,2'])
+class TestAddSettingsKeyboard(TestCase):
+	@patch("channel_manager.add_help_button")
+	def test_generate_settings_keyboard(self, mock_add_help_button, *args):
+		channel_id = -10012345678
+
+		channel_manager.generate_settings_keyboard(channel_id)
+		mock_add_help_button.assert_not_called()
+
+	@patch("channel_manager.add_help_button")
+	def test_add_help_button(self, mock_add_help_button, *args):
+		channel_id = -10012345678
+
+		channel_manager.generate_settings_keyboard(channel_id, True)
+		mock_add_help_button.assert_called_once_with(channel_id)
+
+	@patch("channel_manager.generate_settings_keyboard")
+	def test_show_settings_keyboard(self, mock_generate_settings_keyboard, *args):
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], -10012345678)
+		mock_message.id = 123
+
+		text = channel_manager.generate_current_settings_text(mock_message.chat.id)
+		channel_manager.show_settings_keyboard(mock_bot, mock_message)
+		mock_bot.edit_message_text.assert_called_once_with(chat_id=mock_message.chat.id, message_id=mock_message.id,
+														   text=text, reply_markup=mock_generate_settings_keyboard.return_value)
+
+	@patch("utils.merge_keyboard_markup")
+	@patch("forwarding_utils.generate_control_buttons")
+	@patch("channel_manager.generate_settings_keyboard")
+	def test_show_settings_keyboard_for_button(self, mock_generate_settings_keyboard,
+											   mock_generate_control_buttons, mock_merge_keyboard_markup, *args):
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], -10012345678)
+		mock_message.id = 123
+
+		channel_manager.show_settings_keyboard_for_button(mock_bot, mock_message)
+		mock_generate_control_buttons.assert_called_once_with(ANY, mock_message)
+		mock_generate_settings_keyboard.assert_called_once_with(mock_message.chat.id, add_help=True)
+		mock_merge_keyboard_markup.assert_called_once_with(
+			mock_generate_control_buttons.return_value,
+			mock_generate_settings_keyboard.return_value
+		)
+		mock_bot.edit_message_reply_markup.assert_called_once_with(chat_id=mock_message.chat.id, message_id=mock_message.id,
+														   reply_markup=mock_merge_keyboard_markup.return_value)
 
 if __name__ == "__main__":
 	main()

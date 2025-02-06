@@ -415,16 +415,10 @@ def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types
 
 def add_button_settings(channel_id: int):
 	settings_button = telebot.types.InlineKeyboardButton("Settings ⚙️")
-	settings_message_id = channel_manager.get_settings_message_id(channel_id)
-	if settings_message_id:
-		chat_id_str = str(channel_id)
-		chat_id_str = chat_id_str[4:] if chat_id_str[:4] == "-100" else chat_id_str
-		settings_button.url = f"https://t.me/c/{chat_id_str}/{settings_message_id}"
-	else:
-		settings_button.callback_data = utils.create_callback_str(
-			channel_manager.CALLBACK_PREFIX,
-			channel_manager.CB_TYPES.CREATE_CHANNEL_SETTINGS
-		)
+	settings_button.callback_data = utils.create_callback_str(
+		channel_manager.CALLBACK_PREFIX,
+		channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS_BUTTON
+	)
 
 	return settings_button
 
