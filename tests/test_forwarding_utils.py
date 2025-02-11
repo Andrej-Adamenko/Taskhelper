@@ -172,7 +172,7 @@ class ForwardForSubchannelTest(TestCase):
 		hashtag_data = HashtagData()
 		forwarding_utils.forward_to_subchannel(mock_bot, mock_message, hashtag_data)
 
-		mock_generate_control_buttons.assert_has_calls([unittest.mock.call(hashtag_data, mock_message, newest=True, subchannel_id=sub_chat_id),
+		mock_generate_control_buttons.assert_has_calls([unittest.mock.call(hashtag_data, mock_message, newest=True),
 														unittest.mock.call(hashtag_data, mock_message)])
 
 		mock_copy_message.assert_called_once_with(mock_bot, chat_id=sub_chat_id, message_id=main_message_id,
@@ -182,7 +182,7 @@ class ForwardForSubchannelTest(TestCase):
 class AddButtonSettingsTest(TestCase):
 	def test_add_button_settings(self, mock_create_callback_str, *args):
 		channel_id = 125
-		forwarding_utils.add_button_settings(channel_id)
+		forwarding_utils.add_button_settings()
 		mock_create_callback_str.assert_called_once_with(
 			channel_manager.CALLBACK_PREFIX,
 			channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS_BUTTON

@@ -5,7 +5,6 @@ import time
 import datetime
 
 import telebot.types
-from pyrogram.types import InlineKeyboardButton
 from telebot.apihelper import ApiTelegramException
 
 import config_utils
@@ -13,6 +12,7 @@ import db_utils
 import threading_utils
 import forwarding_utils
 import channel_manager
+import utils
 from config_utils import MAX_BUTTONS_IN_ROW
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
@@ -71,9 +71,13 @@ def create_callback_str(callback_prefix, callback_type, *args):
 
 
 def parse_callback_str(callback_str: str):
-	components = callback_str.split(",")
-	callback_type = components[1]
-	arguments = components[2:]
+	callback_type = ""
+	arguments = []
+	if callback_str is not None and callback_str != config_utils.EMPTY_CALLBACK_DATA_BUTTON:
+		components = callback_str.split(",")
+		callback_type = components[1]
+		arguments = components[2:]
+
 	return callback_type, arguments
 
 
@@ -210,12 +214,11 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 	if db_utils.is_individual_channel_exists(chat_id):
 		newest_message_id = db_utils.get_newest_copied_message(chat_id)
 		if message_id == newest_message_id:
-			settings_button = forwarding_utils.add_button_settings(chat_id)
+			settings_button = forwarding_utils.add_button_settings()
 
 			# copy keyboard markup object to prevent modification of an original object
-			keyboard_markup = copy.deepcopy(keyboard_markup)
-			keyboard_markup.keyboard.append([telebot.types.InlineKeyboardButton(" ", callback_data="_")])
-			keyboard_markup.keyboard.append([settings_button])
+			keyboard_markup = merge_keyboard_markup(keyboard_markup,
+													telebot.types.InlineKeyboardMarkup([[settings_button]]))
 
 	try:
 		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard_markup)
@@ -414,7 +417,7 @@ def mark_message_for_deletion(bot: telebot.TeleBot, chat_id: int, message_id: in
 def merge_keyboard_markup(
 		keyboard: telebot.types.InlineKeyboardMarkup,
 		*keyboard2: telebot.types.InlineKeyboardMarkup,
-		empty_button = telebot.types.InlineKeyboardButton(" ", callback_data="_")):
+		empty_button = telebot.types.InlineKeyboardButton(" ", callback_data=config_utils.EMPTY_CALLBACK_DATA_BUTTON)):
 
 	result = keyboard.keyboard.copy()
 

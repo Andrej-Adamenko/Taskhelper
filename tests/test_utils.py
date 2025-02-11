@@ -155,7 +155,7 @@ class MergeKeyboardMarkupTest(TestCase):
 	def test_merge_keyboards(self):
 		mock_empty_button = Mock(spec=InlineKeyboardButton)
 		mock_empty_button.text = ""
-		mock_empty_button.callback_data = "_"
+		mock_empty_button.callback_data = config_utils.EMPTY_CALLBACK_DATA_BUTTON
 
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		mock_keyboard.keyboard = [InlineKeyboardButton("Start")]

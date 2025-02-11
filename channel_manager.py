@@ -172,6 +172,7 @@ def add_help_button(channel_id):
 		chat_id_str = str(channel_id)
 		chat_id_str = chat_id_str[4:] if chat_id_str[:4] == "-100" else chat_id_str
 		settings_button.url = f"https://t.me/c/{chat_id_str}/{settings_message_id}"
+		settings_button.callback_data = config_utils.EMPTY_CALLBACK_DATA_BUTTON
 	else:
 		settings_button.callback_data = utils.create_callback_str(
 			CALLBACK_PREFIX,
@@ -193,16 +194,11 @@ def show_settings_keyboard(bot: telebot.TeleBot, msg_data: telebot.types.Message
 def show_settings_keyboard_for_button(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 	channel_id = msg_data.chat.id
 	message_id = msg_data.id
-	main_message_id, main_channel_id = db_utils.get_main_message_from_copied(msg_data.id, msg_data.chat.id)
-	msg_data.chat.id = main_channel_id
-	msg_data.message_id = main_message_id
 
-	hash_data = hashtag_data.HashtagData(msg_data, main_channel_id)
-	keyboard = forwarding_utils.generate_control_buttons(hash_data, msg_data)
+	keyboard = forwarding_utils.generate_control_buttons_from_subchannel(msg_data)
 	keyboard2 = generate_settings_keyboard(channel_id, add_help=True)
 	keyboard_merge = utils.merge_keyboard_markup(keyboard, keyboard2)
 	bot.edit_message_reply_markup(chat_id=channel_id, message_id=message_id, reply_markup=keyboard_merge)
-
 
 def get_settings_message_id(channel_id):
 	settings, priorities = get_individual_channel_settings(channel_id)
@@ -216,6 +212,11 @@ def set_settings_message_id(channel_id, message_id):
 	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
 
+def is_settings_message(message: telebot.types.Message):
+	string_information_message = get_text_information_text().strip()
+	return string_information_message in message.text
+
+
 def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
 	last_message = db_utils.get_oldest_copied_message(channel_id)
 
@@ -223,14 +224,13 @@ def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
 		last_message = utils.get_last_message(bot, channel_id)
 
 	if last_message > 0:
-		string_information_message = get_text_information_text().strip()
 		for current_msg_id in range(1, last_message + 1):
 			try:
 				forwarded_message = utils.get_main_message_content_by_id(bot, channel_id, current_msg_id)
 			except ApiTelegramException:
 				continue
 
-			if forwarded_message is not None and string_information_message in forwarded_message.text:
+			if forwarded_message is not None and is_settings_message(forwarded_message):
 				update_settings_message(bot, channel_id, current_msg_id)
 				set_settings_message_id(channel_id, current_msg_id)
 
@@ -508,11 +508,11 @@ def save_remind_settings(call: CallbackQuery):
 	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
 
-def start_deferred_interval_check(bot: telebot.TeleBot):
+def start_deferred_interval_check(bot: telebot.TeleBot, start_delay: int = 30):
 	global DEFERRED_INTERVAL_CHECK_TIMER
 	if DEFERRED_INTERVAL_CHECK_TIMER and DEFERRED_INTERVAL_CHECK_TIMER.is_alive():
 		DEFERRED_INTERVAL_CHECK_TIMER.cancel()
-	DEFERRED_INTERVAL_CHECK_TIMER = threading.Timer(30, interval_updating_utils.start_interval_updating, (bot,))
+	DEFERRED_INTERVAL_CHECK_TIMER = threading.Timer(start_delay, interval_updating_utils.start_interval_updating, (bot,))
 	DEFERRED_INTERVAL_CHECK_TIMER.start()
 
 
@@ -547,8 +547,16 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		start_deferred_interval_check(bot)
 	elif callback_type == CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU:
 		save_channel_settings(bot, call)
-		update_settings_message(bot, message.chat.id, message.id)
-		start_deferred_interval_check(bot)
+		if is_settings_message(message):
+			update_settings_message(bot, message.chat.id, message.id)
+		message_id = get_settings_message_id(message.chat.id)
+		if message_id != message.id:
+			update_settings_message(bot, message.chat.id, message_id)
+		newest_message_id = db_utils.get_newest_copied_message(message.chat.id)
+		if newest_message_id == message.id:
+			bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=newest_message_id,
+								reply_markup=forwarding_utils.generate_control_buttons_from_subchannel(message, True))
+		start_deferred_interval_check(bot, 0)
 	elif callback_type == CB_TYPES.NOP:
 		bot.answer_callback_query(call.id)
 	elif callback_type in _TOGGLE_CALLBACKS:

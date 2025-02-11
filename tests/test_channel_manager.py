@@ -1,8 +1,10 @@
 import unittest
 from unittest import TestCase, main
 from unittest.mock import patch, Mock, call, ANY
+
+from pyrogram.filters import reply_keyboard
 from telebot import TeleBot
-from telebot.types import Message, InlineKeyboardButton
+from telebot.types import Message, InlineKeyboardButton, CallbackQuery
 
 from tests import test_helper
 import channel_manager
@@ -115,8 +117,7 @@ class TestChannelSettingsMessage(TestCase):
 		priorities = '1,2'
 		mock_get_individual_channel_settings.return_value = [channel_settings, priorities]
 
-		mock_message = Mock(spec=Message)
-		mock_message.id = message_id
+		mock_message = test_helper.create_mock_message("", [], None, message_id)
 		mock_bot.send_message.return_value = mock_message
 
 		mock_get_exist_settings_message.return_value = False
@@ -146,8 +147,7 @@ class TestChannelSettingsMessage(TestCase):
 		priorities = '1,2'
 		mock_get_individual_channel_settings.return_value = [channel_settings, priorities]
 
-		mock_message = Mock(spec=Message)
-		mock_message.id = message_id
+		mock_message = test_helper.create_mock_message("", [], None, message_id)
 		mock_bot.send_message.return_value = mock_message
 
 		mock_get_exist_settings_message.return_value = False
@@ -174,8 +174,7 @@ class TestChannelSettingsMessage(TestCase):
 		priorities = '1,2'
 		mock_get_individual_channel_settings.return_value = [channel_settings, priorities]
 
-		mock_message = Mock(spec=Message)
-		mock_message.id = message_id
+		mock_message = test_helper.create_mock_message("", [], None, message_id)
 		mock_bot.send_message.return_value = mock_message
 
 
@@ -196,8 +195,7 @@ class TestChannelSettingsMessage(TestCase):
 		priorities = '1,2'
 		mock_get_individual_channel_settings.return_value = [channel_settings, priorities]
 
-		mock_message = Mock(spec=Message)
-		mock_message.id = message_id
+		mock_message = test_helper.create_mock_message("", [], None, message_id)
 		mock_bot.send_message.return_value = mock_message
 
 		mock_get_exist_settings_message.return_value = True
@@ -207,8 +205,8 @@ class TestChannelSettingsMessage(TestCase):
 		mock_set_settings_message_id.assert_not_called()
 
 	@patch("utils.get_last_message")
+	@patch("channel_manager.is_settings_message")
 	@patch("utils.get_main_message_content_by_id")
-	@patch("channel_manager.get_text_information_text")
 	@patch("channel_manager.update_settings_message")
 	@patch("db_utils.get_newest_copied_message")
 	@patch("channel_manager.set_settings_message_id")
@@ -216,8 +214,8 @@ class TestChannelSettingsMessage(TestCase):
 	@patch("utils.edit_message_keyboard")
 	def test_get_exist_settings_message(self, mock_edit_message_keyboard, mock_generate_control_buttons,
 										mock_set_settings_message_id, mock_get_newest_copied_message,
-										mock_update_settings_message, mock_get_text_information_text,
-										mock_get_main_message_content_by_id, mock_get_last_message,
+										mock_update_settings_message, mock_get_main_message_content_by_id,
+										mock_is_settings_message, mock_get_last_message,
 										mock_get_oldest_copied_message, *args):
 		mock_bot = Mock(spec=TeleBot)
 		channel_id = -10012345678
@@ -228,7 +226,7 @@ class TestChannelSettingsMessage(TestCase):
 			call.a(mock_bot, channel_id, 5)
 		]
 
-		mock_get_text_information_text.return_value = f"{message_id}"
+		mock_is_settings_message.return_value = True
 
 		mock_message = test_helper.create_mock_message(f"{message_id} 12345", [], channel_id, last_message_id)
 		mock_get_main_message_content_by_id.return_value = mock_message
@@ -246,7 +244,7 @@ class TestChannelSettingsMessage(TestCase):
 		# Test get content in all messages
 		self.assertEqual(manager.mock_calls, expected_calls)
 		# Test update settings message
-		mock_get_text_information_text.assert_called_once_with()
+		mock_is_settings_message.assert_called_once_with(mock_message)
 		mock_update_settings_message.assert_called_once_with(mock_bot, channel_id, message_id)
 		mock_set_settings_message_id.assert_called_once_with(channel_id, message_id)
 
@@ -259,17 +257,16 @@ class TestChannelSettingsMessage(TestCase):
 		self.assertTrue(result)
 
 	@patch("utils.get_last_message")
+	@patch("channel_manager.is_settings_message")
 	@patch("utils.get_main_message_content_by_id")
-	@patch("channel_manager.get_text_information_text")
 	@patch("channel_manager.set_settings_message_id")
-	def test_get_exist_settings_message_with_empty_message(self, mock_set_settings_message_id, mock_get_text_information_text,
-										mock_get_main_message_content_by_id, mock_get_last_message, *args):
+	def test_get_exist_settings_message_with_empty_message(self, mock_set_settings_message_id, mock_get_main_message_content_by_id,
+														   mock_is_settings_message, mock_get_last_message, *args):
 		mock_bot = Mock(spec=TeleBot)
 		channel_id = -10012345678
 		last_message_id = 5
-		message_id = 1
 		expected_calls = []
-		mock_get_text_information_text.return_value = f"{message_id}"
+		mock_is_settings_message.return_value = True
 		mock_get_main_message_content_by_id.return_value = None
 		manager = Mock()
 		manager.attach_mock(mock_get_main_message_content_by_id, 'a')
@@ -284,29 +281,31 @@ class TestChannelSettingsMessage(TestCase):
 		# Test get content in all messages
 		self.assertEqual(manager.mock_calls, expected_calls)
 		# Test find settings message
-		mock_get_text_information_text.assert_called_once_with()
+		mock_is_settings_message.assert_not_called()
 		mock_set_settings_message_id.assert_not_called()
 		self.assertFalse(result)
 
 	@patch("utils.get_last_message")
+	@patch("channel_manager.is_settings_message")
 	@patch("utils.get_main_message_content_by_id")
-	@patch("channel_manager.get_text_information_text")
 	@patch("channel_manager.set_settings_message_id")
-	def test_get_exist_information_message_without_information_message(self, mock_set_settings_message_id, mock_get_text_information_text,
-										mock_get_main_message_content_by_id, mock_get_last_message, *args):
+	def test_get_exist_information_message_without_information_message(self, mock_set_settings_message_id,
+														mock_get_main_message_content_by_id, mock_is_settings_message,
+														mock_get_last_message, *args):
 		mock_bot = Mock(spec=TeleBot)
 		channel_id = -10012345678
 		last_message_id = 5
-		message_id = 3
 		expected_calls = []
-		mock_get_text_information_text.return_value = f"{message_id}"
+		mock_is_settings_message.return_value = False
 		mock_message = test_helper.create_mock_message("", [])
 		mock_get_main_message_content_by_id.return_value = mock_message
 		manager = Mock()
 		manager.attach_mock(mock_get_main_message_content_by_id, 'a')
+		manager.attach_mock(mock_is_settings_message, 'b')
 
 		for i in range(1, last_message_id + 1):
 			expected_calls.append(call.a(mock_bot, channel_id, i))
+			expected_calls.append(call.b(mock_message))
 
 		mock_get_last_message.return_value = last_message_id
 		result = channel_manager.get_exist_settings_message(mock_bot, channel_id)
@@ -315,32 +314,32 @@ class TestChannelSettingsMessage(TestCase):
 		# Test get content in all messages
 		self.assertEqual(manager.mock_calls, expected_calls)
 		# Test find settings message
-		mock_get_text_information_text.assert_called_once_with()
 		mock_set_settings_message_id.assert_not_called()
 		self.assertFalse(result)
 
 	@patch("utils.get_last_message")
+	@patch("channel_manager.is_settings_message")
 	@patch("utils.get_main_message_content_by_id")
-	@patch("channel_manager.get_text_information_text")
 	@patch("channel_manager.set_settings_message_id")
 	def test_get_exist_information_message_without_information_message_with_copied_messages(self,
-										mock_set_settings_message_id, mock_get_text_information_text,
-										mock_get_main_message_content_by_id, mock_get_last_message,
+										mock_set_settings_message_id, mock_get_main_message_content_by_id,
+										mock_is_settings_message, mock_get_last_message,
 										mock_get_oldest_copied_message, *args):
 		mock_bot = Mock(spec=TeleBot)
 		channel_id = -10012345678
 		last_message_id = 5
 		last_copied_id = 3
-		message_id = 3
 		expected_calls = []
-		mock_get_text_information_text.return_value = f"{message_id}"
+		mock_is_settings_message.return_value = False
 		mock_message = test_helper.create_mock_message("", [])
 		mock_get_main_message_content_by_id.return_value = mock_message
 		manager = Mock()
 		manager.attach_mock(mock_get_main_message_content_by_id, 'a')
+		manager.attach_mock(mock_is_settings_message, 'b')
 
 		for i in range(1, last_copied_id + 1):
 			expected_calls.append(call.a(mock_bot, channel_id, i))
+			expected_calls.append(call.b(mock_message))
 
 		mock_get_last_message.return_value = last_message_id
 		mock_get_oldest_copied_message.return_value = last_copied_id
@@ -351,9 +350,21 @@ class TestChannelSettingsMessage(TestCase):
 		# Test get content in all messages
 		self.assertEqual(manager.mock_calls, expected_calls)
 		# Test find settings message
-		mock_get_text_information_text.assert_called_once_with()
 		mock_set_settings_message_id.assert_not_called()
 		self.assertFalse(result)
+
+	@patch("channel_manager.get_text_information_text")
+	def test_is_settings_message(self, mock_get_text_information_text, *args):
+		mock_get_text_information_text.return_value = "123"
+		result = channel_manager.is_settings_message(test_helper.create_mock_message("", []))
+		self.assertFalse(result)
+
+		result = channel_manager.is_settings_message(test_helper.create_mock_message("12345 5678", []))
+		self.assertTrue(result)
+
+		result = channel_manager.is_settings_message(test_helper.create_mock_message("2345 1235678", []))
+		self.assertTrue(result)
+
 
 @patch("db_utils.get_oldest_copied_message", return_value=False)
 @patch("db_utils.get_individual_channel_settings",
@@ -377,32 +388,133 @@ class TestAddSettingsKeyboard(TestCase):
 	@patch("channel_manager.generate_settings_keyboard")
 	def test_show_settings_keyboard(self, mock_generate_settings_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
-		mock_message = test_helper.create_mock_message("", [], -10012345678)
-		mock_message.id = 123
+		mock_message = test_helper.create_mock_message("", [], -10012345678, 123)
 
 		text = channel_manager.generate_current_settings_text(mock_message.chat.id)
 		channel_manager.show_settings_keyboard(mock_bot, mock_message)
 		mock_bot.edit_message_text.assert_called_once_with(chat_id=mock_message.chat.id, message_id=mock_message.id,
 														   text=text, reply_markup=mock_generate_settings_keyboard.return_value)
 
-	@patch("utils.merge_keyboard_markup")
-	@patch("forwarding_utils.generate_control_buttons")
+	@patch("db_utils.get_main_message_from_copied")
+	@patch("forwarding_utils.generate_control_buttons_from_subchannel")
 	@patch("channel_manager.generate_settings_keyboard")
-	def test_show_settings_keyboard_for_button(self, mock_generate_settings_keyboard,
-											   mock_generate_control_buttons, mock_merge_keyboard_markup, *args):
+	@patch("utils.merge_keyboard_markup")
+	def test_show_settings_keyboard_for_button(self, mock_merge_keyboard_markup, mock_generate_settings_keyboard,
+											   mock_generate_control_buttons_from_subchannel, mock_get_main_message_from_copied, *args):
 		mock_bot = Mock(spec=TeleBot)
-		mock_message = test_helper.create_mock_message("", [], -10012345678)
-		mock_message.id = 123
+		mock_message_id = 123
+		mock_main_message_id = 102
+		mock_channel_id = -10012345678
+		mock_main_channel_id = -10087654321
+		mock_message = test_helper.create_mock_message("", [], mock_channel_id, mock_message_id)
+
+		mock_get_main_message_from_copied.return_value = [mock_main_message_id, mock_main_channel_id]
 
 		channel_manager.show_settings_keyboard_for_button(mock_bot, mock_message)
-		mock_generate_control_buttons.assert_called_once_with(ANY, mock_message)
-		mock_generate_settings_keyboard.assert_called_once_with(mock_message.chat.id, add_help=True)
+		mock_generate_control_buttons_from_subchannel.assert_called_once_with(mock_message)
+		mock_generate_settings_keyboard.assert_called_once_with(mock_channel_id, add_help=True)
 		mock_merge_keyboard_markup.assert_called_once_with(
-			mock_generate_control_buttons.return_value,
+			mock_generate_control_buttons_from_subchannel.return_value,
 			mock_generate_settings_keyboard.return_value
 		)
-		mock_bot.edit_message_reply_markup.assert_called_once_with(chat_id=mock_message.chat.id, message_id=mock_message.id,
+		mock_bot.edit_message_reply_markup.assert_called_once_with(chat_id=mock_channel_id, message_id=mock_message_id,
 														   reply_markup=mock_merge_keyboard_markup.return_value)
+
+
+@patch("db_utils.is_individual_channel_exists", return_value=True)
+class TestHandleCallback(TestCase):
+	@patch("channel_manager.save_channel_settings")
+	@patch("channel_manager.is_settings_message", return_value=True)
+	@patch("channel_manager.update_settings_message")
+	@patch("channel_manager.get_settings_message_id")
+	@patch("db_utils.get_newest_copied_message")
+	@patch("forwarding_utils.generate_control_buttons_from_subchannel")
+	@patch("channel_manager.start_deferred_interval_check")
+	def test_save_and_hide_settings_menu_for_settings_message(self, mock_start_deferred_interval_check,
+										mock_generate_control_buttons_from_subchannel, mock_get_newest_copied_message,
+										mock_get_settings_message_id, mock_update_settings_message,
+										mock_is_settings_message, mock_save_channel_settings, *args):
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU},"
+		mock_call.message = test_helper.create_mock_message("", [], -10012345678, 123)
+		mock_get_settings_message_id.return_value = 123
+		mock_newest_message_id = 321
+		mock_get_newest_copied_message.return_value = mock_newest_message_id
+
+		channel_manager.handle_callback(mock_bot, mock_call)
+		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
+		mock_is_settings_message.assert_called_once_with(mock_call.message)
+		mock_get_settings_message_id.assert_called_once_with(mock_call.message.chat.id)
+		mock_update_settings_message.assert_called_once_with(mock_bot, mock_call.message.chat.id, mock_call.message.id)
+		mock_get_newest_copied_message.assert_called_once_with(mock_call.message.chat.id)
+		mock_generate_control_buttons_from_subchannel.assert_not_called()
+		mock_bot.edit_message_reply_markup.assert_not_called()
+		mock_start_deferred_interval_check.assert_called_once_with(mock_bot, 0)
+
+	@patch("channel_manager.save_channel_settings")
+	@patch("channel_manager.is_settings_message", return_value=True)
+	@patch("channel_manager.update_settings_message")
+	@patch("channel_manager.get_settings_message_id")
+	@patch("db_utils.get_newest_copied_message")
+	@patch("forwarding_utils.generate_control_buttons_from_subchannel")
+	@patch("channel_manager.start_deferred_interval_check")
+	def test_save_and_hide_settings_menu_for_another_settings_message(self, mock_start_deferred_interval_check,
+										mock_generate_control_buttons_from_subchannel, mock_get_newest_copied_message,
+										mock_get_settings_message_id, mock_update_settings_message,
+										mock_is_settings_message, mock_save_channel_settings, *args):
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU},"
+		mock_call.message = test_helper.create_mock_message("", [], -10012345678, 125)
+		mock_get_settings_message_id.return_value = 123
+		mock_newest_message_id = 321
+		mock_get_newest_copied_message.return_value = mock_newest_message_id
+
+		channel_manager.handle_callback(mock_bot, mock_call)
+		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
+		mock_is_settings_message.assert_called_once_with(mock_call.message)
+		mock_get_settings_message_id.assert_called_once_with(mock_call.message.chat.id)
+		mock_update_settings_message.assert_has_calls([
+			call(mock_bot, mock_call.message.chat.id, mock_call.message.id),
+			call(mock_bot, mock_call.message.chat.id, mock_get_settings_message_id.return_value)
+		])
+		mock_get_newest_copied_message.assert_called_once_with(mock_call.message.chat.id)
+		mock_generate_control_buttons_from_subchannel.assert_not_called()
+		mock_bot.edit_message_reply_markup.assert_not_called()
+		mock_start_deferred_interval_check.assert_called_once_with(mock_bot, 0)
+
+	@patch("channel_manager.save_channel_settings")
+	@patch("channel_manager.is_settings_message", return_value=False)
+	@patch("channel_manager.update_settings_message")
+	@patch("channel_manager.get_settings_message_id")
+	@patch("db_utils.get_newest_copied_message")
+	@patch("forwarding_utils.generate_control_buttons_from_subchannel")
+	@patch("channel_manager.start_deferred_interval_check")
+	def test_save_and_hide_settings_menu_for_last_ticket(self, mock_start_deferred_interval_check,
+										mock_generate_control_buttons_from_subchannel, mock_get_newest_copied_message,
+										mock_get_settings_message_id, mock_update_settings_message,
+										mock_is_settings_message, mock_save_channel_settings, *args):
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU},"
+		mock_call.message = test_helper.create_mock_message("", [], -10012345678, 321)
+		mock_get_settings_message_id.return_value = 123
+		mock_newest_message_id = 321
+		mock_get_newest_copied_message.return_value = mock_newest_message_id
+
+		channel_manager.handle_callback(mock_bot, mock_call)
+		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
+		mock_is_settings_message.assert_called_once_with(mock_call.message)
+		mock_get_settings_message_id.assert_called_once_with(mock_call.message.chat.id)
+		mock_update_settings_message.assert_called_once_with(mock_bot, mock_call.message.chat.id, mock_get_settings_message_id.return_value)
+		mock_get_newest_copied_message.assert_called_once_with(mock_call.message.chat.id)
+		mock_generate_control_buttons_from_subchannel.assert_called_once_with(mock_call.message, True)
+		mock_bot.edit_message_reply_markup(chat_id=mock_call.message.chat.id, message_id=mock_newest_message_id,
+										   reply_keyboard=mock_generate_control_buttons_from_subchannel.return_value)
+		mock_start_deferred_interval_check.assert_called_once_with(mock_bot, 0)
+
+
 
 if __name__ == "__main__":
 	main()
