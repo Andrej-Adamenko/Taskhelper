@@ -1,6 +1,8 @@
+import copy
 import json
 import logging
 import threading
+from symtable import Function
 from typing import List, Dict
 
 import telebot
@@ -14,6 +16,7 @@ import hashtag_data
 import interval_updating_utils
 import utils
 from db_utils import update_individual_channel_settings
+from forwarding_utils import get_button_settings_keyboard
 
 CALLBACK_PREFIX = "CHNN"
 NEW_USER_TYPE = "+"
@@ -373,14 +376,35 @@ def generate_user_keyboard(main_channel_id: int, channel_id: int, setting_type: 
 	return InlineKeyboardMarkup(rows)
 
 
-def open_user_selection(bot: telebot.TeleBot, call: CallbackQuery, setting_type: str):
+def get_user_selection_keyboard(call: CallbackQuery, setting_type: str):
 	user_id = call.from_user.id
 	main_channel_id = db_utils.get_main_channel_from_user(user_id)
 	channel_id = call.message.chat.id
+	return generate_user_keyboard(main_channel_id, channel_id, setting_type)
 
-	keyboard = generate_user_keyboard(main_channel_id, channel_id, setting_type)
-	text = generate_current_settings_text(channel_id)
-	bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=keyboard, text=text)
+
+def open_user_selection(bot: telebot.TeleBot, call: CallbackQuery, setting_type: str):
+	message = call.message
+	keyboard = get_user_selection_keyboard(call, setting_type)
+	setting_args = bot, message, keyboard
+	call_function_settings_button(bot, message, update_settings_keyboard, setting_args, keyboard)
+
+
+def call_function_settings_button(bot: telebot.TeleBot, post_data: Message,
+						settings_func, settings_args, ticket_keyboard: InlineKeyboardMarkup):
+	if is_settings_message(post_data):
+		settings_func(*settings_args)
+	message_id = get_settings_message_id(post_data.chat.id)
+	if message_id != post_data.id:
+		update_settings_message(bot, post_data.chat.id, message_id)
+	newest_message_id = db_utils.get_newest_copied_message(post_data.chat.id)
+	if newest_message_id == post_data.id:
+		ticket_keyboard = utils.merge_keyboard_markup(
+			forwarding_utils.generate_control_buttons_from_subchannel(post_data),
+			ticket_keyboard
+		)
+		bot.edit_message_reply_markup(chat_id=post_data.chat.id, message_id=newest_message_id,
+									  reply_markup=ticket_keyboard)
 
 
 def generate_remind_keyboard(channel_id):
@@ -467,10 +491,11 @@ def save_user_settings(call: CallbackQuery, setting_type: str):
 	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
 
-def update_settings_keyboard(bot: telebot.TeleBot, message: Message):
+def update_settings_keyboard(bot: telebot.TeleBot, message: Message, keyboard: InlineKeyboardMarkup = None):
 	channel_id = message.chat.id
 	message_id = message.id
-	keyboard = generate_settings_keyboard(channel_id)
+	if keyboard is None:
+		keyboard = generate_settings_keyboard(channel_id)
 	text = generate_current_settings_text(channel_id)
 	bot.edit_message_text(chat_id=channel_id, message_id=message_id, reply_markup=keyboard, text=text)
 
@@ -547,15 +572,8 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		start_deferred_interval_check(bot)
 	elif callback_type == CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU:
 		save_channel_settings(bot, call)
-		if is_settings_message(message):
-			update_settings_message(bot, message.chat.id, message.id)
-		message_id = get_settings_message_id(message.chat.id)
-		if message_id != message.id:
-			update_settings_message(bot, message.chat.id, message_id)
-		newest_message_id = db_utils.get_newest_copied_message(message.chat.id)
-		if newest_message_id == message.id:
-			bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=newest_message_id,
-								reply_markup=forwarding_utils.generate_control_buttons_from_subchannel(message, True))
+		call_function_settings_button(bot, message, update_settings_message,
+									  (bot, message.chat.id, message.id), get_button_settings_keyboard())
 		start_deferred_interval_check(bot, 0)
 	elif callback_type == CB_TYPES.NOP:
 		bot.answer_callback_query(call.id)

@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from pyrogram.types import InlineKeyboardMarkup
 from telebot.types import MessageEntity, Message, InlineKeyboardButton
 
+import config_utils
 from tests import test_helper
 import utils
 

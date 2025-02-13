@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import threading
@@ -99,7 +100,10 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 			continue
 
 		newest_message_id = db_utils.get_newest_copied_message(subchannel_id)
-		keyboard_markup = generate_control_buttons(hashtag_data, post_data, newest=True)
+		keyboard_markup = utils.merge_keyboard_markup(
+			generate_control_buttons(hashtag_data, post_data),
+			get_button_settings_keyboard()
+		)
 
 		try:
 			if post_data.text is None:
@@ -354,16 +358,17 @@ def filter_creator_channels(channel_data: List, main_channel_id: int, main_messa
 
 	return result_channels
 
-def generate_control_buttons_from_subchannel(post_data: telebot.types.Message, newest: bool = False):
+def generate_control_buttons_from_subchannel(post_data: telebot.types.Message):
 	main_message_id, main_channel_id = db_utils.get_main_message_from_copied(post_data.id, post_data.chat.id)
-	post_data.chat.id = main_channel_id
-	post_data.message_id = main_message_id
+	post_data1 = copy.deepcopy(post_data)
+	post_data1.chat.id = main_channel_id
+	post_data1.message_id = main_message_id
 
-	hash_data = HashtagData(post_data, main_channel_id)
-	return generate_control_buttons(hash_data, post_data, newest)
+	hash_data = HashtagData(post_data1, main_channel_id)
+	return generate_control_buttons(hash_data, post_data1)
 
 
-def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types.Message, newest: bool = False):
+def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
@@ -415,20 +420,16 @@ def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types
 
 	keyboard_markup = InlineKeyboardMarkup([buttons])
 
-	if newest:
-		keyboard_markup.keyboard.append([telebot.types.InlineKeyboardButton(" ", callback_data=config_utils.EMPTY_CALLBACK_DATA_BUTTON)])
-		keyboard_markup.keyboard.append([add_button_settings()])
-
 	return keyboard_markup
 
-def add_button_settings():
+def get_button_settings_keyboard():
 	settings_button = telebot.types.InlineKeyboardButton("Settings ⚙️")
 	settings_button.callback_data = utils.create_callback_str(
 		channel_manager.CALLBACK_PREFIX,
 		channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS_BUTTON
 	)
 
-	return settings_button
+	return telebot.types.InlineKeyboardMarkup([[settings_button]])
 
 def generate_subchannel_buttons(post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id

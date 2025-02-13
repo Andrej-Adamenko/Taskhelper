@@ -214,11 +214,10 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 	if db_utils.is_individual_channel_exists(chat_id):
 		newest_message_id = db_utils.get_newest_copied_message(chat_id)
 		if message_id == newest_message_id:
-			settings_button = forwarding_utils.add_button_settings()
+			settings_keyboard = forwarding_utils.get_button_settings_keyboard()
 
 			# copy keyboard markup object to prevent modification of an original object
-			keyboard_markup = merge_keyboard_markup(keyboard_markup,
-													telebot.types.InlineKeyboardMarkup([[settings_button]]))
+			keyboard_markup = merge_keyboard_markup(keyboard_markup,settings_keyboard)
 
 	try:
 		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard_markup)
