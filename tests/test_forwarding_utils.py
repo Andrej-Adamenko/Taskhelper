@@ -4,7 +4,6 @@ from unittest.mock import patch, Mock, ANY, call
 
 from telebot import TeleBot
 
-import channel_manager
 from tests import test_helper
 from hashtag_data import HashtagData
 
@@ -151,7 +150,7 @@ class ForwardForSubchannelTest(TestCase):
 	@patch("db_utils.get_main_message_from_copied")
 	@patch("forwarding_utils.generate_control_buttons")
 	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
-	@patch("forwarding_utils.get_button_settings_keyboard")
+	@patch("channel_manager.get_button_settings_keyboard")
 	@patch("utils.merge_keyboard_markup")
 	@patch("utils.copy_message")
 	def test_create_message_with_keyboard(self, mock_copy_message, mock_merge_keyboard_markup,
@@ -177,7 +176,7 @@ class ForwardForSubchannelTest(TestCase):
 
 		mock_generate_control_buttons.assert_has_calls([unittest.mock.call(hashtag_data, mock_message),
 														unittest.mock.call(hashtag_data, mock_message)])
-		mock_get_button_settings_keyboard.assert_called_once_with()
+		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
 		mock_merge_keyboard_markup.assert_called_once_with(
 			mock_generate_control_buttons.return_value,
 			mock_get_button_settings_keyboard.return_value
@@ -185,16 +184,6 @@ class ForwardForSubchannelTest(TestCase):
 
 		mock_copy_message.assert_called_once_with(mock_bot, chat_id=sub_chat_id, message_id=main_message_id,
 												  from_chat_id=main_chat_id, reply_markup=mock_merge_keyboard_markup.return_value)
-
-@patch("utils.create_callback_str")
-class AddButtonSettingsTest(TestCase):
-	def test_get_button_settings_keyboard(self, mock_create_callback_str, *args):
-		channel_id = 125
-		forwarding_utils.get_button_settings_keyboard()
-		mock_create_callback_str.assert_called_once_with(
-			channel_manager.CALLBACK_PREFIX,
-			channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS_BUTTON
-		)
 
 
 if __name__ == "__main__":

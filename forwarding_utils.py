@@ -102,7 +102,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		newest_message_id = db_utils.get_newest_copied_message(subchannel_id)
 		keyboard_markup = utils.merge_keyboard_markup(
 			generate_control_buttons(hashtag_data, post_data),
-			get_button_settings_keyboard()
+			channel_manager.get_button_settings_keyboard("Settings ⚙️")
 		)
 
 		try:
@@ -421,15 +421,6 @@ def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types
 	keyboard_markup = InlineKeyboardMarkup([buttons])
 
 	return keyboard_markup
-
-def get_button_settings_keyboard():
-	settings_button = telebot.types.InlineKeyboardButton("Settings ⚙️")
-	settings_button.callback_data = utils.create_callback_str(
-		channel_manager.CALLBACK_PREFIX,
-		channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS_BUTTON
-	)
-
-	return telebot.types.InlineKeyboardMarkup([[settings_button]])
 
 def generate_subchannel_buttons(post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id

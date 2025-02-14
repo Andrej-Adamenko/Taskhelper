@@ -1,4 +1,3 @@
-import copy
 import logging
 from typing import List
 import time
@@ -10,9 +9,7 @@ from telebot.apihelper import ApiTelegramException
 import config_utils
 import db_utils
 import threading_utils
-import forwarding_utils
 import channel_manager
-import utils
 from config_utils import MAX_BUTTONS_IN_ROW
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
@@ -214,7 +211,7 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 	if db_utils.is_individual_channel_exists(chat_id):
 		newest_message_id = db_utils.get_newest_copied_message(chat_id)
 		if message_id == newest_message_id:
-			settings_keyboard = forwarding_utils.get_button_settings_keyboard()
+			settings_keyboard = channel_manager.get_button_settings_keyboard("Settings ⚙️")
 
 			# copy keyboard markup object to prevent modification of an original object
 			keyboard_markup = merge_keyboard_markup(keyboard_markup,settings_keyboard)
