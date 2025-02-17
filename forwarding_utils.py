@@ -358,8 +358,8 @@ def filter_creator_channels(channel_data: List, main_channel_id: int, main_messa
 
 	return result_channels
 
-def generate_control_buttons_from_subchannel(post_data: telebot.types.Message):
-	main_message_id, main_channel_id = db_utils.get_main_message_from_copied(post_data.id, post_data.chat.id)
+def generate_control_buttons_from_subchannel(post_data: telebot.types.Message, message_id: int):
+	main_message_id, main_channel_id = db_utils.get_main_message_from_copied(message_id, post_data.chat.id)
 	post_data1 = copy.deepcopy(post_data)
 	post_data1.chat.id = main_channel_id
 	post_data1.message_id = main_message_id

@@ -457,6 +457,43 @@ class TestChannelSettingsMessage(TestCase):
 	@patch("db_utils.get_newest_copied_message")
 	@patch("forwarding_utils.generate_control_buttons_from_subchannel")
 	@patch("utils.merge_keyboard_markup")
+	def test_call_function_settings_button_force_update_ticket_keyboard(self, mock_merge_keyboard_markup,
+								mock_generate_control_buttons_from_subchannel, mock_get_newest_copied_message,
+								mock_update_settings_message, mock_get_settings_message_id,
+								mock_update_settings_keyboard, mock_is_settings_message, *args):
+
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], -10012345678, 123)
+		mock_get_settings_message_id.return_value = 123
+		mock_newest_message_id = 321
+		mock_get_newest_copied_message.return_value = mock_newest_message_id
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		args = mock_bot, mock_message, mock_keyboard
+
+		channel_manager.call_function_settings_button(mock_bot, mock_message, mock_update_settings_keyboard, args,
+													  mock_keyboard, True)
+		mock_is_settings_message.assert_called_once_with(mock_message)
+		mock_update_settings_keyboard.assert_called_once_with(*args)
+		mock_get_settings_message_id.assert_called_once_with(mock_message.chat.id)
+		mock_update_settings_message.assert_not_called()
+		mock_get_newest_copied_message.assert_called_once_with(mock_message.chat.id)
+		mock_generate_control_buttons_from_subchannel.assert_called_once_with(mock_message, mock_newest_message_id)
+		mock_merge_keyboard_markup.assert_called_once_with(mock_generate_control_buttons_from_subchannel.return_value,
+														   mock_keyboard)
+		mock_bot.edit_message_reply_markup.assert_called_once_with(chat_id=mock_message.chat.id,
+																   message_id=mock_newest_message_id,
+																   reply_markup=mock_merge_keyboard_markup.return_value)
+
+	@patch("db_utils.get_individual_channel_settings",
+		   return_value=['{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}',
+						 '1,2'])
+	@patch("channel_manager.is_settings_message", return_value=True)
+	@patch("channel_manager.update_settings_keyboard")
+	@patch("channel_manager.get_settings_message_id")
+	@patch("channel_manager.update_settings_message")
+	@patch("db_utils.get_newest_copied_message")
+	@patch("forwarding_utils.generate_control_buttons_from_subchannel")
+	@patch("utils.merge_keyboard_markup")
 	def test_call_function_settings_button_another_settings_message(self, mock_merge_keyboard_markup, mock_generate_control_buttons_from_subchannel,
 								 mock_get_newest_copied_message, mock_update_settings_message,
 								 mock_get_settings_message_id, mock_update_settings_keyboard,
@@ -509,7 +546,7 @@ class TestChannelSettingsMessage(TestCase):
 		mock_update_settings_message.assert_called_once_with(mock_bot, mock_message.chat.id,
 															 mock_get_settings_message_id.return_value)
 		mock_get_newest_copied_message.assert_called_once_with(mock_message.chat.id)
-		mock_generate_control_buttons_from_subchannel.assert_called_once_with(mock_message)
+		mock_generate_control_buttons_from_subchannel.assert_called_once_with(mock_message, mock_newest_message_id)
 		mock_merge_keyboard_markup.assert_called_once_with(mock_generate_control_buttons_from_subchannel.return_value,
 														   mock_keyboard)
 		mock_bot.edit_message_reply_markup.assert_called_once_with(chat_id=mock_message.chat.id,
@@ -648,7 +685,7 @@ class TestHandleCallback(TestCase):
 	@patch("channel_manager.save_channel_settings")
 	@patch("channel_manager.open_remind_selection")
 	@patch("channel_manager.start_deferred_interval_check")
-	def test_followed_selected(self, mock_start_deferred_interval_check, mock_open_remind_selection,
+	def test_remind_selected(self, mock_start_deferred_interval_check, mock_open_remind_selection,
 							   mock_save_channel_settings, *args):
 		channel_id = -10012345678
 		message_id = 123
@@ -717,7 +754,7 @@ class TestHandleCallback(TestCase):
 		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
 		mock_call_function_settings_button.assert_called_once_with(mock_bot, mock_call.message,
 																   mock_update_settings_message, setting_args,
-																   mock_get_button_settings_keyboard.return_value)
+																   mock_get_button_settings_keyboard.return_value, True)
 		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
 		mock_start_deferred_interval_check.assert_called_once_with(mock_bot, 0)
 

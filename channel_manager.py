@@ -377,16 +377,17 @@ def open_user_selection(bot: telebot.TeleBot, call: CallbackQuery, setting_type:
 
 
 def call_function_settings_button(bot: telebot.TeleBot, post_data: Message,
-						settings_func, settings_args, ticket_keyboard: InlineKeyboardMarkup):
+						settings_func, settings_args, ticket_keyboard: InlineKeyboardMarkup,
+								  force_update_ticket_keyboard:bool = False):
 	if is_settings_message(post_data):
 		settings_func(*settings_args)
 	message_id = get_settings_message_id(post_data.chat.id)
 	if message_id != post_data.id:
 		update_settings_message(bot, post_data.chat.id, message_id)
 	newest_message_id = db_utils.get_newest_copied_message(post_data.chat.id)
-	if newest_message_id == post_data.id:
+	if newest_message_id == post_data.id or force_update_ticket_keyboard:
 		ticket_keyboard = utils.merge_keyboard_markup(
-			forwarding_utils.generate_control_buttons_from_subchannel(post_data),
+			forwarding_utils.generate_control_buttons_from_subchannel(post_data, newest_message_id),
 			ticket_keyboard
 		)
 		bot.edit_message_reply_markup(chat_id=post_data.chat.id, message_id=newest_message_id,
@@ -568,7 +569,7 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		save_channel_settings(bot, call)
 		keyboard = get_button_settings_keyboard("Settings ⚙️")
 		call_function_settings_button(bot, message, update_settings_message,
-										(bot, message.chat.id, message.id), keyboard)
+										(bot, message.chat.id, message.id), keyboard, True)
 		start_deferred_interval_check(bot, 0)
 	elif callback_type == CB_TYPES.NOP:
 		bot.answer_callback_query(call.id)
