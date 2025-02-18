@@ -363,6 +363,8 @@ class TestChannelSettingsMessage(TestCase):
 		result = channel_manager.is_settings_message(test_helper.create_mock_message("2345 1235678", []))
 		self.assertTrue(result)
 
+
+class TestChannelSettingsKeyboard(TestCase):
 	@patch("db_utils.get_main_channel_from_user")
 	@patch("channel_manager.generate_user_keyboard")
 	@patch("channel_manager.call_function_settings_button")
@@ -553,6 +555,109 @@ class TestChannelSettingsMessage(TestCase):
 																   message_id=mock_newest_message_id,
 																   reply_markup=mock_merge_keyboard_markup.return_value)
 
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {})
+	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.generate_user_keyboard")
+	@patch("channel_manager.generate_remind_keyboard")
+	def test_get_ticket_settings_buttons(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+
+		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
+		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		mock_generate_settings_keyboard.assert_not_called()
+		mock_generate_user_keyboard.assert_not_called()
+		mock_generate_remind_keyboard.assert_not_called()
+		self.assertEqual(keyboard, mock_get_button_settings_keyboard.return_value)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS})
+	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.generate_user_keyboard")
+	@patch("channel_manager.generate_remind_keyboard")
+	def test_get_ticket_settings_buttons_settings_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+
+		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
+		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		mock_generate_settings_keyboard.assert_called_once_with(channel_id, True)
+		mock_generate_user_keyboard.assert_not_called()
+		mock_generate_remind_keyboard.assert_not_called()
+		self.assertEqual(keyboard, mock_generate_settings_keyboard.return_value)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.ASSIGNED_SELECTED})
+	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.generate_user_keyboard")
+	@patch("channel_manager.generate_remind_keyboard")
+	def test_get_ticket_settings_buttons_user_assigned_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+
+		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
+		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		mock_generate_settings_keyboard.assert_not_called()
+		mock_generate_user_keyboard.assert_called_once_with(main_channel_id, channel_id, channel_manager.SETTING_TYPES.ASSIGNED)
+		mock_generate_remind_keyboard.assert_not_called()
+		self.assertEqual(keyboard, mock_generate_user_keyboard.return_value)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.FOLLOWED_SELECTED})
+	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.generate_user_keyboard")
+	@patch("channel_manager.generate_remind_keyboard")
+	def test_get_ticket_settings_buttons_user_followed_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+
+		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
+		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		mock_generate_settings_keyboard.assert_not_called()
+		mock_generate_user_keyboard.assert_called_once_with(main_channel_id, channel_id, channel_manager.SETTING_TYPES.FOLLOWED)
+		mock_generate_remind_keyboard.assert_not_called()
+		self.assertEqual(keyboard, mock_generate_user_keyboard.return_value)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.REPORTED_SELECTED})
+	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.generate_user_keyboard")
+	@patch("channel_manager.generate_remind_keyboard")
+	def test_get_ticket_settings_buttons_user_reported_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+
+		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
+		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		mock_generate_settings_keyboard.assert_not_called()
+		mock_generate_user_keyboard.assert_called_once_with(main_channel_id, channel_id, channel_manager.SETTING_TYPES.REPORTED)
+		mock_generate_remind_keyboard.assert_not_called()
+		self.assertEqual(keyboard, mock_generate_user_keyboard.return_value)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.REMIND_SELECTED})
+	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.generate_user_keyboard")
+	@patch("channel_manager.generate_remind_keyboard")
+	def test_get_ticket_settings_buttons_remind_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+
+		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
+		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		mock_generate_settings_keyboard.assert_not_called()
+		mock_generate_user_keyboard.assert_not_called()
+		mock_generate_remind_keyboard.assert_called_once_with(channel_id)
+		self.assertEqual(keyboard, mock_generate_remind_keyboard.return_value)
+
+
 
 @patch("db_utils.get_oldest_copied_message", return_value=False)
 @patch("db_utils.get_individual_channel_settings",
@@ -630,6 +735,9 @@ class TestAddSettingsKeyboard(TestCase):
 
 
 @patch("db_utils.is_individual_channel_exists", return_value=True)
+@patch("db_utils.get_individual_channel_settings",
+		return_value=['{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}',
+					 '1,2'])
 class TestHandleCallback(TestCase):
 	@patch("channel_manager.save_channel_settings")
 	@patch("channel_manager.open_user_selection")
@@ -647,6 +755,7 @@ class TestHandleCallback(TestCase):
 		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
 		mock_open_user_selection.assert_called_once_with(mock_bot, mock_call, channel_manager.SETTING_TYPES.ASSIGNED)
 		mock_start_deferred_interval_check.assert_not_called()
+		self.assertEqual(channel_manager.CB_TYPES.ASSIGNED_SELECTED, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
 
 	@patch("channel_manager.save_channel_settings")
 	@patch("channel_manager.open_user_selection")
@@ -664,6 +773,7 @@ class TestHandleCallback(TestCase):
 		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
 		mock_open_user_selection.assert_called_once_with(mock_bot, mock_call, channel_manager.SETTING_TYPES.REPORTED)
 		mock_start_deferred_interval_check.assert_not_called()
+		self.assertEqual(channel_manager.CB_TYPES.REPORTED_SELECTED, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
 
 	@patch("channel_manager.save_channel_settings")
 	@patch("channel_manager.open_user_selection")
@@ -681,6 +791,7 @@ class TestHandleCallback(TestCase):
 		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
 		mock_open_user_selection.assert_called_once_with(mock_bot, mock_call, channel_manager.SETTING_TYPES.FOLLOWED)
 		mock_start_deferred_interval_check.assert_not_called()
+		self.assertEqual(channel_manager.CB_TYPES.FOLLOWED_SELECTED, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
 
 	@patch("channel_manager.save_channel_settings")
 	@patch("channel_manager.open_remind_selection")
@@ -698,6 +809,7 @@ class TestHandleCallback(TestCase):
 		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
 		mock_open_remind_selection.assert_called_once_with(mock_bot, mock_call)
 		mock_start_deferred_interval_check.assert_not_called()
+		self.assertEqual(channel_manager.CB_TYPES.REMIND_SELECTED, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
 
 	@patch("channel_manager.save_user_settings")
 	@patch("channel_manager.show_settings_keyboard")
@@ -716,6 +828,7 @@ class TestHandleCallback(TestCase):
 		mock_save_user_settings.assert_called_once_with(mock_call, settings_type)
 		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call.message)
 		mock_start_deferred_interval_check.assert_called_once_with(mock_bot)
+		self.assertEqual(channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
 
 	@patch("channel_manager.save_remind_settings")
 	@patch("channel_manager.show_settings_keyboard")
@@ -733,6 +846,7 @@ class TestHandleCallback(TestCase):
 		mock_save_remind_settings.assert_called_once_with(mock_call)
 		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call.message)
 		mock_start_deferred_interval_check.assert_called_once_with(mock_bot)
+		self.assertEqual(channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
 
 	@patch("channel_manager.save_channel_settings")
 	@patch("channel_manager.call_function_settings_button")
@@ -757,6 +871,33 @@ class TestHandleCallback(TestCase):
 																   mock_get_button_settings_keyboard.return_value, True)
 		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
 		mock_start_deferred_interval_check.assert_called_once_with(mock_bot, 0)
+		self.assertEqual(None, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+
+	@patch("channel_manager.show_settings_keyboard")
+	def test_open_channel_settings(self, mock_show_settings_keyboard, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		channel_manager.handle_callback(mock_bot, mock_call)
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call.message)
+		self.assertEqual(channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+
+	@patch("channel_manager.create_settings_message")
+	def test_create_channel_settings(self, mock_create_settings_message, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.CREATE_CHANNEL_SETTINGS},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		channel_manager.handle_callback(mock_bot, mock_call)
+		mock_create_settings_message.assert_called_once_with(mock_bot, channel_id)
+		self.assertEqual(channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
 
 
 

@@ -21,6 +21,7 @@ NEW_USER_TYPE = "+"
 
 DEFERRED_INTERVAL_CHECK_TIMER = None
 
+CHANNEL_TICKET_SETTINGS_BUTTONS = {}
 
 class CB_TYPES:
 	ASSIGNED_SELECTED = "AS"
@@ -36,7 +37,6 @@ class CB_TYPES:
 	SAVE_SELECTED_USERS = "SVU"
 	SAVE_REMIND_SETTINGS = "SVR"
 	OPEN_CHANNEL_SETTINGS = "OCS"
-	OPEN_CHANNEL_SETTINGS_BUTTON = "OCSB"
 	CREATE_CHANNEL_SETTINGS = "CCS"
 	NOP = "NOP"  # No operation
 
@@ -506,6 +506,26 @@ def get_button_settings_keyboard(text: str = "Edit channel settings ⚙️"):
 	return telebot.types.InlineKeyboardMarkup([[settings_button]])
 
 
+def get_ticket_settings_buttons(channel_id: int, main_channel_id: int) -> (InlineKeyboardMarkup, InlineKeyboardMarkup):
+	ticket_keyboard = get_button_settings_keyboard("Settings ⚙️")
+
+	if channel_id in CHANNEL_TICKET_SETTINGS_BUTTONS:
+		channel_menu = CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id]
+
+		if channel_menu == CB_TYPES.OPEN_CHANNEL_SETTINGS:
+			ticket_keyboard = generate_settings_keyboard(channel_id, True)
+		elif channel_menu == CB_TYPES.ASSIGNED_SELECTED:
+			ticket_keyboard = generate_user_keyboard(main_channel_id, channel_id, SETTING_TYPES.ASSIGNED)
+		elif channel_menu == CB_TYPES.FOLLOWED_SELECTED:
+			ticket_keyboard = generate_user_keyboard(main_channel_id, channel_id, SETTING_TYPES.FOLLOWED)
+		elif channel_menu == CB_TYPES.REPORTED_SELECTED:
+			ticket_keyboard = generate_user_keyboard(main_channel_id, channel_id, SETTING_TYPES.REPORTED)
+		elif channel_menu == CB_TYPES.REMIND_SELECTED:
+			ticket_keyboard = generate_remind_keyboard(channel_id)
+
+	return ticket_keyboard
+
+
 def save_remind_settings(call: CallbackQuery):
 	channel_id = call.message.chat.id
 	settings, priorities = get_individual_channel_settings(channel_id)
@@ -546,27 +566,34 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 
 	if callback_type == CB_TYPES.ASSIGNED_SELECTED:
 		save_channel_settings(bot, call)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = CB_TYPES.ASSIGNED_SELECTED
 		open_user_selection(bot, call, SETTING_TYPES.ASSIGNED)
 	elif callback_type == CB_TYPES.REPORTED_SELECTED:
 		save_channel_settings(bot, call)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = CB_TYPES.REPORTED_SELECTED
 		open_user_selection(bot, call, SETTING_TYPES.REPORTED)
 	elif callback_type == CB_TYPES.FOLLOWED_SELECTED:
 		save_channel_settings(bot, call)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = CB_TYPES.FOLLOWED_SELECTED
 		open_user_selection(bot, call, SETTING_TYPES.FOLLOWED)
 	elif callback_type == CB_TYPES.REMIND_SELECTED:
 		save_channel_settings(bot, call)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = CB_TYPES.REMIND_SELECTED
 		open_remind_selection(bot, call)
 	elif callback_type == CB_TYPES.SAVE_SELECTED_USERS:
 		setting_type, = other_data
 		save_user_settings(call, setting_type)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = CB_TYPES.OPEN_CHANNEL_SETTINGS
 		show_settings_keyboard(bot, message)
 		start_deferred_interval_check(bot)
 	elif callback_type == CB_TYPES.SAVE_REMIND_SETTINGS:
 		save_remind_settings(call)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = CB_TYPES.OPEN_CHANNEL_SETTINGS
 		show_settings_keyboard(bot, message)
 		start_deferred_interval_check(bot)
 	elif callback_type == CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU:
 		save_channel_settings(bot, call)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = None
 		keyboard = get_button_settings_keyboard("Settings ⚙️")
 		call_function_settings_button(bot, message, update_settings_message,
 										(bot, message.chat.id, message.id), keyboard, True)
@@ -577,8 +604,10 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		toggle_button(bot, call, callback_type, other_data)
 	elif callback_type == CB_TYPES.OPEN_CHANNEL_SETTINGS:
 		show_settings_keyboard(bot, message)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = CB_TYPES.OPEN_CHANNEL_SETTINGS
 	elif callback_type == CB_TYPES.CREATE_CHANNEL_SETTINGS:
 		create_settings_message(bot, message.chat.id)
+		CHANNEL_TICKET_SETTINGS_BUTTONS[message.chat.id] = CB_TYPES.OPEN_CHANNEL_SETTINGS
 
 
 def is_button_checked(buttons: List[InlineKeyboardButton], target_cb_type: str):

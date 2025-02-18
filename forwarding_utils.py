@@ -102,7 +102,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		newest_message_id = db_utils.get_newest_copied_message(subchannel_id)
 		keyboard_markup = utils.merge_keyboard_markup(
 			generate_control_buttons(hashtag_data, post_data),
-			channel_manager.get_button_settings_keyboard("Settings ⚙️")
+			channel_manager.get_ticket_settings_buttons(subchannel_id, main_channel_id)
 		)
 
 		try:

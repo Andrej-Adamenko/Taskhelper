@@ -150,11 +150,12 @@ class ForwardForSubchannelTest(TestCase):
 	@patch("db_utils.get_main_message_from_copied")
 	@patch("forwarding_utils.generate_control_buttons")
 	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
-	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.get_ticket_settings_buttons")
 	@patch("utils.merge_keyboard_markup")
 	@patch("utils.copy_message")
-	def test_create_message_with_keyboard(self, mock_copy_message, mock_merge_keyboard_markup,
-										  mock_get_button_settings_keyboard, mock_get_subchannel_ids_from_hashtags,
+	@patch("forwarding_utils.update_copied_message")
+	def test_create_message_with_keyboard(self, mock_update_copied_message, mock_copy_message, mock_merge_keyboard_markup,
+										  mock_get_ticket_settings_buttons, mock_get_subchannel_ids_from_hashtags,
 										  mock_generate_control_buttons, mock_get_main_message_from_copied, *args):
 		main_chat_id = 12345678
 		main_message_id = 157
@@ -176,14 +177,15 @@ class ForwardForSubchannelTest(TestCase):
 
 		mock_generate_control_buttons.assert_has_calls([unittest.mock.call(hashtag_data, mock_message),
 														unittest.mock.call(hashtag_data, mock_message)])
-		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		mock_get_ticket_settings_buttons.assert_called_once_with(sub_chat_id, main_chat_id)
 		mock_merge_keyboard_markup.assert_called_once_with(
 			mock_generate_control_buttons.return_value,
-			mock_get_button_settings_keyboard.return_value
+			mock_get_ticket_settings_buttons.return_value
 		)
 
 		mock_copy_message.assert_called_once_with(mock_bot, chat_id=sub_chat_id, message_id=main_message_id,
 												  from_chat_id=main_chat_id, reply_markup=mock_merge_keyboard_markup.return_value)
+		mock_update_copied_message.assert_called_once_with(mock_bot, sub_chat_id, 166)
 
 	@patch("db_utils.get_main_message_from_copied")
 	@patch("copy.deepcopy")
