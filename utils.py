@@ -174,7 +174,7 @@ def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.ty
 			return False
 
 		if e1.type == "hashtag":
-			return True  # for hashtags length is ignored because length of scheduled tags can be changed
+			return True  # for hashtags length is ignored because length of deferred tags can be changed
 		else:
 			return e1.length == e2.length
 
