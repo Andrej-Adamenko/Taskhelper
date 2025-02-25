@@ -1,4 +1,3 @@
-import copy
 import logging
 from typing import List
 import time
@@ -10,7 +9,6 @@ from telebot.apihelper import ApiTelegramException
 import config_utils
 import db_utils
 import threading_utils
-import forwarding_utils
 import channel_manager
 from config_utils import MAX_BUTTONS_IN_ROW
 
@@ -70,9 +68,13 @@ def create_callback_str(callback_prefix, callback_type, *args):
 
 
 def parse_callback_str(callback_str: str):
-	components = callback_str.split(",")
-	callback_type = components[1]
-	arguments = components[2:]
+	callback_type = ""
+	arguments = []
+	if callback_str is not None and callback_str != config_utils.EMPTY_CALLBACK_DATA_BUTTON:
+		components = callback_str.split(",")
+		callback_type = components[1]
+		arguments = components[2:]
+
 	return callback_type, arguments
 
 
@@ -209,12 +211,11 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 	if db_utils.is_individual_channel_exists(chat_id):
 		newest_message_id = db_utils.get_newest_copied_message(chat_id)
 		if message_id == newest_message_id:
-			settings_button = forwarding_utils.add_button_settings(chat_id)
+			main_message_id, main_channel_id = db_utils.get_main_message_from_copied(newest_message_id, chat_id)
 
 			# copy keyboard markup object to prevent modification of an original object
-			keyboard_markup = copy.deepcopy(keyboard_markup)
-			keyboard_markup.keyboard.append([telebot.types.InlineKeyboardButton(" ", callback_data="_")])
-			keyboard_markup.keyboard.append([settings_button])
+			keyboard_markup = merge_keyboard_markup(keyboard_markup,
+								channel_manager.get_ticket_settings_buttons(chat_id, main_channel_id))
 
 	try:
 		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard_markup)
@@ -409,4 +410,20 @@ def mark_message_for_deletion(bot: telebot.TeleBot, chat_id: int, message_id: in
 		if E.error_code == 429:
 			raise E
 		logging.info(f"Error during marking message{chat_id, message_id} for deletion {E}")
+
+def merge_keyboard_markup(
+		keyboard: telebot.types.InlineKeyboardMarkup,
+		*keyboard2: telebot.types.InlineKeyboardMarkup,
+		empty_button = telebot.types.InlineKeyboardButton(" ", callback_data=config_utils.EMPTY_CALLBACK_DATA_BUTTON)):
+
+	result = keyboard.keyboard.copy()
+
+	for board in keyboard2:
+		if len(board.keyboard) > 0 and len(result) > 0 and empty_button:
+			result += [[empty_button]]
+
+		result += board.keyboard
+
+	return telebot.types.InlineKeyboardMarkup(result)
+
 

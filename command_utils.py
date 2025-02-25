@@ -11,7 +11,6 @@ import forwarding_utils
 import hashtag_data
 import interval_updating_utils
 import user_utils
-import utils
 from scheduled_messages_utils import scheduled_message_dispatcher
 
 

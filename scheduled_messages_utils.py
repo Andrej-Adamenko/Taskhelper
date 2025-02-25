@@ -189,7 +189,7 @@ class ScheduledMessageDispatcher:
 		right_arrow_cb = utils.create_callback_str(self.CALLBACK_PREFIX, self.__NEXT_MONTH_CALLBACK, current_date_str)
 		right_arrow_button = InlineKeyboardButton(">", callback_data=right_arrow_cb)
 
-		current_month_button = InlineKeyboardButton(f"{current_year} {calendar.month_name[current_month]}", callback_data="_")
+		current_month_button = InlineKeyboardButton(f"{current_year} {calendar.month_name[current_month]}", callback_data=config_utils.EMPTY_CALLBACK_DATA_BUTTON)
 
 		back_button_callback = utils.create_callback_str(forwarding_utils.CALLBACK_PREFIX, forwarding_utils.CB_TYPES.SAVE)
 		back_button = InlineKeyboardButton("Back", callback_data=back_button_callback)
@@ -204,7 +204,7 @@ class ScheduledMessageDispatcher:
 				button_text = str(day) if day > 0 else " "
 				if now.day == day and now.month == current_month and now.year == current_year:
 					button_text = config_utils.BUTTON_TEXTS["CHECK"] + button_text
-				callback = "_"
+				callback = config_utils.EMPTY_CALLBACK_DATA_BUTTON
 				if day > 0:
 					callback = utils.create_callback_str(self.CALLBACK_PREFIX, self.__SELECT_DAY_CALLBACK, f"{day}.{current_date_str}")
 

@@ -27,5 +27,6 @@ def create_mock_message(text: str, entities: List[MessageEntity], chat_id: int =
 
 	if message_id:
 		message.message_id = message_id
+		message.id = message_id
 
 	return message

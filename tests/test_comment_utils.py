@@ -2,9 +2,8 @@ from unittest import TestCase, main
 from unittest.mock import patch, call, Mock, ANY
 from telebot import TeleBot
 
-import forwarding_utils  # needed to avoid circular dependency
 from comment_utils import CommentDispatcher
-import test_helper
+from tests import test_helper
 
 comment_dispatcher = CommentDispatcher()
 comment_dispatcher.__NEXT_ACTION_TEXT_PREFIX = "::"

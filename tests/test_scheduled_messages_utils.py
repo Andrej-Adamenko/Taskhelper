@@ -1,15 +1,14 @@
 from unittest import TestCase, main
-from unittest.mock import patch, Mock, ANY
+from unittest.mock import patch, Mock
 
 import pytz
 import datetime
 from telebot import TeleBot
 from telebot.types import CallbackQuery
 
-import test_helper
-import forwarding_utils
-import scheduled_messages_utils
+from tests import test_helper
 from hashtag_data import HashtagData
+import scheduled_messages_utils
 
 
 @patch("config_utils.TIMEZONE_NAME", "UTC")

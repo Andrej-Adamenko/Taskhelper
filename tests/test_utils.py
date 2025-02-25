@@ -1,11 +1,11 @@
 from unittest import TestCase, main
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-from telebot import TeleBot
-from telebot.types import MessageEntity, Message
+from pyrogram.types import InlineKeyboardMarkup
+from telebot.types import MessageEntity, Message, InlineKeyboardButton
 
-import forwarding_utils
-import test_helper
+import config_utils
+from tests import test_helper
 import utils
 
 
@@ -121,6 +121,61 @@ class ReplaceWhitespacesTest(TestCase):
 		text = "test\t0991234567\tasdf\naaaa\n#o #bb #p2"
 		result = utils.replace_whitespaces(text)
 		self.assertEqual(result, text)
+
+class MergeKeyboardMarkupTest(TestCase):
+	def test_merge_empty_keyboards(self):
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = []
+
+		mock_keyboard2 = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard2.keyboard = []
+
+		result = utils.merge_keyboard_markup(mock_keyboard, mock_keyboard2)
+		self.assertEqual(result.keyboard, [])
+
+	def test_merge_empty_second_keyboard(self):
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [InlineKeyboardButton("Start")]
+
+		mock_keyboard2 = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard2.keyboard = []
+
+		result = utils.merge_keyboard_markup(mock_keyboard, mock_keyboard2)
+		self.assertEqual(result.keyboard, mock_keyboard.keyboard)
+
+	def test_merge_empty_first_keyboard(self):
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = []
+
+		mock_keyboard2 = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard2.keyboard = [InlineKeyboardButton("Stop")]
+
+		result = utils.merge_keyboard_markup(mock_keyboard, mock_keyboard2)
+		self.assertEqual(result.keyboard, mock_keyboard2.keyboard)
+
+	def test_merge_keyboards(self):
+		mock_empty_button = Mock(spec=InlineKeyboardButton)
+		mock_empty_button.text = ""
+		mock_empty_button.callback_data = config_utils.EMPTY_CALLBACK_DATA_BUTTON
+
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [InlineKeyboardButton("Start")]
+
+		mock_keyboard2 = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard2.keyboard = [InlineKeyboardButton("Stop")]
+
+		result = utils.merge_keyboard_markup(mock_keyboard, mock_keyboard2, empty_button=mock_empty_button)
+		self.assertEqual(result.keyboard, mock_keyboard.keyboard + [[mock_empty_button]] + mock_keyboard2.keyboard)
+
+	def test_merge_emtpy_button_keyboards(self):
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [InlineKeyboardButton("Start")]
+
+		mock_keyboard2 = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard2.keyboard = [InlineKeyboardButton("Stop")]
+
+		result = utils.merge_keyboard_markup(mock_keyboard, mock_keyboard2, empty_button=None)
+		self.assertEqual(result.keyboard, mock_keyboard.keyboard + mock_keyboard2.keyboard)
 
 
 if __name__ == "__main__":
