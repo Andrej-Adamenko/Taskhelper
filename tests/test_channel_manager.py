@@ -2,8 +2,9 @@ from unittest import TestCase, main
 from unittest.mock import patch, Mock, call
 
 from telebot import TeleBot
-from telebot.types import CallbackQuery, User, InlineKeyboardMarkup
+from telebot.types import CallbackQuery, User, InlineKeyboardMarkup, InlineKeyboardButton
 
+import config_utils
 from tests import test_helper
 import channel_manager
 
@@ -363,59 +364,263 @@ class TestChannelSettingsMessage(TestCase):
 		result = channel_manager.is_settings_message(test_helper.create_mock_message("2345 1235678", []))
 		self.assertTrue(result)
 
+	@patch("channel_manager.is_button_checked", return_value=False)
+	@patch("utils.parse_callback_str", return_value=[channel_manager.CB_TYPES.DUE_SELECTED, [""]])
+	@patch("channel_manager.save_toggle_button")
+	def test_toggle_button_error_due(self, mock_save_toggle_button, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_button = Mock(spec=InlineKeyboardButton)
+		mock_button.text = f"Due{config_utils.BUTTON_TEXTS["CHECK"]}"
+		mock_button.callback_data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.DUE_SELECTED},"
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[mock_button]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+
+		channel_manager.toggle_button(mock_bot, mock_call, channel_manager.CB_TYPES.DUE_SELECTED, [""])
+		mock_bot.answer_callback_query.assert_called_once_with(callback_query_id=mock_call.id, text="At least one of the Due and Deferred buttons should be selected")
+		mock_save_toggle_button.assert_not_called()
+		mock_bot.edit_message_reply_markup.assert_not_called()
+		self.assertEqual(f"Due{config_utils.BUTTON_TEXTS["CHECK"]}", mock_keyboard.keyboard[0][0].text)
+
+	@patch("channel_manager.is_button_checked", return_value=True)
+	@patch("utils.parse_callback_str", return_value=[channel_manager.CB_TYPES.DUE_SELECTED, [""]])
+	@patch("channel_manager.save_toggle_button")
+	def test_toggle_button(self, mock_save_toggle_button, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_button = Mock(spec=InlineKeyboardButton)
+		mock_button.text = f"Due{config_utils.BUTTON_TEXTS["CHECK"]}"
+		mock_button.callback_data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.DUE_SELECTED},"
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[mock_button]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+
+		channel_manager.toggle_button(mock_bot, mock_call, channel_manager.CB_TYPES.DUE_SELECTED, [""])
+		mock_bot.answer_callback_query.assert_not_called()
+		mock_save_toggle_button.assert_called_once_with(mock_bot, mock_call, channel_manager.SETTING_TYPES.DUE, "", False)
+		mock_bot.edit_message_reply_markup.assert_not_called()
+		self.assertEqual("Due", mock_keyboard.keyboard[0][0].text)
+
+	@patch("channel_manager.is_button_checked", return_value=True)
+	@patch("channel_manager.save_toggle_button")
+	def test_toggle_button_user(self, mock_save_toggle_button, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_button = Mock(spec=InlineKeyboardButton)
+		mock_button.text = f"Due{config_utils.BUTTON_TEXTS["CHECK"]}"
+		mock_button.callback_data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.TOGGLE_USER},{channel_manager.SETTING_TYPES.ASSIGNED},cc"
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[mock_button]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+
+		channel_manager.toggle_button(mock_bot, mock_call, channel_manager.CB_TYPES.TOGGLE_USER,
+									  [channel_manager.SETTING_TYPES.ASSIGNED, "cc"])
+		mock_bot.answer_callback_query.assert_not_called()
+		mock_save_toggle_button.assert_called_once_with(mock_bot, mock_call, channel_manager.SETTING_TYPES.ASSIGNED, "cc", False)
+		mock_bot.edit_message_reply_markup.assert_not_called()
+		self.assertEqual("Due", mock_keyboard.keyboard[0][0].text)
+
+	@patch("channel_manager.is_button_checked", return_value=True)
+	@patch("utils.parse_callback_str", return_value=[channel_manager.CB_TYPES.DUE_SELECTED, [""]])
+	@patch("channel_manager.save_toggle_button")
+	def test_toggle_button_empty(self, mock_save_toggle_button, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+
+		channel_manager.toggle_button(mock_bot, mock_call, channel_manager.CB_TYPES.DUE_SELECTED, [""])
+		mock_bot.answer_callback_query.assert_not_called()
+		mock_save_toggle_button.assert_not_called()
+		mock_bot.edit_message_reply_markup.assert_not_called()
+
+
+@patch("db_utils.get_individual_channel_settings",
+		return_value=['{"due": true, "assigned": ["FF", "NN"], "reported": ["+"]}',
+					  '1,2'])
+@patch("db_utils.update_individual_channel")
+@patch("channel_manager.show_settings_keyboard")
+class TestSaveToggleButton(TestCase):
+	def test_save_toggle_button_set(self, mock_show_settings_keyboard, mock_update_individual_channel,
+									mock_get_individual_channel_settings, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+		setting_type = channel_manager.SETTING_TYPES.DUE
+		cb_data = ""
+		is_enabled = True
+
+		channel_manager.save_toggle_button(mock_bot, mock_call, setting_type, cb_data, is_enabled)
+		mock_get_individual_channel_settings.assert_called_once_with(channel_id)
+		mock_update_individual_channel.assert_called_once_with(channel_id, '{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"]}',  '1,2')
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+
+	def test_save_toggle_button_add(self, mock_show_settings_keyboard, mock_update_individual_channel,
+									mock_get_individual_channel_settings, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+		setting_type = channel_manager.SETTING_TYPES.DEFERRED
+		cb_data = ""
+		is_enabled = True
+
+		channel_manager.save_toggle_button(mock_bot, mock_call, setting_type, cb_data, is_enabled)
+		mock_get_individual_channel_settings.assert_called_once_with(channel_id)
+		mock_update_individual_channel.assert_called_once_with(channel_id, '{"due": true, "deferred": true, "assigned": ["FF", "NN"], "reported": ["+"]}',  '1,2')
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+
+	def test_save_toggle_button_priority_remove(self, mock_show_settings_keyboard, mock_update_individual_channel,
+									mock_get_individual_channel_settings, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+		setting_type = channel_manager.CB_TYPES.PRIORITY_SELECTED
+		cb_data = "2"
+		is_enabled = False
+
+		channel_manager.save_toggle_button(mock_bot, mock_call, setting_type, cb_data, is_enabled)
+		mock_get_individual_channel_settings.assert_called_once_with(channel_id)
+		mock_update_individual_channel.assert_called_once_with(channel_id, '{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"]}',  '1')
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+
+	def test_save_toggle_button_priority_add(self, mock_show_settings_keyboard, mock_update_individual_channel,
+									mock_get_individual_channel_settings, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+		setting_type = channel_manager.CB_TYPES.PRIORITY_SELECTED
+		cb_data = "3"
+		is_enabled = True
+
+		channel_manager.save_toggle_button(mock_bot, mock_call, setting_type, cb_data, is_enabled)
+		mock_get_individual_channel_settings.assert_called_once_with(channel_id)
+		mock_update_individual_channel.assert_called_once_with(channel_id, '{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"]}',  '1,2,3')
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+
+	def test_save_toggle_button_add_array(self, mock_show_settings_keyboard, mock_update_individual_channel,
+									mock_get_individual_channel_settings, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+		setting_type = channel_manager.SETTING_TYPES.FOLLOWED
+		cb_data = "NN"
+		is_enabled = True
+
+		channel_manager.save_toggle_button(mock_bot, mock_call, setting_type, cb_data, is_enabled)
+		mock_get_individual_channel_settings.assert_called_once_with(channel_id)
+		mock_update_individual_channel.assert_called_once_with(channel_id, '{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}',  '1,2')
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+
+	def test_save_toggle_button_add_array_element(self, mock_show_settings_keyboard, mock_update_individual_channel,
+									mock_get_individual_channel_settings, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+		setting_type = channel_manager.SETTING_TYPES.ASSIGNED
+		cb_data = "CC"
+		is_enabled = True
+
+		channel_manager.save_toggle_button(mock_bot, mock_call, setting_type, cb_data, is_enabled)
+		mock_get_individual_channel_settings.assert_called_once_with(channel_id)
+		mock_update_individual_channel.assert_called_once_with(channel_id, '{"due": true, "deferred": false, "assigned": ["FF", "NN", "CC"], "reported": ["+"]}', '1,2')
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+
+	def test_save_toggle_button_add_exists_array_element(self, mock_show_settings_keyboard, mock_update_individual_channel,
+									mock_get_individual_channel_settings, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+		setting_type = channel_manager.SETTING_TYPES.ASSIGNED
+		cb_data = "NN"
+		is_enabled = True
+
+		channel_manager.save_toggle_button(mock_bot, mock_call, setting_type, cb_data, is_enabled)
+		mock_get_individual_channel_settings.assert_called_once_with(channel_id)
+		mock_update_individual_channel.assert_called_once_with(channel_id, '{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"]}', '1,2')
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+
+	def test_save_toggle_button_remove_array_element(self, mock_show_settings_keyboard, mock_update_individual_channel,
+									mock_get_individual_channel_settings, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.id = 12234
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_keyboard.keyboard = [[]]
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.message.reply_markup = mock_keyboard
+		setting_type = channel_manager.SETTING_TYPES.REPORTED
+		cb_data = "+"
+		is_enabled = False
+
+		channel_manager.save_toggle_button(mock_bot, mock_call, setting_type, cb_data, is_enabled)
+		mock_get_individual_channel_settings.assert_called_once_with(channel_id)
+		mock_update_individual_channel.assert_called_once_with(channel_id, '{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": []}',  '1,2')
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+
 
 class TestChannelSettingsKeyboard(TestCase):
-	@patch("db_utils.get_main_channel_from_user")
-	@patch("channel_manager.generate_user_keyboard")
-	@patch("channel_manager.call_function_settings_button")
-	@patch("channel_manager.update_settings_message")
-	def test_open_user_selection(self, mock_update_settings_message, mock_call_function_settings_button,
-								 mock_generate_user_keyboard, mock_get_main_channel_from_user, *args):
-		mock_bot = Mock(spec=TeleBot)
-		mock_call = Mock(spec=CallbackQuery)
-		main_channel_id = -10087654321
-		channel_id = -10012345678
-		message_id = 123
-		user_id = 8536472
-		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
-		mock_call.from_user = Mock(spec=User)
-		mock_call.from_user.id = user_id
-		settings_type = channel_manager.SETTING_TYPES.REPORTED
-		mock_get_main_channel_from_user.return_value = main_channel_id
-		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
-		mock_generate_user_keyboard.return_value = mock_keyboard
-		settings_args = mock_bot, channel_id, message_id, mock_keyboard
-
-		channel_manager.open_user_selection(mock_bot, mock_call, settings_type)
-		mock_get_main_channel_from_user.assert_called_once_with(user_id)
-		mock_generate_user_keyboard.assert_called_once_with(main_channel_id, channel_id, settings_type)
-		mock_call_function_settings_button.assert_called_once_with(mock_bot, mock_call.message,
-																   mock_update_settings_message, settings_args,
-																   mock_keyboard)
-
-	@patch("channel_manager.generate_remind_keyboard")
-	@patch("channel_manager.call_function_settings_button")
-	@patch("channel_manager.update_settings_message")
-	def test_open_remind_selection(self, mock_update_settings_message, mock_call_function_settings_button,
-								 mock_generate_remind_keyboard, *args):
-		mock_bot = Mock(spec=TeleBot)
-		mock_call = Mock(spec=CallbackQuery)
-		channel_id = -10012345678
-		message_id = 123
-		user_id = 8536472
-		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
-		mock_call.from_user = Mock(spec=User)
-		mock_call.from_user.id = user_id
-		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
-		mock_generate_remind_keyboard.return_value = mock_keyboard
-		settings_args = mock_bot, channel_id, message_id, mock_keyboard
-
-		channel_manager.open_remind_selection(mock_bot, mock_call)
-		mock_generate_remind_keyboard.assert_called_once_with(channel_id)
-		mock_call_function_settings_button.assert_called_once_with(mock_bot, mock_call.message,
-																   mock_update_settings_message, settings_args,
-																   mock_keyboard)
-
 	@patch("db_utils.get_individual_channel_settings",
 		   return_value=['{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}',
 						 '1,2'])
@@ -439,7 +644,8 @@ class TestChannelSettingsKeyboard(TestCase):
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		args = mock_bot, mock_message, mock_keyboard
 
-		channel_manager.call_function_settings_button(mock_bot, mock_message, mock_update_settings_keyboard, args, mock_keyboard)
+		channel_manager.call_function_settings_button(mock_bot, mock_message, mock_update_settings_keyboard,
+													  args, mock_keyboard, mock_keyboard)
 		mock_is_settings_message.assert_called_once_with(mock_message)
 		mock_update_settings_keyboard.assert_called_once_with(*args)
 		mock_get_settings_message_id.assert_called_once_with(mock_message.chat.id)
@@ -473,7 +679,7 @@ class TestChannelSettingsKeyboard(TestCase):
 		args = mock_bot, mock_message, mock_keyboard
 
 		channel_manager.call_function_settings_button(mock_bot, mock_message, mock_update_settings_keyboard, args,
-													  mock_keyboard, True)
+													  mock_keyboard, mock_keyboard, True)
 		mock_is_settings_message.assert_called_once_with(mock_message)
 		mock_update_settings_keyboard.assert_called_once_with(*args)
 		mock_get_settings_message_id.assert_called_once_with(mock_message.chat.id)
@@ -508,12 +714,13 @@ class TestChannelSettingsKeyboard(TestCase):
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		args = mock_bot, mock_message, mock_keyboard
 
-		channel_manager.call_function_settings_button(mock_bot, mock_message, mock_update_settings_keyboard, args, mock_keyboard)
+		channel_manager.call_function_settings_button(mock_bot, mock_message, mock_update_settings_keyboard,
+													  args, mock_keyboard, mock_keyboard)
 		mock_is_settings_message.assert_called_once_with(mock_message)
 		mock_update_settings_keyboard.assert_called_once_with(*args)
 		mock_get_settings_message_id.assert_called_once_with(mock_message.chat.id)
 		mock_update_settings_message.assert_called_once_with(mock_bot, mock_message.chat.id,
-															 mock_get_settings_message_id.return_value)
+															 mock_get_settings_message_id.return_value, mock_keyboard)
 		mock_get_newest_copied_message.assert_called_once_with(mock_message.chat.id)
 		mock_generate_control_buttons_from_subchannel.assert_not_called()
 		mock_merge_keyboard_markup.assert_not_called()
@@ -541,12 +748,13 @@ class TestChannelSettingsKeyboard(TestCase):
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		args = mock_bot, mock_message, mock_keyboard
 
-		channel_manager.call_function_settings_button(mock_bot, mock_message, mock_update_settings_keyboard, args, mock_keyboard)
+		channel_manager.call_function_settings_button(mock_bot, mock_message, mock_update_settings_keyboard,
+													  args, mock_keyboard, mock_keyboard)
 		mock_is_settings_message.assert_called_once_with(mock_message)
 		mock_update_settings_keyboard.assert_not_called()
 		mock_get_settings_message_id.assert_called_once_with(mock_message.chat.id)
 		mock_update_settings_message.assert_called_once_with(mock_bot, mock_message.chat.id,
-															 mock_get_settings_message_id.return_value)
+															 mock_get_settings_message_id.return_value, mock_keyboard)
 		mock_get_newest_copied_message.assert_called_once_with(mock_message.chat.id)
 		mock_generate_control_buttons_from_subchannel.assert_called_once_with(mock_message, mock_newest_message_id)
 		mock_merge_keyboard_markup.assert_called_once_with(mock_generate_control_buttons_from_subchannel.return_value,
@@ -555,103 +763,150 @@ class TestChannelSettingsKeyboard(TestCase):
 																   message_id=mock_newest_message_id,
 																   reply_markup=mock_merge_keyboard_markup.return_value)
 
+	@patch("channel_manager.get_settings_menu")
+	def test_get_ticket_settings_buttons(self, mock_get_settings_menu, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+		user_id = 85241367
+		keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_settings_menu.return_value = keyboard
+
+		result = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id, user_id)
+		mock_get_settings_menu.assert_called_once_with(channel_id, main_channel_id, user_id, channel_manager.TICKET_MENU_TYPE)
+		self.assertEqual(result, keyboard)
+
 	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {})
 	@patch("channel_manager.get_button_settings_keyboard")
 	@patch("channel_manager.generate_settings_keyboard")
 	@patch("channel_manager.generate_user_keyboard")
 	@patch("channel_manager.generate_remind_keyboard")
-	def test_get_ticket_settings_buttons(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+	def test_get_settings_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
 										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
 		channel_id = -10012345678
 		main_channel_id = -10087654231
 
-		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
+		keyboard = channel_manager.get_settings_menu(channel_id, main_channel_id, menu_type=channel_manager.INFO_MENU_TYPE)
+		mock_get_button_settings_keyboard.assert_called_once_with()
+		mock_generate_settings_keyboard.assert_not_called()
+		mock_generate_user_keyboard.assert_not_called()
+		mock_generate_remind_keyboard.assert_not_called()
+		self.assertEqual(keyboard, mock_get_button_settings_keyboard.return_value)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {})
+	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.generate_user_keyboard")
+	@patch("channel_manager.generate_remind_keyboard")
+	def test_get_settings_menu_ticket(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+
+		keyboard = channel_manager.get_settings_menu(channel_id, main_channel_id, menu_type=channel_manager.TICKET_MENU_TYPE)
 		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
 		mock_generate_settings_keyboard.assert_not_called()
 		mock_generate_user_keyboard.assert_not_called()
 		mock_generate_remind_keyboard.assert_not_called()
 		self.assertEqual(keyboard, mock_get_button_settings_keyboard.return_value)
 
-	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS})
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {"info": {"state": channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, "user": 85241367}}})
 	@patch("channel_manager.get_button_settings_keyboard")
 	@patch("channel_manager.generate_settings_keyboard")
 	@patch("channel_manager.generate_user_keyboard")
 	@patch("channel_manager.generate_remind_keyboard")
-	def test_get_ticket_settings_buttons_settings_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+	def test_get_settings_menu_settings_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
 										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
 		channel_id = -10012345678
 		main_channel_id = -10087654231
 
-		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
+		keyboard = channel_manager.get_settings_menu(channel_id, main_channel_id, menu_type=channel_manager.INFO_MENU_TYPE)
+		mock_get_button_settings_keyboard.assert_called_once_with()
+		mock_generate_settings_keyboard.assert_called_once_with(channel_id, False)
+		mock_generate_user_keyboard.assert_not_called()
+		mock_generate_remind_keyboard.assert_not_called()
+		self.assertEqual(keyboard, mock_generate_settings_keyboard.return_value)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {"ticket": {"state": channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, "user": 85241367}}})
+	@patch("channel_manager.get_button_settings_keyboard")
+	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.generate_user_keyboard")
+	@patch("channel_manager.generate_remind_keyboard")
+	def test_get_settings_menu_settings_menu_ticket(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
+		channel_id = -10012345678
+		main_channel_id = -10087654231
+
+		keyboard = channel_manager.get_settings_menu(channel_id, main_channel_id, menu_type=channel_manager.TICKET_MENU_TYPE)
 		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
 		mock_generate_settings_keyboard.assert_called_once_with(channel_id, True)
 		mock_generate_user_keyboard.assert_not_called()
 		mock_generate_remind_keyboard.assert_not_called()
 		self.assertEqual(keyboard, mock_generate_settings_keyboard.return_value)
 
-	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.ASSIGNED_SELECTED})
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {"info": {"state": channel_manager.CB_TYPES.ASSIGNED_SELECTED, "user": 85241367}}})
 	@patch("channel_manager.get_button_settings_keyboard")
 	@patch("channel_manager.generate_settings_keyboard")
 	@patch("channel_manager.generate_user_keyboard")
 	@patch("channel_manager.generate_remind_keyboard")
-	def test_get_ticket_settings_buttons_user_assigned_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+	def test_get_settings_menu_user_assigned_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
 										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
 		channel_id = -10012345678
 		main_channel_id = -10087654231
 
-		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
-		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		keyboard = channel_manager.get_settings_menu(channel_id, main_channel_id, menu_type=channel_manager.INFO_MENU_TYPE)
+		mock_get_button_settings_keyboard.assert_called_once_with()
 		mock_generate_settings_keyboard.assert_not_called()
 		mock_generate_user_keyboard.assert_called_once_with(main_channel_id, channel_id, channel_manager.SETTING_TYPES.ASSIGNED)
 		mock_generate_remind_keyboard.assert_not_called()
 		self.assertEqual(keyboard, mock_generate_user_keyboard.return_value)
 
-	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.FOLLOWED_SELECTED})
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {"info": {"state": channel_manager.CB_TYPES.FOLLOWED_SELECTED, "user": 85241367}}})
 	@patch("channel_manager.get_button_settings_keyboard")
 	@patch("channel_manager.generate_settings_keyboard")
 	@patch("channel_manager.generate_user_keyboard")
 	@patch("channel_manager.generate_remind_keyboard")
-	def test_get_ticket_settings_buttons_user_followed_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+	def test_get_settings_menu_user_followed_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
 										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
 		channel_id = -10012345678
 		main_channel_id = -10087654231
 
-		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
-		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		keyboard = channel_manager.get_settings_menu(channel_id, main_channel_id, menu_type=channel_manager.INFO_MENU_TYPE)
+		mock_get_button_settings_keyboard.assert_called_once_with()
 		mock_generate_settings_keyboard.assert_not_called()
 		mock_generate_user_keyboard.assert_called_once_with(main_channel_id, channel_id, channel_manager.SETTING_TYPES.FOLLOWED)
 		mock_generate_remind_keyboard.assert_not_called()
 		self.assertEqual(keyboard, mock_generate_user_keyboard.return_value)
 
-	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.REPORTED_SELECTED})
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {"info": {"state": channel_manager.CB_TYPES.REPORTED_SELECTED, "user": 85241367}}})
 	@patch("channel_manager.get_button_settings_keyboard")
 	@patch("channel_manager.generate_settings_keyboard")
 	@patch("channel_manager.generate_user_keyboard")
 	@patch("channel_manager.generate_remind_keyboard")
-	def test_get_ticket_settings_buttons_user_reported_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+	def test_get_settings_menu_user_reported_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
 										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
 		channel_id = -10012345678
 		main_channel_id = -10087654231
+		user_id = 85241367
 
-		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
-		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		keyboard = channel_manager.get_settings_menu(channel_id, main_channel_id, menu_type=channel_manager.INFO_MENU_TYPE)
+		mock_get_button_settings_keyboard.assert_called_once_with()
 		mock_generate_settings_keyboard.assert_not_called()
 		mock_generate_user_keyboard.assert_called_once_with(main_channel_id, channel_id, channel_manager.SETTING_TYPES.REPORTED)
 		mock_generate_remind_keyboard.assert_not_called()
 		self.assertEqual(keyboard, mock_generate_user_keyboard.return_value)
 
-	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: channel_manager.CB_TYPES.REMIND_SELECTED})
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {"info": {"state": channel_manager.CB_TYPES.REMIND_SELECTED, "user": 85241367}}})
 	@patch("channel_manager.get_button_settings_keyboard")
 	@patch("channel_manager.generate_settings_keyboard")
 	@patch("channel_manager.generate_user_keyboard")
 	@patch("channel_manager.generate_remind_keyboard")
-	def test_get_ticket_settings_buttons_remind_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
+	def test_get_settings_menu_remind_menu(self, mock_generate_remind_keyboard, mock_generate_user_keyboard,
 										 mock_generate_settings_keyboard, mock_get_button_settings_keyboard, *args):
 		channel_id = -10012345678
 		main_channel_id = -10087654231
 
-		keyboard = channel_manager.get_ticket_settings_buttons(channel_id, main_channel_id)
-		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
+		keyboard = channel_manager.get_settings_menu(channel_id, main_channel_id, menu_type=channel_manager.INFO_MENU_TYPE)
+		mock_get_button_settings_keyboard.assert_called_once_with()
 		mock_generate_settings_keyboard.assert_not_called()
 		mock_generate_user_keyboard.assert_not_called()
 		mock_generate_remind_keyboard.assert_called_once_with(channel_id)
@@ -678,20 +933,57 @@ class TestAddSettingsKeyboard(TestCase):
 		channel_manager.generate_settings_keyboard(channel_id, True)
 		mock_add_help_button.assert_called_once_with(channel_id)
 
-	@patch("channel_manager.generate_settings_keyboard")
+	@patch("channel_manager.get_settings_menu")
 	@patch("channel_manager.call_function_settings_button")
 	@patch("channel_manager.update_settings_message")
 	def test_show_settings_keyboard(self, mock_update_settings_message, mock_call_function_settings_button,
-									mock_generate_settings_keyboard, *args):
+									mock_get_settings_menu, *args):
+		channel_id = -10012345678
+		message_id = 123
+		user_id = 8536472
 		mock_bot = Mock(spec=TeleBot)
-		mock_message = test_helper.create_mock_message("", [], -10012345678, 123)
-		setting_args = mock_bot, mock_message.chat.id, mock_message.id, mock_generate_settings_keyboard.return_value
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, 123)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_settings_menu.return_value = mock_keyboard
+		setting_args = mock_bot, channel_id, message_id, mock_keyboard
 
-		channel_manager.show_settings_keyboard(mock_bot, mock_message)
-		mock_generate_settings_keyboard.assert_has_calls([call(mock_message.chat.id), call(mock_message.chat.id, True)])
-		mock_call_function_settings_button.assert_called_once_with(mock_bot, mock_message,
+		channel_manager.show_settings_keyboard(mock_bot, mock_call)
+		mock_get_settings_menu.assert_has_calls([
+			call(channel_id, user_id=user_id, menu_type=channel_manager.TICKET_MENU_TYPE),
+			call(channel_id, user_id=user_id, menu_type=channel_manager.INFO_MENU_TYPE)
+		])
+		mock_call_function_settings_button.assert_called_once_with(mock_bot, mock_call.message,
 																   mock_update_settings_message, setting_args,
-																   mock_generate_settings_keyboard.return_value)
+																   mock_keyboard, mock_keyboard, False)
+
+	@patch("channel_manager.get_settings_menu")
+	@patch("channel_manager.call_function_settings_button")
+	@patch("channel_manager.update_settings_message")
+	def test_show_settings_keyboard_force(self, mock_update_settings_message, mock_call_function_settings_button,
+									mock_get_settings_menu, *args):
+		channel_id = -10012345678
+		message_id = 123
+		user_id = 8536472
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, 123)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_settings_menu.return_value = mock_keyboard
+		setting_args = mock_bot, channel_id, message_id, mock_keyboard
+
+		channel_manager.show_settings_keyboard(mock_bot, mock_call, True)
+		mock_get_settings_menu.assert_has_calls([
+			call(channel_id, user_id=user_id, menu_type=channel_manager.TICKET_MENU_TYPE),
+			call(channel_id, user_id=user_id, menu_type=channel_manager.INFO_MENU_TYPE)
+		])
+		mock_call_function_settings_button.assert_called_once_with(mock_bot, mock_call.message,
+																   mock_update_settings_message, setting_args,
+																   mock_keyboard, mock_keyboard, True)
 
 	@patch("channel_manager.get_button_settings_keyboard")
 	@patch("channel_manager.generate_current_settings_text")
@@ -699,7 +991,6 @@ class TestAddSettingsKeyboard(TestCase):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
-		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
 
 		channel_manager.update_settings_message(mock_bot, channel_id, message_id)
 		mock_get_button_settings_keyboard.assert_called_once_with()
@@ -738,12 +1029,13 @@ class TestAddSettingsKeyboard(TestCase):
 @patch("db_utils.get_individual_channel_settings",
 		return_value=['{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}',
 					 '1,2'])
+@patch("channel_manager._set_channel_ticket_settings_state")
 class TestHandleCallback(TestCase):
 	@patch("channel_manager.save_channel_settings")
-	@patch("channel_manager.open_user_selection")
-	@patch("channel_manager.start_deferred_interval_check")
-	def test_assigned_selected(self, mock_start_deferred_interval_check, mock_open_user_selection,
-							   mock_save_channel_settings, *args):
+	@patch("channel_manager.show_settings_keyboard")
+	@patch("interval_updating_utils.start_interval_updating")
+	def test_assigned_selected(self, mock_start_interval_updating, mock_show_settings_keyboard,
+							   mock_save_channel_settings, mock__set_channel_ticket_settings_state, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
@@ -752,16 +1044,16 @@ class TestHandleCallback(TestCase):
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 
 		channel_manager.handle_callback(mock_bot, mock_call)
-		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
-		mock_open_user_selection.assert_called_once_with(mock_bot, mock_call, channel_manager.SETTING_TYPES.ASSIGNED)
-		mock_start_deferred_interval_check.assert_not_called()
-		self.assertEqual(channel_manager.CB_TYPES.ASSIGNED_SELECTED, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+		mock__set_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.CB_TYPES.ASSIGNED_SELECTED)
+		mock_save_channel_settings.assert_not_called()
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+		mock_start_interval_updating.assert_not_called()
 
 	@patch("channel_manager.save_channel_settings")
-	@patch("channel_manager.open_user_selection")
-	@patch("channel_manager.start_deferred_interval_check")
-	def test_reported_selected(self, mock_start_deferred_interval_check, mock_open_user_selection,
-							   mock_save_channel_settings, *args):
+	@patch("channel_manager.show_settings_keyboard")
+	@patch("interval_updating_utils.start_interval_updating")
+	def test_reported_selected(self, mock_start_interval_updating, mock_show_settings_keyboard,
+							   mock_save_channel_settings, mock__set_channel_ticket_settings_state, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
@@ -770,16 +1062,16 @@ class TestHandleCallback(TestCase):
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 
 		channel_manager.handle_callback(mock_bot, mock_call)
-		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
-		mock_open_user_selection.assert_called_once_with(mock_bot, mock_call, channel_manager.SETTING_TYPES.REPORTED)
-		mock_start_deferred_interval_check.assert_not_called()
-		self.assertEqual(channel_manager.CB_TYPES.REPORTED_SELECTED, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+		mock__set_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.CB_TYPES.REPORTED_SELECTED)
+		mock_save_channel_settings.assert_not_called()
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+		mock_start_interval_updating.assert_not_called()
 
 	@patch("channel_manager.save_channel_settings")
-	@patch("channel_manager.open_user_selection")
-	@patch("channel_manager.start_deferred_interval_check")
-	def test_followed_selected(self, mock_start_deferred_interval_check, mock_open_user_selection,
-							   mock_save_channel_settings, *args):
+	@patch("channel_manager.show_settings_keyboard")
+	@patch("interval_updating_utils.start_interval_updating")
+	def test_followed_selected(self, mock_start_interval_updating, mock_show_settings_keyboard,
+							   mock_save_channel_settings, mock__set_channel_ticket_settings_state, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
@@ -788,16 +1080,16 @@ class TestHandleCallback(TestCase):
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 
 		channel_manager.handle_callback(mock_bot, mock_call)
-		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
-		mock_open_user_selection.assert_called_once_with(mock_bot, mock_call, channel_manager.SETTING_TYPES.FOLLOWED)
-		mock_start_deferred_interval_check.assert_not_called()
-		self.assertEqual(channel_manager.CB_TYPES.FOLLOWED_SELECTED, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+		mock__set_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.CB_TYPES.FOLLOWED_SELECTED)
+		mock_save_channel_settings.assert_not_called()
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+		mock_start_interval_updating.assert_not_called()
 
 	@patch("channel_manager.save_channel_settings")
-	@patch("channel_manager.open_remind_selection")
-	@patch("channel_manager.start_deferred_interval_check")
-	def test_remind_selected(self, mock_start_deferred_interval_check, mock_open_remind_selection,
-							   mock_save_channel_settings, *args):
+	@patch("channel_manager.show_settings_keyboard")
+	@patch("interval_updating_utils.start_interval_updating")
+	def test_remind_selected(self, mock_start_interval_updating, mock_show_settings_keyboard,
+							   mock_save_channel_settings, mock__set_channel_ticket_settings_state, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
@@ -806,75 +1098,108 @@ class TestHandleCallback(TestCase):
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 
 		channel_manager.handle_callback(mock_bot, mock_call)
-		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
-		mock_open_remind_selection.assert_called_once_with(mock_bot, mock_call)
-		mock_start_deferred_interval_check.assert_not_called()
-		self.assertEqual(channel_manager.CB_TYPES.REMIND_SELECTED, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+		mock__set_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.CB_TYPES.REMIND_SELECTED)
+		mock_save_channel_settings.assert_not_called()
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+		mock_start_interval_updating.assert_not_called()
 
 	@patch("channel_manager.save_user_settings")
 	@patch("channel_manager.show_settings_keyboard")
-	@patch("channel_manager.start_deferred_interval_check")
-	def test_save_selected_users(self, mock_start_deferred_interval_check, mock_show_settings_keyboard,
-								 mock_save_user_settings, *args):
+	@patch("interval_updating_utils.start_interval_updating")
+	def test_save_selected_users(self, mock_start_interval_updating, mock_show_settings_keyboard,
+								 mock_save_user_settings, mock__set_channel_ticket_settings_state, *args):
 		channel_id = -10012345678
 		message_id = 123
 		settings_type = channel_manager.SETTING_TYPES.REPORTED
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
-		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.SAVE_SELECTED_USERS},{settings_type}"
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.BACK_TO_MAIN_MENU},{settings_type}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = 876
 
 		channel_manager.handle_callback(mock_bot, mock_call)
-		mock_save_user_settings.assert_called_once_with(mock_call, settings_type)
-		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call.message)
-		mock_start_deferred_interval_check.assert_called_once_with(mock_bot)
-		self.assertEqual(channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+		mock__set_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS)
 
-	@patch("channel_manager.save_remind_settings")
-	@patch("channel_manager.show_settings_keyboard")
-	@patch("channel_manager.start_deferred_interval_check")
-	def test_save_remind_settings(self, mock_start_deferred_interval_check, mock_show_settings_keyboard,
-								 mock_save_remind_settings, *args):
-		channel_id = -10012345678
-		message_id = 123
-		mock_bot = Mock(spec=TeleBot)
-		mock_call = Mock(spec=CallbackQuery)
-		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.SAVE_REMIND_SETTINGS}"
-		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_save_user_settings.assert_not_called()
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
+		mock_start_interval_updating.assert_not_called()
 
-		channel_manager.handle_callback(mock_bot, mock_call)
-		mock_save_remind_settings.assert_called_once_with(mock_call)
-		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call.message)
-		mock_start_deferred_interval_check.assert_called_once_with(mock_bot)
-		self.assertEqual(channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
-
+	@patch("channel_manager._clear_channel_ticket_settings_state")
 	@patch("channel_manager.save_channel_settings")
 	@patch("channel_manager.call_function_settings_button")
 	@patch("channel_manager.update_settings_message")
 	@patch("channel_manager.get_button_settings_keyboard")
-	@patch("channel_manager.start_deferred_interval_check")
-	def test_save_and_hide_settings_menu(self, mock_start_deferred_interval_check, mock_get_button_settings_keyboard,
+	@patch("interval_updating_utils.start_interval_updating")
+	def test_save_and_hide_settings_menu(self, mock_start_interval_updating, mock_get_button_settings_keyboard,
 										 mock_update_settings_message, mock_call_function_settings_button,
-										 mock_save_channel_settings, *args):
+										 mock_save_channel_settings, mock__clear_channel_ticket_settings_state, *args):
+		channel_id = -10012345678
+		message_id = 123
+		user_id = 8536472
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
+
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		setting_args = mock_bot, channel_id, message_id, mock_get_button_settings_keyboard.return_value
+
+		channel_manager.handle_callback(mock_bot, mock_call)
+		mock__clear_channel_ticket_settings_state.assert_called_once_with(mock_call)
+		mock_save_channel_settings.assert_not_called()
+		mock_call_function_settings_button.assert_called_once_with(mock_bot, mock_call.message,
+																   mock_update_settings_message, setting_args,
+																   mock_get_button_settings_keyboard.return_value,
+																   mock_get_button_settings_keyboard.return_value, True)
+		mock_get_button_settings_keyboard.assert_has_calls([call("Settings ⚙️"), call()])
+		mock_start_interval_updating.assert_called_once_with(mock_bot)
+
+
+	@patch("channel_manager.toggle_button")
+	def test_toggle_callbacks(self, mock_toggle_button, mock__set_channel_ticket_settings_state, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
-		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU},"
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.DUE_SELECTED},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
-		setting_args = mock_bot, channel_id, message_id
 
 		channel_manager.handle_callback(mock_bot, mock_call)
-		mock_save_channel_settings.assert_called_once_with(mock_bot, mock_call)
-		mock_call_function_settings_button.assert_called_once_with(mock_bot, mock_call.message,
-																   mock_update_settings_message, setting_args,
-																   mock_get_button_settings_keyboard.return_value, True)
-		mock_get_button_settings_keyboard.assert_called_once_with("Settings ⚙️")
-		mock_start_deferred_interval_check.assert_called_once_with(mock_bot, 0)
-		self.assertEqual(None, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+		mock__set_channel_ticket_settings_state.assert_not_called()
+		mock_toggle_button.assert_called_once_with(mock_bot, mock_call, channel_manager.CB_TYPES.DUE_SELECTED, [''])
+
+	@patch("channel_manager.toggle_button")
+	def test_toggle_callbacks_user(self, mock_toggle_button, mock__set_channel_ticket_settings_state, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.TOGGLE_USER},{channel_manager.SETTING_TYPES.FOLLOWED},NN"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		channel_manager.handle_callback(mock_bot, mock_call)
+		mock__set_channel_ticket_settings_state.assert_not_called()
+		mock_toggle_button.assert_called_once_with(mock_bot, mock_call, channel_manager.CB_TYPES.TOGGLE_USER,
+												   [channel_manager.SETTING_TYPES.FOLLOWED, 'NN'])
+
+	@patch("channel_manager.toggle_button")
+	def test_toggle_callbacks_remind(self, mock_toggle_button, mock__set_channel_ticket_settings_state, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.TOGGLE_REMIND_SETTING},{channel_manager.REMIND_TYPES.ASSIGNED}"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		channel_manager.handle_callback(mock_bot, mock_call)
+		mock__set_channel_ticket_settings_state.assert_not_called()
+		mock_toggle_button.assert_called_once_with(mock_bot, mock_call, channel_manager.CB_TYPES.TOGGLE_REMIND_SETTING,
+											[channel_manager.REMIND_TYPES.ASSIGNED])
 
 	@patch("channel_manager.show_settings_keyboard")
-	def test_open_channel_settings(self, mock_show_settings_keyboard, *args):
+	def test_open_channel_settings(self, mock_show_settings_keyboard, mock__set_channel_ticket_settings_state, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
@@ -883,11 +1208,11 @@ class TestHandleCallback(TestCase):
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 
 		channel_manager.handle_callback(mock_bot, mock_call)
-		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call.message)
-		self.assertEqual(channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+		mock__set_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS)
+		mock_show_settings_keyboard.assert_called_once_with(mock_bot, mock_call)
 
 	@patch("channel_manager.create_settings_message")
-	def test_create_channel_settings(self, mock_create_settings_message, *args):
+	def test_create_channel_settings(self, mock_create_settings_message, mock__set_channel_ticket_settings_state, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
@@ -896,8 +1221,23 @@ class TestHandleCallback(TestCase):
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 
 		channel_manager.handle_callback(mock_bot, mock_call)
+		mock__set_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS)
 		mock_create_settings_message.assert_called_once_with(mock_bot, channel_id)
-		self.assertEqual(channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS, channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id])
+
+
+	def test_set_channel_ticket_settings_state(self, *args):
+		channel_id = -10012345678
+		message_id = 123
+		user_id = 8536472
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.CREATE_CHANNEL_SETTINGS},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
+		state = channel_manager.CB_TYPES.FOLLOWED_SELECTED
+
+		result = channel_manager._set_channel_ticket_settings_state(mock_call, state)
+
 
 
 
