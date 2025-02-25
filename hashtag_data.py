@@ -301,7 +301,7 @@ class HashtagData:
 		if scheduled_tag_index is not None:
 			text, entities = self.replace_old_scheduled_tag(text, entities, scheduled_tag_index)
 			self.update_scheduled_tag_entity_length(text, entities, scheduled_tag_index)
-			scheduled_tag = self.get_tag_from_entity(entities[scheduled_tag_index], text)
+			scheduled_tag = self.update_scheduled_tag_timepart(self.get_tag_from_entity(entities[scheduled_tag_index], text))
 
 		status_tag = None
 		if status_tag_index is not None:
@@ -348,24 +348,29 @@ class HashtagData:
 	def extract_scheduled_tag_from_text(self, text, entity):
 		entity_text = self.get_tag_from_entity(entity, text)
 		tag_parts = entity_text.split(" ")
-		if len(tag_parts) < 2:
-			return entity_text
-		elif len(tag_parts) > 2:
-			time_part = tag_parts[2]
-			time_parts = time_part.split(':')
-			return entity_text.replace(time_part, "{:02d}".format(int(time_parts[0])) + ":" + "{:02d}".format(int(time_parts[1])))
+		if len(tag_parts) != 2:
+			return self.update_scheduled_tag_timepart(entity_text)
 
 		text_after_tag = text[entity.offset + entity.length + 1:]
 		colon_index = text_after_tag.find(":")
 		if colon_index < 0:
-			return f"{entity_text} 00:00"
+			return self.update_scheduled_tag_timepart(f"{entity_text} 0:0")
 
 		hours = text_after_tag[:colon_index]
 		if not utils.parse_datetime(hours, "%H"):
-			hours = "00"
+			hours = "0"
 
-		return entity_text + " " + "{:02d}".format(int(hours)) + ":00"
+		return self.update_scheduled_tag_timepart(entity_text + " " + "{:02d}".format(int(hours)) + ":0")
 
+	def update_scheduled_tag_timepart(self, entity_text):
+		tag_parts = entity_text.split(" ")
+		if len(tag_parts) > 2:
+			time_part = tag_parts[2]
+			time_parts = time_part.split(':')
+			return entity_text.replace(time_part,
+									   "{:02d}".format(int(time_parts[0])) + ":" + "{:02d}".format(int(time_parts[1])))
+
+		return entity_text
 
 	def get_present_hashtag_indices(self):
 		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
