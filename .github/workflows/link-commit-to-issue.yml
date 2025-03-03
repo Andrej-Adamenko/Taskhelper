@@ -1,0 +1,51 @@
+name: Link commit to issue
+
+on:
+  push:
+    branches:
+      - 'feature/*'  # Trigger on any branch with the pattern 'feature/{issue_number}'
+
+jobs:
+  link-commit-to-issue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Extract issue number from branch name
+        id: extract_issue_number
+        run: |
+          echo "Branch name is $GITHUB_REF"
+          branch_name=${GITHUB_REF##*/}
+          issue_number=$(echo $branch_name | sed -n 's/.*feature\/\([0-9]\+\)$/\1/p')
+          echo "Extracted issue number: $issue_number"
+          echo "ISSUE_NUMBER=$issue_number" >> $GITHUB_ENV
+
+      - name: Get latest commit details
+        id: commit_details
+        run: |
+          # Get the latest commit hash and commit message
+          commit_hash=$(git log -1 --pretty=format:'%H')
+          commit_message=$(git log -1 --pretty=format:'%s')
+          echo "Latest commit hash: $commit_hash"
+          echo "Latest commit message: $commit_message"
+          echo "COMMIT_HASH=$commit_hash" >> $GITHUB_ENV
+          echo "COMMIT_MESSAGE=$commit_message" >> $GITHUB_ENV
+
+      - name: Link commit to issue with commit details
+        if: env.ISSUE_NUMBER  # Ensure the issue number is found
+        run: |
+          # Get issue and commit urls 
+          issue_url="https://github.com/${{ github.repository }}/issues/${{ env.ISSUE_NUMBER }}"
+          commit_url="https://github.com/${{ github.repository }}/commit/${{ env.COMMIT_HASH }}"
+          
+          # Create the comment body with the commit link and message
+          comment_body="Commit linked to Issue #${{ env.ISSUE_NUMBER }}. Commit message: **${{ env.COMMIT_MESSAGE }}**. [View commit](${commit_url})."
+          
+          # Use GitHub API to add the comment to the issue
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{\"body\": \"$comment_body\"}" \
+            https://api.github.com/repos/${{ github.repository }}/issues/${{ env.ISSUE_NUMBER }}/comments
