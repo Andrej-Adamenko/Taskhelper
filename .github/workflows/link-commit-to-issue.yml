@@ -42,7 +42,7 @@ jobs:
           commit_url="https://github.com/${{ github.repository }}/commit/${{ env.COMMIT_HASH }}"
           
           # Create the comment body with the commit link and message
-          comment_body="Commit linked to Issue #${{ env.ISSUE_NUMBER }}. Commit message: **${{ env.COMMIT_MESSAGE }}**. [View commit](${commit_url})."
+          comment_body="Commit **${{ env.COMMIT_MESSAGE }}**. [View](${commit_url})."
           
           # Use GitHub API to add the comment to the issue
           curl -X POST \
