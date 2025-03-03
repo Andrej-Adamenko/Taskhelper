@@ -36,6 +36,7 @@ jobs:
       - name: Link commit to issue with commit details
         if: env.ISSUE_NUMBER  # Ensure the issue number is found
         run: |
+          # Get issue and commit urls 
           issue_url="https://github.com/${{ github.repository }}/issues/${{ env.ISSUE_NUMBER }}"
           commit_url="https://github.com/${{ github.repository }}/commit/${{ env.COMMIT_HASH }}"
           
