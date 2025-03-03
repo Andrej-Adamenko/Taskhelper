@@ -33,6 +33,8 @@ jobs:
           echo "COMMIT_MESSAGE=$commit_message" >> $GITHUB_ENV
 
       - name: Link commit to issue with commit details
+        permissions:
+          issues: write
         if: env.ISSUE_NUMBER  # Ensure the issue number is found
         run: |
           # Get issue and commit urls 
