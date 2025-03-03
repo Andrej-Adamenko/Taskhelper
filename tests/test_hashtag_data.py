@@ -831,6 +831,21 @@ class ExtractScheduledTagFromTextTest(TestCase):
 		result = hashtag_data.extract_scheduled_tag_from_text(text, entity)
 		self.assertEqual(result, "s 2024-05-16 02:05")
 
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("db_utils.is_user_tag_exists", return_value=None)
+@patch("hashtag_data.SCHEDULED_TAG", "s")
+class ExtractHashtagsScheduledTest(TestCase):
+	def test_time_without_zeros(self, *args):
+		hashtag_data = HashtagData()
+		main_channel_id = 123
+		hashtag_data.main_channel_id = main_channel_id
+		hashtag_data.is_hashtag_line_present = False
+		text = "#s 2024-05-16 2:5"
+		entity = telebot.types.MessageEntity(type="hashtag", offset=0, length=len("#s 2024-05-16 2:2"))
+		post_data = test_helper.create_mock_message(text, [entity])
+		result = hashtag_data.extract_hashtags(post_data, main_channel_id)
+		self.assertEqual(result, ("s 2024-05-16 02:05", None, [], None))
+
 
 if __name__ == "__main__":
 	main()

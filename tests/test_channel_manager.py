@@ -84,14 +84,15 @@ class TestChannelSettingsMessage(TestCase):
 
 		text = channel_manager.generate_current_settings_text(channel_id)
 		self.assertIn("\"/settings\"", text)
+		self.assertIn("If this message with settings was deleted you can call \"/settings\" command to create it", text)
 
-		self.assertIn("Assigned to -", text)
-		self.assertIn("Reported by -", text)
-		self.assertIn("CCed to -", text)
-		self.assertIn("Remind me when -", text)
-		self.assertIn("Due -", text)
-		self.assertIn("Deferred -", text)
-		self.assertIn("Priority 1/2/3 -", text)
+		self.assertIn("Assigned to - include tickets that is assigned to the selected users", text)
+		self.assertIn("Reported by - include tickets that is created by the selected users", text)
+		self.assertIn("CCed to - include tickets where the selected users in CC", text)
+		self.assertIn("Remind me when - regulates what tickets can be reminded in this channel", text)
+		self.assertIn("Due - if this option is enabled, regular (NOT deferred) tickets and also tickets deferred until a date, but that date is in the past now, will all be included in this channel", text)
+		self.assertIn("Deferred - if this option is enabled, tickets, deferred until now will be included in this channel", text)
+		self.assertIn("Priority 1/2/3 - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel", text)
 
 		self.assertIn("CURRENT SETTINGS", text)
 		self.assertIn("Assigned to: #FF, #NN", text)

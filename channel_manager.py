@@ -302,13 +302,13 @@ def create_settings_message(bot: telebot.TeleBot, channel_id: int):
 
 def get_text_information_text():
 	return '''
-Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. If the message with settings was deleted you can call "/settings" command to create it. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
+Please select this channel's settings, click on buttons to select/deselect filtering parameters. When all needed parameters are selected press "Save" button. If this message with settings was deleted you can call "/settings" command to create it. If "New users" parameter is selected than new users will be automatically added to the list. Descriptions of each parameter:
    1) Assigned to - include tickets that is assigned to the selected users
    2) Reported by - include tickets that is created by the selected users
    3) CCed to - include tickets where the selected users in CC
    4) Remind me when - regulates what tickets can be reminded in this channel
-   5) Due - if this option is enabled, regular(NOT scheduled) tickets will be included in this channel
-   6) Deferred - if this option is enabled, scheduled tickets will be included in this channel
+   5) Due - if this option is enabled, regular (NOT deferred) tickets and also tickets deferred until a date, but that date is in the past now, will all be included in this channel
+   6) Deferred - if this option is enabled, tickets, deferred until now will be included in this channel
    7) Priority 1/2/3 - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel
 '''
 

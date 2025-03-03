@@ -66,7 +66,7 @@ class ScheduledMessageDispatcher:
 
 		hashtag_data.set_scheduled_tag(date_str)
 
-		comment_text = f"{call.from_user.first_name} scheduled the ticket to be sent on {date_str}."
+		comment_text = f"{call.from_user.first_name} deferred the ticket to be sent on {date_str}."
 		utils.add_comment_to_ticket(bot, message, comment_text)
 
 		db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
@@ -259,7 +259,7 @@ class ScheduledMessageDispatcher:
 	def send_scheduled_message(self, bot: telebot.TeleBot, scheduled_message: ScheduledMessage):
 		main_message_id = scheduled_message.main_message_id
 		main_channel_id = scheduled_message.main_channel_id
-		logging.info(f"Sending scheduled message {main_message_id, main_channel_id, scheduled_message.send_time}")
+		logging.info(f"Sending deferred message {main_message_id, main_channel_id, scheduled_message.send_time}")
 		try:
 			message = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
 		except ApiTelegramException:
@@ -286,7 +286,7 @@ class ScheduledMessageDispatcher:
 				try:
 					self.send_scheduled_message(bot, msg_info)
 				except Exception as E:
-					logging.error(f"Exception during sending scheduled message: {E}")
+					logging.error(f"Exception during sending deferred message: {E}")
 			time.sleep(1)
 
 	def update_status_from_tags(self, bot: telebot.TeleBot, msg_data: telebot.types.Message, hashtag_data: HashtagData):
@@ -311,7 +311,7 @@ class ScheduledMessageDispatcher:
 			self.insert_scheduled_message_info(main_message_id, main_channel_id, tag_send_time)
 
 			if not hashtag_data.ignore_comments:
-				comment_text = f"Ticket was scheduled to be sent on {datetime_str}."
+				comment_text = f"Ticket was deferred to be sent on {datetime_str}."
 				utils.add_comment_to_ticket(bot, msg_data, comment_text)
 			return
 

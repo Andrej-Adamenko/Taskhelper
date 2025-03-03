@@ -73,10 +73,10 @@ def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, a
 	help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — changes default subchannel\n"
 	help_text += "Example: /set_default_subchannel -100987987987 aa 1\n\n"
 	help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — changes text on one of the buttons\n"
-	help_text += "Available buttons: opened, closed, assigned, cc, schedule, check, priority\n"
+	help_text += "Available buttons: opened, closed, assigned, cc, defer, check, priority\n"
 	help_text += "Example: /set_button_text opened Op\n\n"
 	help_text += "/set_hashtag_text <HASHTAG_NAME> <NEW_VALUE> — changes hashtag text of one of the service hashtags\n"
-	help_text += "Available hashtags: opened, closed, scheduled, priority\n"
+	help_text += "Available hashtags: opened, closed, deferred, priority\n"
 	help_text += "Example: /set_hashtag_text opened Op\n\n"
 	help_text += "/set_remind_without_interaction <MINUTES> — changes timeout for skipping daily reminder if user is interacted with tickets within this time\n"
 	help_text += "Example: /set_remind_without_interaction 1440\n\n"
@@ -252,7 +252,7 @@ def handle_change_button_text(bot: telebot.TeleBot, msg_data: telebot.types.Mess
 		config_utils.BUTTON_TEXTS["ASSIGNED_USER_PREFIX"] = arguments
 	elif button_name == "cc":
 		config_utils.BUTTON_TEXTS["CC"] = arguments
-	elif button_name == "schedule":
+	elif button_name == "schedule" or button_name == "defer":
 		config_utils.BUTTON_TEXTS["SCHEDULE_MESSAGE"] = arguments
 	elif button_name == "check":
 		config_utils.BUTTON_TEXTS["CHECK"] = arguments
@@ -294,7 +294,7 @@ def handle_change_hashtag_text(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 			return
 		config_utils.HASHTAGS["CLOSED"] = new_value
 		hashtag_data.CLOSED_TAG = new_value
-	elif tag_name == "scheduled":
+	elif tag_name == "scheduled" or tag_name == "deferred":
 		if hashtag_data.SCHEDULED_TAG != config_utils.HASHTAGS_BEFORE_UPDATE["SCHEDULED"]:
 			bot.send_message(chat_id=msg_data.chat.id, text=f"Wait until previous update is finished.")
 			return
