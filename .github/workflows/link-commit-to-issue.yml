@@ -18,7 +18,7 @@ jobs:
         run: |
           echo "Branch name is $GITHUB_REF"
           branch_name=${GITHUB_REF##*/}
-          issue_number=$(echo $branch_name | sed -n 's/^feature\/\([0-9]\+\)$/\1/p')
+          issue_number=$(echo $branch_name | sed -n 's/.*feature\/\([0-9]\+\)$/\1/p')
           echo "Extracted issue number: $issue_number"
           echo "ISSUE_NUMBER=$issue_number" >> $GITHUB_ENV
 
