@@ -15,7 +15,7 @@ cd Taskhelper
 $ pip install -r requirements.txt
 ```
 
-If the command returns the error: ***externally-managed-enviroment***, use the command instead:
+If the command returns the error: ***externally-managed-environment***, use the command instead:
 ```
 $ pip install -r requirements.txt --break-system-packages
 ```
@@ -240,16 +240,18 @@ The settings menu gives you the option to select or deselect certain settings fr
 * "Priority 1/2/3" - here you should specify which tickets with priority 1, 2 and 3 will be forwarded to this channel.
 
 The "Assigned to", "Reported by", and "CCed to" buttons open a menu of user tags where multiple user tags can be selected at once.
-
 Selected users are displayed in the button text as "Assigned to: aa, bb, cc".
 
 In addition to user tags, there is also a "New User" option that will automatically add new users to the current category after they have been added using the bot command.
 
 "Due" and "Deferred" by default, both parameters are ON when a new channel is created.
 
-After selecting the desired settings, you should press the "Save" button to save and apply the settings.
+After select or deselect the desired setting option, it is saving to channel settings.
+If you want to close the setting menu or start the interval check immediately, you should click the "Close & Update" button.
 
-You can open this menu by pressing "Settings ⚙️" button on the last ticket in channel, it will redirect you to the message with current channel settings which will have "Edit channel settings ⚙️" button that you can use to open the menu for changing channel settings.
+You can open this menu by pressing "Settings ⚙️" button on the last ticket in channel or by pressing "Edit channel settings ⚙️" button on the message with current channel settings.
+
+If you want redirect to the message with current channel settings, you can press the "Help" button in the settings menu on the last ticket.
 
 If message with "Edit channel settings ⚙️" was deleted you can use "/settings" command to create it again.
 

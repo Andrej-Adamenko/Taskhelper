@@ -557,6 +557,18 @@ def get_main_channel_user_tags(main_channel_id):
 
 
 @db_thread_lock
+def get_main_channel_user_tags_by_user(user_id):
+	sql = ("SELECT DISTINCT u.user_tag FROM users u "
+		   "LEFT JOIN users u1 ON u1.main_channel_id = u.main_channel_id "
+		   "WHERE u1.user_id=(?)"
+		   "ORDER BY u.id")
+	CURSOR.execute(sql, (user_id,))
+	result = CURSOR.fetchall()
+	if result:
+		return [row[0] for row in result]
+
+
+@db_thread_lock
 def insert_or_update_user(main_channel_id, user_tag, user_id):
 	if is_user_tag_exists(main_channel_id, user_tag):
 		sql = "UPDATE users SET user_id=(?) WHERE main_channel_id=(?) AND user_tag=(?)"

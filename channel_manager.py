@@ -1,8 +1,6 @@
 import copy
 import json
 import logging
-import threading
-from symtable import Function
 from typing import List, Dict
 
 import telebot
@@ -72,6 +70,13 @@ class REMIND_TYPES:
 	REPORTED = "reported"
 	FOLLOWED = "cced"
 
+	TYPES_ORDER = [ASSIGNED, REPORTED, FOLLOWED]
+	TYPES_TITLE = {
+		ASSIGNED: "Assigned to me",
+		REPORTED: "Reported by me",
+		FOLLOWED: "CCed to me"
+	}
+
 
 _TOGGLE_CALLBACKS = [
 	CB_TYPES.DUE_SELECTED,
@@ -124,19 +129,19 @@ def add_user_tags_to_button_text(button: InlineKeyboardButton, channel_type: str
 def generate_settings_keyboard(channel_id: int, add_help=False):
 	settings, priorities = get_individual_channel_settings(channel_id)
 
-	assigned_to_btn = InlineKeyboardButton("Assigned to:")
+	assigned_to_btn = InlineKeyboardButton(MENU_TITLES[SETTING_TYPES.ASSIGNED])
 	assigned_to_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.ASSIGNED_SELECTED)
 	add_user_tags_to_button_text(assigned_to_btn, SETTING_TYPES.ASSIGNED, settings)
 
-	reported_by_btn = InlineKeyboardButton("Reported by:")
+	reported_by_btn = InlineKeyboardButton(MENU_TITLES[SETTING_TYPES.REPORTED])
 	reported_by_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.REPORTED_SELECTED)
 	add_user_tags_to_button_text(reported_by_btn, SETTING_TYPES.REPORTED, settings)
 
-	followed_by_btn = InlineKeyboardButton("CCed to:")
+	followed_by_btn = InlineKeyboardButton(MENU_TITLES[SETTING_TYPES.FOLLOWED])
 	followed_by_btn.callback_data = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.FOLLOWED_SELECTED)
 	add_user_tags_to_button_text(followed_by_btn, SETTING_TYPES.FOLLOWED, settings)
 
-	remind_btn = InlineKeyboardButton("Remind me when:")
+	remind_btn = InlineKeyboardButton(MENU_TITLES[SETTING_TYPES.REMIND])
 	remind_settings = settings.get(SETTING_TYPES.REMIND)
 	if remind_settings:
 		settings_str = ",".join([f" {s}" for s in remind_settings])
@@ -195,15 +200,14 @@ def add_help_button(channel_id):
 
 	return settings_button
 
-def show_settings_keyboard(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, force_update: bool = False):
+def show_settings_keyboard(bot: telebot.TeleBot, call: telebot.types.CallbackQuery,
+						   force_update_info: bool = False, force_update_ticket: bool = False):
 	message = call.message
 	channel_id = message.chat.id
 	ticket_keyboard = get_settings_menu(channel_id, user_id=call.from_user.id, menu_type=TICKET_MENU_TYPE)
 	keyboard = get_settings_menu(channel_id, user_id=call.from_user.id, menu_type=INFO_MENU_TYPE)
-	setting_args = bot, message.chat.id, message.id, keyboard
 	try:
-		call_function_settings_button(bot, message, update_settings_message, setting_args,
-									  keyboard, ticket_keyboard, force_update)
+		_call_settings_button(bot, message, keyboard, ticket_keyboard, force_update_info, force_update_ticket)
 	except ApiTelegramException as E:
 		if "message is not modified:" in E.description:
 			logging.error(f"Error during channel settings message update - {E}")
@@ -381,13 +385,36 @@ def generate_user_keyboard(main_channel_id: int, channel_id: int, setting_type: 
 	return InlineKeyboardMarkup(rows)
 
 
-def call_function_settings_button(bot: telebot.TeleBot, post_data: Message,
-								  settings_func, settings_args, keyboard: InlineKeyboardMarkup,
-								  ticket_keyboard: InlineKeyboardMarkup, force_update_ticket_keyboard:bool = False):
+def generate_remind_keyboard(channel_id):
+	settings, priorities = get_individual_channel_settings(channel_id)
+	active_settings = []
+	buttons = []
+	if SETTING_TYPES.REMIND in settings:
+		active_settings = settings[SETTING_TYPES.REMIND]
+	for item in REMIND_TYPES.TYPES_ORDER:
+		callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_REMIND_SETTING, item)
+		button = InlineKeyboardButton(REMIND_TYPES.TYPES_TITLE[item], callback_data=callback)
+		if item in active_settings:
+			button.text += config_utils.BUTTON_TEXTS["CHECK"]
+		buttons.append(button)
+
+	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.BACK_TO_MAIN_MENU)
+	buttons.append(InlineKeyboardButton(f"← Back", callback_data=callback))
+
+	nop_callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.NOP)
+	buttons.insert(0, InlineKeyboardButton(MENU_TITLES[SETTING_TYPES.REMIND], callback_data=nop_callback))
+
+	rows = [[btn] for btn in buttons]
+	return InlineKeyboardMarkup(rows)
+
+
+def _call_settings_button(bot: telebot.TeleBot, post_data: Message,
+								  keyboard: InlineKeyboardMarkup, ticket_keyboard: InlineKeyboardMarkup,
+								  force_update_info_keyboard:bool = False, force_update_ticket_keyboard:bool = False):
 	if is_settings_message(post_data):
-		settings_func(*settings_args)
+		update_settings_message(bot, post_data.chat.id, post_data.id, keyboard)
 	message_id = get_settings_message_id(post_data.chat.id)
-	if message_id != post_data.id:
+	if message_id != post_data.id and force_update_info_keyboard:
 		update_settings_message(bot, post_data.chat.id, message_id, keyboard)
 	newest_message_id = db_utils.get_newest_copied_message(post_data.chat.id)
 	if newest_message_id == post_data.id or force_update_ticket_keyboard:
@@ -397,82 +424,6 @@ def call_function_settings_button(bot: telebot.TeleBot, post_data: Message,
 		)
 		bot.edit_message_reply_markup(chat_id=post_data.chat.id, message_id=newest_message_id,
 									  reply_markup=ticket_keyboard)
-
-
-def generate_remind_keyboard(channel_id):
-	settings, priorities = get_individual_channel_settings(channel_id)
-	active_settings = []
-	if SETTING_TYPES.REMIND in settings:
-		active_settings = settings[SETTING_TYPES.REMIND]
-
-	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_REMIND_SETTING, REMIND_TYPES.ASSIGNED)
-	assigned_btn = InlineKeyboardButton(f"Assigned to me", callback_data=callback)
-	if REMIND_TYPES.ASSIGNED in active_settings:
-		assigned_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-
-	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_REMIND_SETTING, REMIND_TYPES.REPORTED)
-	reported_btn = InlineKeyboardButton(f"Reported by me", callback_data=callback)
-	if REMIND_TYPES.REPORTED in active_settings:
-		reported_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-
-	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_REMIND_SETTING, REMIND_TYPES.FOLLOWED)
-	followed_btn = InlineKeyboardButton(f"CCed to me", callback_data=callback)
-	if REMIND_TYPES.FOLLOWED in active_settings:
-		followed_btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-
-	callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.BACK_TO_MAIN_MENU)
-	save_button = InlineKeyboardButton(f"← Back", callback_data=callback)
-
-	nop_callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.NOP)
-	text_button = InlineKeyboardButton(MENU_TITLES[SETTING_TYPES.REMIND], callback_data=nop_callback)
-
-	buttons = [
-		text_button,
-		assigned_btn,
-		reported_btn,
-		followed_btn,
-		save_button,
-	]
-
-	rows = [[btn] for btn in buttons]
-	return InlineKeyboardMarkup(rows)
-
-
-def toggle_user_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, cb_data: str):
-	reply_markup = call.message.reply_markup
-	buttons = [btn for row in reply_markup.keyboard for btn in row]
-	for btn in buttons:
-		callback_str = btn.callback_data
-		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
-		if btn_cb_type == cb_type and btn_cb_data == cb_data:
-			if btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
-				btn.text = btn.text[:-len(config_utils.BUTTON_TEXTS["CHECK"])]
-			else:
-				btn.text += config_utils.BUTTON_TEXTS["CHECK"]
-
-	bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.id, reply_markup=reply_markup)
-
-
-def save_user_settings(call: CallbackQuery, setting_type: str):
-	channel_id = call.message.chat.id
-	settings, priorities = get_individual_channel_settings(channel_id)
-
-	reply_markup = call.message.reply_markup
-	buttons = [btn for row in reply_markup.keyboard for btn in row]
-	selected_user_tags = []
-	for btn in buttons:
-		callback_str = btn.callback_data
-		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
-
-		if btn_cb_type != CB_TYPES.TOGGLE_USER or not btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
-			continue
-
-		setting_type, user_tag, = btn_cb_data
-		selected_user_tags.append(user_tag)
-
-	settings[setting_type] = selected_user_tags
-	settings_str = json.dumps(settings)
-	db_utils.update_individual_channel_settings(channel_id, settings_str)
 
 
 def update_settings_keyboard(bot: telebot.TeleBot, message: Message, keyboard: InlineKeyboardMarkup = None):
@@ -545,27 +496,6 @@ def _get_settings_menu_by_type(channel_id: int, main_channel_id: int = None, use
 
 	return keyboard
 
-def save_remind_settings(call: CallbackQuery):
-	channel_id = call.message.chat.id
-	settings, priorities = get_individual_channel_settings(channel_id)
-
-	reply_markup = call.message.reply_markup
-	buttons = [btn for row in reply_markup.keyboard for btn in row]
-	selected_remind_settings = []
-	for btn in buttons:
-		callback_str = btn.callback_data
-		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
-
-		if btn_cb_type != CB_TYPES.TOGGLE_REMIND_SETTING or not btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]):
-			continue
-
-		setting_type, = btn_cb_data
-		selected_remind_settings.append(setting_type)
-
-	settings[SETTING_TYPES.REMIND] = selected_remind_settings
-	settings_str = json.dumps(settings)
-	db_utils.update_individual_channel_settings(channel_id, settings_str)
-
 
 def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 	callback_type, other_data = utils.parse_callback_str(call.data)
@@ -586,7 +516,9 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		show_settings_keyboard(bot, call)
 	elif callback_type == CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU:
 		_clear_channel_ticket_settings_state(call)
-		show_settings_keyboard(bot, call, True)
+		show_settings_keyboard(bot, call,
+							   _get_channel_ticket_settings_state(message.chat.id, INFO_MENU_TYPE) is None,
+							   _get_channel_ticket_settings_state(message.chat.id, TICKET_MENU_TYPE) is None)
 		interval_updating_utils.start_interval_updating(bot)
 	elif callback_type == CB_TYPES.NOP:
 		bot.answer_callback_query(call.id)
@@ -611,6 +543,21 @@ def _set_channel_ticket_settings_state(call: CallbackQuery, state: str):
 	}
 
 
+def _get_channel_ticket_settings(channel_id: int, menu_type: str) -> dict|None:
+	if channel_id in CHANNEL_TICKET_SETTINGS_BUTTONS:
+		if menu_type in CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id]:
+			return CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id][menu_type]
+
+	return None
+
+def _get_channel_ticket_settings_state(channel_id: int, menu_type: str) -> str|None:
+	settings = _get_channel_ticket_settings(channel_id, menu_type)
+	if settings is not None:
+		settings = settings["state"]
+
+	return settings
+
+
 def _clear_channel_ticket_settings_state(call: CallbackQuery):
 	menu_type = TICKET_MENU_TYPE
 	if is_settings_message(call.message):
@@ -621,6 +568,7 @@ def _clear_channel_ticket_settings_state(call: CallbackQuery):
 		for key, value in items:
 			if key == menu_type or value["user"] == call.from_user.id:
 				del CHANNEL_TICKET_SETTINGS_BUTTONS[call.message.chat.id][key]
+
 
 def is_button_checked(buttons: List[InlineKeyboardButton], target_cb_type: str):
 	for btn in buttons:
@@ -671,10 +619,13 @@ def toggle_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, cb_da
 	if save_changes:
 		save_toggle_button(bot, call, setting_type, other_data, is_enabled)
 
+
 def save_toggle_button(bot: telebot.TeleBot, call:CallbackQuery, setting_type:str,
 					   cb_data:str, is_enable:bool):
-	settings, priorities = get_individual_channel_settings(call.message.chat.id)
+	channel_id = call.message.chat.id
+	settings, priorities = get_individual_channel_settings(channel_id)
 	settings[CB_TYPES.PRIORITY_SELECTED] = priorities
+	update_settings = True
 	array_settings = [SETTING_TYPES.ASSIGNED, SETTING_TYPES.REPORTED, SETTING_TYPES.FOLLOWED,
 					  SETTING_TYPES.REMIND, CB_TYPES.PRIORITY_SELECTED]
 	default_settings = {
@@ -688,58 +639,51 @@ def save_toggle_button(bot: telebot.TeleBot, call:CallbackQuery, setting_type:st
 			settings[setting_type] = settings[setting_type] if setting_type in settings else []
 			if cb_data not in settings[setting_type]:
 				settings[setting_type].append(cb_data)
+				settings[setting_type] = _sort_array_settings(settings[setting_type], setting_type, call)
 		elif cb_data in settings[setting_type]:
 			settings[setting_type].remove(cb_data)
+	elif not is_enable and (setting_type == SETTING_TYPES.DUE and not settings[SETTING_TYPES.DEFERRED] or
+							setting_type == SETTING_TYPES.DEFERRED and not settings[SETTING_TYPES.DUE]):
+		update_settings = False
 	else:
 		settings[setting_type] = is_enable
 
 	priorities = settings[CB_TYPES.PRIORITY_SELECTED]
 	del settings[CB_TYPES.PRIORITY_SELECTED]
 
-	update_individual_channel(call.message.chat.id, settings, priorities)
-	show_settings_keyboard(bot, call)
+	if update_settings:
+		update_individual_channel(channel_id, settings, priorities)
 
-def save_channel_settings(bot: telebot.TeleBot, call: CallbackQuery):
-	main_channel_id = db_utils.get_main_channel_from_user(call.from_user.id)
-	if not main_channel_id and call.from_user.username:
-		main_channel_id = db_utils.get_main_channel_from_user("@" + call.from_user.username)
+	ticket_keyboard_state = _get_channel_ticket_settings_state(channel_id, TICKET_MENU_TYPE)
+	info_keyboard_state = _get_channel_ticket_settings_state(channel_id, INFO_MENU_TYPE)
+	force_update_ticket = (ticket_keyboard_state is not None and
+			(ticket_keyboard_state == CB_TYPES.OPEN_CHANNEL_SETTINGS or ticket_keyboard_state == info_keyboard_state))
+	show_settings_keyboard(bot, call, True, force_update_ticket)
 
-	if not main_channel_id:
-		bot.answer_callback_query(callback_query_id=call.id, text="User not found.")
-		return
 
-	reply_markup = call.message.reply_markup
-	buttons = [btn for row in reply_markup.keyboard for btn in row]
+def _sort_array_settings(array: list, setting_type: str, call: CallbackQuery):
+	array.sort()
+	update_sort_array = False
+	sorted_array = []
 
-	priorities = []
-	new_settings = {
-		SETTING_TYPES.DEFERRED: False,
-		SETTING_TYPES.DUE: False,
-	}
+	if setting_type in [SETTING_TYPES.ASSIGNED, SETTING_TYPES.REPORTED, SETTING_TYPES.FOLLOWED]:
+		user_tags = db_utils.get_main_channel_user_tags_by_user(call.from_user.id)
+		update_sort_array = True
+		for user_tag in user_tags:
+			if user_tag in array:
+				sorted_array.append(user_tag)
+		if NEW_USER_TYPE in array:
+			sorted_array.append(NEW_USER_TYPE)
+	elif setting_type == SETTING_TYPES.REMIND:
+		update_sort_array = True
+		for item in REMIND_TYPES.TYPES_ORDER:
+			if item in array:
+				sorted_array.append(item)
 
-	for btn in buttons:
-		callback_str = btn.callback_data
-		btn_cb_type, btn_cb_data = utils.parse_callback_str(callback_str)
-		if not btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"]) or btn_cb_type not in _TOGGLE_CALLBACKS:
-			continue
+	if update_sort_array:
+		array = sorted_array
 
-		if btn_cb_type == CB_TYPES.PRIORITY_SELECTED:
-			priority = btn_cb_data[0]
-			priorities.append(priority)
-		elif btn_cb_type == CB_TYPES.DEFERRED_SELECTED:
-			new_settings[SETTING_TYPES.DEFERRED] = True
-		elif btn_cb_type == CB_TYPES.DUE_SELECTED:
-			new_settings[SETTING_TYPES.DUE] = True
-
-	channel_id = call.message.chat.id
-	settings, _ = get_individual_channel_settings(channel_id)
-	for setting_name in new_settings:
-		settings[setting_name] = new_settings[setting_name]
-
-	priorities_str = _TYPE_SEPARATOR.join(priorities)
-	settings_str = json.dumps(settings)
-
-	db_utils.update_individual_channel(channel_id, settings_str, priorities_str)
+	return array
 
 
 def add_new_user_tag_to_channels(bot: telebot.TeleBot, main_channel_id: int, user_tag: str):
