@@ -15,7 +15,7 @@ cd Taskhelper
 $ pip install -r requirements.txt
 ```
 
-If the command returns the error: ***externally-managed-enviroment***, use the command instead:
+If the command returns the error: ***externally-managed-environment***, use the command instead:
 ```
 $ pip install -r requirements.txt --break-system-packages
 ```
