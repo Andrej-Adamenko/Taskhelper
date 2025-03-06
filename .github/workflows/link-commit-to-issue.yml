@@ -6,22 +6,54 @@ on:
       - 'feature/*'  # Trigger on any branch with the pattern 'feature/{issue_number}'
 
 jobs:
-  link-commit-to-issue:
-    permissions:
-      issues: write
+  check-branch-commit:
     runs-on: ubuntu-latest
+    outputs:
+      EQUALS: ${{ steps.check.outputs.EQUALS }}
+      ISSUE_NUMBER: ${{ env.BRANCH_ISSUE_NUMBER }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Extract issue number from branch name
-        id: extract_issue_number
+      - name: Get branch number
+        id: branch
         run: |
-          echo "Branch name is $GITHUB_REF"
-          issue_number=${GITHUB_REF##*/}
-          echo "Extracted issue number: $issue_number"
-          echo "ISSUE_NUMBER=$issue_number" >> $GITHUB_ENV
+          branch_name=$(echo $GITHUB_REF | sed 's/refs\/heads\///')
+          echo "BRANCH_ISSUE_NUMBER=$(echo $branch_name | sed -n 's/^feature\/\([0-9]\+\)$/\1/p')" >> $GITHUB_ENV
+
+      - name: Get commit issue
+        id: commit
+        run: |
+          commit_message=$(git log -1 --pretty=%B)
+          echo "COMMIT_ISSUE_NUMBER=$(echo "$commit_message" | sed -n 's/^\s*feature\/\([0-9]\+\).*/\1/p')" >> $GITHUB_ENV
+
+      - name: Check if branch and commit contain the same issue_number
+        id: check
+        if: env.BRANCH_ISSUE_NUMBER && env.COMMIT_ISSUE_NUMBER   # Ensure the issue number is found
+        run: |
+          branch_feature="${{ env.BRANCH_ISSUE_NUMBER }}"
+          commit_feature="${{ env.COMMIT_ISSUE_NUMBER }}"
+
+          if [[ "$branch_feature" == "$commit_feature" ]]; then
+            echo "Branch and commit match: $branch_feature"
+            echo "EQUALS=true" >> $GITHUB_OUTPUT
+          else
+            echo "Branch and commit don't match"
+            echo "EQUALS=" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+  link-commit-to-issue:
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    needs: check-branch-commit
+    if: needs.check-branch-commit.outputs.EQUALS == 'true'  # Only run if branch and commit is equals
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
       - name: Get latest commit details
         id: commit_details
@@ -35,10 +67,10 @@ jobs:
           echo "COMMIT_MESSAGE=$commit_message" >> $GITHUB_ENV
 
       - name: Link commit to issue with commit details
-        if: env.ISSUE_NUMBER  # Ensure the issue number is found
         run: |
           # Get issue and commit urls 
-          issue_url="https://github.com/${{ github.repository }}/issues/${{ env.ISSUE_NUMBER }}"
+          issue_number="${{ needs.check-branch-commit.outputs.ISSUE_NUMBER }}"
+          issue_url="https://github.com/${{ github.repository }}/issues/$issue_number"
           commit_url="https://github.com/${{ github.repository }}/commit/${{ env.COMMIT_HASH }}"
           
           # Create the comment body with the commit link and message
@@ -49,4 +81,4 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d "{\"body\": \"$comment_body\"}" \
-            https://api.github.com/repos/${{ github.repository }}/issues/${{ env.ISSUE_NUMBER }}/comments
+            https://api.github.com/repos/${{ github.repository }}/issues/$issue_number/comments
