@@ -41,7 +41,6 @@ jobs:
           else
             echo "Branch and commit don't match"
             echo "EQUALS=" >> $GITHUB_OUTPUT
-            exit 1
           fi
 
   link-commit-to-issue:
