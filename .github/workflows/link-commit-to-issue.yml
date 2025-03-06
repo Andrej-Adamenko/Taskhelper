@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       EQUALS: ${{ steps.check.outputs.EQUALS }}
+      ISSUE_NUMBER: ${{ env.BRANCH_ISSUE_NUMBER }}
+      ISSUE_NUMBER2: ${{ steps.branch.BRANCH_ISSUE_NUMBER }}
 
     steps:
       - name: Checkout code
@@ -43,12 +45,22 @@ jobs:
             exit 1
           fi
 
+  test-job:
+    runs-on: ubuntu-latest
+    needs: check-branch-commit
+    steps:
+      - name: Test output
+        run: |
+          echo "issue_number_env: ${{ env.BRANCH_ISSUE_NUMBER }}"
+          echo "issue_number_output_env: ${{ needs.check-branch-commit.outputs.ISSUE_NUMBER }}"
+          echo "issue_number_output: ${{ needs.check-branch-commit.outputs.ISSUE_NUMBER2 }}"
+
   link-commit-to-issue:
     permissions:
       issues: write
     runs-on: ubuntu-latest
     needs: check-branch-commit
-    if: needs.check-branch-commit.outputs.EQUALS == 'true'  # Only run if branch and commit is equals
+    if: needs.check-branch-commit.outputs.EQUALS == 'no'  # Only run if branch and commit is equals
 
     steps:
       - name: Checkout code
