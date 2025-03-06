@@ -34,9 +34,10 @@ jobs:
 
           if [[ "$branch_feature" == "$commit_feature" ]]; then
             echo "Branch and commit match: $branch_feature"
-            echo "EQUALS=true" >> "$GITHUB_OUTPUT"
+            echo "EQUALS='true'" >> $GITHUB_OUTPUT
           else
-            echo "EQUALS=" >> "$GITHUB_OUTPUT"
+            echo "Branch and commit don't match"
+            echo "EQUALS=" >> $GITHUB_OUTPUT
             exit 1
           fi
 
