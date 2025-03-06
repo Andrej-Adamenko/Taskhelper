@@ -36,7 +36,7 @@ jobs:
             echo "Branch and commit match: $branch_feature"
             echo "EQUALS=true" >> "$GITHUB_OUTPUT"
           else
-            echo "EQUALS=false" >> "$GITHUB_OUTPUT"
+            echo "EQUALS=" >> "$GITHUB_OUTPUT"
             exit 1
           fi
   link-commit-to-issue:
@@ -44,7 +44,7 @@ jobs:
       issues: write
     runs-on: ubuntu-latest
     needs: check-branch-commit
-    if: needs.check-branch-commit.outputs.EQUALS == 'true'  # Only run if branch and commit is equals
+    if: needs.check-branch-commit.outputs.EQUALS  # Only run if branch and commit is equals
 
     steps:
       - name: Checkout code
