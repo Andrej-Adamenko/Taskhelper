@@ -3,7 +3,7 @@ name: Link commit to issue
 on:
   push:
     branches:
-      - '*'
+      - 'feature/*'  # Trigger on any branch with the pattern 'feature/{issue_number}'
 
 jobs:
   check-branch-commit:
