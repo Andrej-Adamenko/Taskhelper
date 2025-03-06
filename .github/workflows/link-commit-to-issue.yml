@@ -47,7 +47,8 @@ jobs:
     steps:
       - name: Test output
         run: |
-          echo ${{ needs.check-branch-commit.outputs.EQUALS }}
+          echo "outputs: ${{ needs.check-branch-commit.outputs }}"
+          echo "EQUALS: ${{ needs.check-branch-commit.outputs.EQUALS }}"
 
   link-commit-to-issue:
     permissions:
