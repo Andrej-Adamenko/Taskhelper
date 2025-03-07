@@ -22,6 +22,7 @@ DEFERRED_INTERVAL_CHECK_TIMER = None
 CHANNEL_TICKET_SETTINGS_BUTTONS = {}
 TICKET_MENU_TYPE = "ticket"
 INFO_MENU_TYPE = "info"
+ALL_MENU_TYPE = "all"
 
 class CB_TYPES:
 	ASSIGNED_SELECTED = "AS"
@@ -419,7 +420,7 @@ def _call_settings_button(bot: telebot.TeleBot, post_data: Message,
 	newest_message_id = db_utils.get_newest_copied_message(post_data.chat.id)
 	if newest_message_id == post_data.id or force_update_ticket_keyboard:
 		ticket_keyboard = utils.merge_keyboard_markup(
-			forwarding_utils.generate_control_buttons_from_subchannel(post_data, newest_message_id),
+			forwarding_utils.generate_control_buttons_from_channel_message(bot, post_data, newest_message_id),
 			ticket_keyboard
 		)
 		bot.edit_message_reply_markup(chat_id=post_data.chat.id, message_id=newest_message_id,
@@ -515,7 +516,7 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		_set_channel_ticket_settings_state(call, CB_TYPES.OPEN_CHANNEL_SETTINGS)
 		show_settings_keyboard(bot, call)
 	elif callback_type == CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU:
-		_clear_channel_ticket_settings_state(call)
+		clear_channel_ticket_settings_state(call)
 		show_settings_keyboard(bot, call,
 							   _get_channel_ticket_settings_state(message.chat.id, INFO_MENU_TYPE) is None,
 							   _get_channel_ticket_settings_state(message.chat.id, TICKET_MENU_TYPE) is None)
@@ -558,16 +559,20 @@ def _get_channel_ticket_settings_state(channel_id: int, menu_type: str) -> str|N
 	return settings
 
 
-def _clear_channel_ticket_settings_state(call: CallbackQuery):
+def clear_channel_ticket_settings_state(call: CallbackQuery, state: str = ALL_MENU_TYPE, channel_id: str = None):
 	menu_type = TICKET_MENU_TYPE
 	if is_settings_message(call.message):
 		menu_type = INFO_MENU_TYPE
 
-	if call.message.chat.id in CHANNEL_TICKET_SETTINGS_BUTTONS:
-		items = copy.deepcopy(CHANNEL_TICKET_SETTINGS_BUTTONS[call.message.chat.id]).items()
+	if channel_id is None:
+		channel_id = call.message.chat.id
+
+	if channel_id in CHANNEL_TICKET_SETTINGS_BUTTONS:
+		items = copy.deepcopy(CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id]).items()
 		for key, value in items:
-			if key == menu_type or value["user"] == call.from_user.id:
-				del CHANNEL_TICKET_SETTINGS_BUTTONS[call.message.chat.id][key]
+			if (state == ALL_MENU_TYPE and (key == menu_type or value["user"] == call.from_user.id) or
+					key == state and value["user"] == call.from_user.id):
+				del CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id][key]
 
 
 def is_button_checked(buttons: List[InlineKeyboardButton], target_cb_type: str):
