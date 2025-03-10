@@ -3,7 +3,9 @@ from unittest import TestCase, main
 from unittest.mock import patch, Mock, ANY, call
 
 from telebot import TeleBot
+from telebot.types import CallbackQuery
 
+import channel_manager
 from tests import test_helper
 from hashtag_data import HashtagData
 
@@ -187,26 +189,211 @@ class ForwardForSubchannelTest(TestCase):
 												  from_chat_id=main_chat_id, reply_markup=mock_merge_keyboard_markup.return_value)
 		mock_update_copied_message.assert_called_once_with(mock_bot, sub_chat_id, 166)
 
+	@patch("utils.get_message_content_by_id")
 	@patch("db_utils.get_main_message_from_copied")
 	@patch("copy.deepcopy")
 	@patch("forwarding_utils.generate_control_buttons")
-	def test_generate_control_buttons_from_subchannel(self, mock_generate_control_buttons, mock_deepcopy,
-												 mock_get_main_message_from_copied, mock_hashtag, *args):
+	def test_generate_control_buttons_from_channel_message(self, mock_generate_control_buttons, mock_deepcopy,
+												mock_get_main_message_from_copied, mock_get_message_content_by_id,
+												mock_hashtag, *args):
+		mock_bot = Mock(spec=TeleBot)
 		message_id = 123
-		other_message_id = 125
 		channel_id = -10012345678
+		dump_channel_id = -100498168751
 		main_message_id = 321
 		main_channel_id = -10087654321
 		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
-		mock_message2 = test_helper.create_mock_message("", [], main_channel_id, main_message_id)
+		mock_message2 = test_helper.create_mock_message("", [], dump_channel_id, message_id)
 		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
 		mock_deepcopy.return_value = mock_message2
 
-		forwarding_utils.generate_control_buttons_from_subchannel(mock_message, other_message_id)
-		mock_get_main_message_from_copied.assert_called_once_with(other_message_id, channel_id)
+		forwarding_utils.generate_control_buttons_from_channel_message(mock_bot, mock_message, message_id)
+		mock_get_message_content_by_id.assert_not_called()
+		mock_get_main_message_from_copied.assert_called_once_with(message_id, channel_id)
 		mock_deepcopy.assert_called_once_with(mock_message)
 		mock_hashtag.assert_called_once_with(mock_message2, main_channel_id)
 		mock_generate_control_buttons.assert_called_once_with(ANY, mock_message2)
+		self.assertEqual(mock_message2.chat.id, main_channel_id)
+		self.assertEqual(mock_message2.id, main_message_id)
+		self.assertEqual(mock_message2.message_id, main_message_id)
+
+
+	@patch("utils.get_message_content_by_id")
+	@patch("db_utils.get_main_message_from_copied")
+	@patch("copy.deepcopy")
+	@patch("forwarding_utils.generate_control_buttons")
+	def test_generate_control_buttons_from_channel_message(self, mock_generate_control_buttons, mock_deepcopy,
+												mock_get_main_message_from_copied, mock_get_message_content_by_id,
+												mock_hashtag, *args):
+		mock_bot = Mock(spec=TeleBot)
+		message_id = 123
+		other_message_id = 125
+		channel_id = -10012345678
+		dump_channel_id = -100498168751
+		main_message_id = 321
+		main_channel_id = -10087654321
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message1 = test_helper.create_mock_message("", [], channel_id, other_message_id)
+		mock_message2 = test_helper.create_mock_message("", [], dump_channel_id, message_id)
+		mock_get_message_content_by_id.return_value = mock_message1
+		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
+		mock_deepcopy.return_value = mock_message2
+
+		forwarding_utils.generate_control_buttons_from_channel_message(mock_bot, mock_message, other_message_id)
+		mock_get_message_content_by_id.assert_called_once_with(mock_bot, channel_id, other_message_id)
+		mock_get_main_message_from_copied.assert_called_once_with(other_message_id, channel_id)
+		mock_deepcopy.assert_called_once_with(mock_message)
+		mock_hashtag.assert_called_once_with(mock_message1, main_channel_id)
+		mock_generate_control_buttons.assert_called_once_with(ANY, mock_message1)
+		self.assertEqual(mock_message1.chat.id, main_channel_id)
+		self.assertEqual(mock_message1.id, main_message_id)
+		self.assertEqual(mock_message1.message_id, main_message_id)
+
+
+
+# @patch("db_utils.is_individual_channel_exists", return_value=True)
+# @patch("db_utils.get_individual_channel_settings",
+# 		return_value=['{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}',
+# 					 '1,2'])
+@patch("db_utils.get_newest_copied_message")
+@patch("channel_manager.clear_channel_ticket_settings_state")
+class TestHandleCallback(TestCase):
+	@patch("forwarding_utils.change_subchannel_button_event")
+	def test_change_subchannel(self, mock_change_subchannel_button_event, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		subchannel_name = "CC 1"
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL},{subchannel_name}"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		forwarding_utils.handle_callback(mock_bot, mock_call)
+		mock_change_subchannel_button_event.assert_called_once_with(mock_bot, mock_call, subchannel_name)
+
+	@patch("forwarding_utils.change_state_button_event")
+	def test_close(self, mock_change_state_button_event, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.CLOSE},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		forwarding_utils.handle_callback(mock_bot, mock_call)
+		mock_change_state_button_event.assert_called_once_with(mock_bot, mock_call, False)
+
+	@patch("forwarding_utils.change_state_button_event")
+	def test_open(self, mock_change_state_button_event, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.OPEN},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		forwarding_utils.handle_callback(mock_bot, mock_call)
+		mock_change_state_button_event.assert_called_once_with(mock_bot, mock_call, True)
+
+	@patch("forwarding_utils.forward_and_add_inline_keyboard")
+	def test_save(self, mock_forward_and_add_inline_keyboard, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.SAVE},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		forwarding_utils.handle_callback(mock_bot, mock_call)
+		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_call.message)
+
+	@patch("forwarding_utils.show_subchannel_buttons")
+	def test_show_subchannels(self, mock_show_subchannel_buttons, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.SHOW_SUBCHANNELS},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_show_subchannel_buttons.assert_called_once_with(mock_bot, mock_call.message, channel_id, message_id)
+
+	@patch("forwarding_utils.show_priority_buttons")
+	def test_show_priorities(self, mock_forward_and_add_inline_keyboard, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.SHOW_PRIORITIES},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_call.message, channel_id, message_id)
+
+	@patch("forwarding_utils.change_priority_button_event")
+	def test_change_priority(self, mock_change_priority_button_event, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		priority = '2'
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.CHANGE_PRIORITY},{priority}"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		forwarding_utils.handle_callback(mock_bot, mock_call)
+		mock_change_priority_button_event.assert_called_once_with(mock_bot, mock_call, priority)
+
+	@patch("forwarding_utils.show_cc_buttons")
+	def test_show_cc(self, mock_show_cc_buttons, mock_clear_channel_ticket_settings_state,
+					 mock_get_newest_copied_message, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.SHOW_CC},"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_newest_copied_message.return_value = message_id
+
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_show_cc_buttons.assert_called_once_with(mock_bot, mock_call.message, channel_id, message_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_clear_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.TICKET_MENU_TYPE, channel_id)
+
+	@patch("forwarding_utils.toggle_cc_button_event")
+	def test_toggle_cc(self, mock_toggle_cc_button_event, mock_clear_channel_ticket_settings_state,
+					   mock_get_newest_copied_message, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		user = "FF"
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.TOGGLE_CC},{user}"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_newest_copied_message.return_value = message_id
+
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_toggle_cc_button_event.assert_called_once_with(mock_bot, mock_call, user)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_clear_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.TICKET_MENU_TYPE, channel_id)
+
+	@patch("forwarding_utils.toggle_cc_button_event")
+	def test_hide_settings_menu_no_newest(self, mock_toggle_cc_button_event, mock_clear_channel_ticket_settings_state,
+					   mock_get_newest_copied_message, *args):
+		channel_id = -10012345678
+		message_id = 123
+		newest_message_id = 125
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		user = "FF"
+		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.TOGGLE_CC},{user}"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_newest_copied_message.return_value = newest_message_id
+
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_toggle_cc_button_event.assert_called_once_with(mock_bot, mock_call, user)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_clear_channel_ticket_settings_state.assert_not_called()
 
 
 if __name__ == "__main__":

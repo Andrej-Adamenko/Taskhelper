@@ -358,11 +358,13 @@ def filter_creator_channels(channel_data: List, main_channel_id: int, main_messa
 
 	return result_channels
 
-def generate_control_buttons_from_subchannel(post_data: telebot.types.Message, message_id: int):
-	main_message_id, main_channel_id = db_utils.get_main_message_from_copied(message_id, post_data.chat.id)
+def generate_control_buttons_from_channel_message(bot: telebot.TeleBot, post_data: telebot.types.Message, message_id: int):
 	post_data1 = copy.deepcopy(post_data)
+	if post_data1.id != message_id:
+		post_data1 = utils.get_message_content_by_id(bot, post_data.chat.id, message_id)
+	main_message_id, main_channel_id = db_utils.get_main_message_from_copied(message_id, post_data.chat.id)
 	post_data1.chat.id = main_channel_id
-	post_data1.message_id = main_message_id
+	post_data1.id = post_data1.message_id = main_message_id
 
 	hash_data = HashtagData(post_data1, main_channel_id)
 	return generate_control_buttons(hash_data, post_data1)
@@ -518,6 +520,10 @@ def add_control_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 
 def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
 	callback_type, other_data = utils.parse_callback_str(call.data)
+
+	newest_message_id = db_utils.get_newest_copied_message(current_channel_id)
+	if newest_message_id == current_message_id:
+		channel_manager.clear_channel_ticket_settings_state(call, channel_manager.TICKET_MENU_TYPE, current_channel_id)
 
 	if callback_type == CB_TYPES.CHANGE_SUBCHANNEL:
 		subchannel_name = other_data[0]
