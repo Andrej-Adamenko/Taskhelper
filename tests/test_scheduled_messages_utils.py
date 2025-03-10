@@ -6,6 +6,7 @@ import datetime
 from telebot import TeleBot
 from telebot.types import CallbackQuery
 
+import channel_manager
 from tests import test_helper
 from hashtag_data import HashtagData
 import scheduled_messages_utils
@@ -241,6 +242,116 @@ class ScheduleMessageTest(TestCase):
 
 		self.scheduled_message_dispatcher.schedule_message(mock_bot, mock_call, send_time)
 		mock_update_scheduled_time.assert_called_once()
+
+
+@patch("db_utils.get_newest_copied_message")
+@patch("channel_manager.clear_channel_ticket_settings_state")
+class TestHandleCallback(TestCase):
+	def setUp(self):
+		self.scheduled_message_dispatcher = scheduled_messages_utils.ScheduledMessageDispatcher()
+
+	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.generate_days_buttons")
+	@patch("utils.edit_message_keyboard")
+	def test_month_calendar(self, mock_edit_message_keyboard, mock_generate_days_buttons, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._MONTH_CALENDAR_CALLBACK}"
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		self.scheduled_message_dispatcher.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_generate_days_buttons.assert_called_once_with()
+		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_call.message,
+														   mock_generate_days_buttons.return_value,
+														   chat_id=channel_id, message_id=message_id)
+
+	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.schedule_message_event")
+	def test_schedule_message(self, mock_schedule_message_event, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		callback_data = ['02.10.2025', '12', '00']
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._SCHEDULE_MESSAGE_CALLBACK}," + ','.join(callback_data)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		self.scheduled_message_dispatcher.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_schedule_message_event.assert_called_once_with(mock_bot, mock_call, callback_data)
+
+	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.change_month_event")
+	def test_next_month(self, mock_change_month_event, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		callback_data = ['10.2025']
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._NEXT_MONTH_CALLBACK}," + ','.join(callback_data)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		self.scheduled_message_dispatcher.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_change_month_event.assert_called_once_with(mock_bot, mock_call.message, callback_data, True, channel_id, message_id)
+
+	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.change_month_event")
+	def test_previous_month(self, mock_change_month_event, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		callback_data = ['10.2025']
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._PREVIOUS_MONTH_CALLBACK}," + ','.join(callback_data)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		self.scheduled_message_dispatcher.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_change_month_event.assert_called_once_with(mock_bot, mock_call.message, callback_data, False, channel_id, message_id)
+
+	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.select_day_event")
+	def test_select_day(self, mock_select_day_event, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		callback_data = ['02.10.2025']
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._SELECT_DAY_CALLBACK}," + ','.join(callback_data)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+
+		self.scheduled_message_dispatcher.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_select_day_event.assert_called_once_with(mock_bot, mock_call.message, callback_data, channel_id, message_id)
+
+	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.select_hour_event")
+	def test_select_hour(self, mock_select_hour_event, mock_clear_channel_ticket_settings_state,
+						 mock_get_newest_copied_message, *args):
+		channel_id = -10012345678
+		message_id = 123
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		callback_data = ['02.10.2025', '09']
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._SELECT_HOUR_CALLBACK}," + ','.join(callback_data)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_newest_copied_message.return_value = message_id
+
+		self.scheduled_message_dispatcher.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_select_hour_event.asssert_called_once_with(mock_bot, mock_call, callback_data, channel_id, message_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_clear_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.TICKET_MENU_TYPE, channel_id)
+
+	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.select_hour_event")
+	def test_select_hour_no_newest(self, mock_select_hour_event, mock_clear_channel_ticket_settings_state,
+						 mock_get_newest_copied_message, *args):
+		channel_id = -10012345678
+		message_id = 123
+		newest_message = 125
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		callback_data = ['02.10.2025', '09']
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._SELECT_HOUR_CALLBACK}," + ','.join(callback_data)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_newest_copied_message.return_value = newest_message
+
+		self.scheduled_message_dispatcher.handle_callback(mock_bot, mock_call, channel_id, message_id)
+		mock_select_hour_event.asssert_called_once_with(mock_bot, mock_call, callback_data, channel_id, message_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_clear_channel_ticket_settings_state.assert_not_called()
 
 
 if __name__ == "__main__":

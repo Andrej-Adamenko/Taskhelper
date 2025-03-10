@@ -561,7 +561,7 @@ def _get_channel_ticket_settings_state(channel_id: int, menu_type: str) -> str|N
 
 def clear_channel_ticket_settings_state(call: CallbackQuery, state: str = ALL_MENU_TYPE, channel_id: str = None):
 	menu_type = TICKET_MENU_TYPE
-	if is_settings_message(call.message):
+	if state == ALL_MENU_TYPE and is_settings_message(call.message):
 		menu_type = INFO_MENU_TYPE
 
 	if channel_id is None:

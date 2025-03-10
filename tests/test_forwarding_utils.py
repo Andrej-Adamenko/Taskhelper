@@ -251,10 +251,6 @@ class ForwardForSubchannelTest(TestCase):
 
 
 
-# @patch("db_utils.is_individual_channel_exists", return_value=True)
-# @patch("db_utils.get_individual_channel_settings",
-# 		return_value=['{"due": true, "deferred": false, "assigned": ["FF", "NN"], "reported": ["+"], "cc": ["NN"]}',
-# 					 '1,2'])
 @patch("db_utils.get_newest_copied_message")
 @patch("channel_manager.clear_channel_ticket_settings_state")
 class TestHandleCallback(TestCase):

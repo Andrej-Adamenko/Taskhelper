@@ -9,6 +9,7 @@ import telebot
 from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+import channel_manager
 import config_utils
 import db_utils
 import forwarding_utils
@@ -22,13 +23,13 @@ class ScheduledMessageDispatcher:
 
 	__scheduled_messages_list: list = []
 
-	__MONTH_CALENDAR_CALLBACK = "CALENDAR"
-	__SELECT_DAY_CALLBACK = "DAY"
-	__NEXT_MONTH_CALLBACK = "NEXT"
-	__PREVIOUS_MONTH_CALLBACK = "PREV"
-	__SELECT_HOUR_CALLBACK = "HOUR"
-	__SELECT_MINUTE_CALLBACK = "MIN"
-	__SCHEDULE_MESSAGE_CALLBACK = "SCHEDULE"
+	_MONTH_CALENDAR_CALLBACK = "CALENDAR"
+	_SELECT_DAY_CALLBACK = "DAY"
+	_NEXT_MONTH_CALLBACK = "NEXT"
+	_PREVIOUS_MONTH_CALLBACK = "PREV"
+	_SELECT_HOUR_CALLBACK = "HOUR"
+	_SELECT_MINUTE_CALLBACK = "MIN"
+	_SCHEDULE_MESSAGE_CALLBACK = "SCHEDULE"
 
 	class ScheduledMessage:
 		def __init__(self, main_message_id, main_channel_id, send_time):
@@ -116,18 +117,23 @@ class ScheduledMessageDispatcher:
 	def handle_callback(self, bot: telebot.TeleBot, call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
 		callback_type, other_data = utils.parse_callback_str(call.data)
 
-		if callback_type == self.__MONTH_CALENDAR_CALLBACK:
+		newest_message_id = db_utils.get_newest_copied_message(current_channel_id)
+		if newest_message_id == current_message_id:
+			channel_manager.clear_channel_ticket_settings_state(call, channel_manager.TICKET_MENU_TYPE,
+																current_channel_id)
+
+		if callback_type == self._MONTH_CALENDAR_CALLBACK:
 			keyboard = self.generate_days_buttons()
 			utils.edit_message_keyboard(bot, call.message, keyboard, chat_id=current_channel_id, message_id=current_message_id)
-		elif callback_type == self.__SCHEDULE_MESSAGE_CALLBACK:
+		elif callback_type == self._SCHEDULE_MESSAGE_CALLBACK:
 			self.schedule_message_event(bot, call, other_data)
-		elif callback_type == self.__NEXT_MONTH_CALLBACK:
+		elif callback_type == self._NEXT_MONTH_CALLBACK:
 			self.change_month_event(bot, call.message, other_data, True, current_channel_id, current_message_id)
-		elif callback_type == self.__PREVIOUS_MONTH_CALLBACK:
+		elif callback_type == self._PREVIOUS_MONTH_CALLBACK:
 			self.change_month_event(bot, call.message, other_data, False, current_channel_id, current_message_id)
-		elif callback_type == self.__SELECT_DAY_CALLBACK:
+		elif callback_type == self._SELECT_DAY_CALLBACK:
 			self.select_day_event(bot, call.message, other_data, current_channel_id, current_message_id)
-		elif callback_type == self.__SELECT_HOUR_CALLBACK:
+		elif callback_type == self._SELECT_HOUR_CALLBACK:
 			self.select_hour_event(bot, call.message, other_data, current_channel_id, current_message_id)
 
 	def change_month_event(self, bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list, forward: bool, current_channel_id: int = None, current_message_id: int = None):
@@ -166,7 +172,7 @@ class ScheduledMessageDispatcher:
 		self.schedule_message(bot, call, send_time)
 
 	def generate_schedule_button(self):
-		callback_data = utils.create_callback_str(self.CALLBACK_PREFIX, self.__MONTH_CALENDAR_CALLBACK)
+		callback_data = utils.create_callback_str(self.CALLBACK_PREFIX, self._MONTH_CALENDAR_CALLBACK)
 		schedule_button_text = config_utils.BUTTON_TEXTS["SCHEDULE_MESSAGE"]
 		schedule_button = InlineKeyboardButton(schedule_button_text, callback_data=callback_data)
 		return schedule_button
@@ -183,10 +189,10 @@ class ScheduledMessageDispatcher:
 
 		current_date_str = f"{current_month}.{current_year}"
 
-		left_arrow_cb = utils.create_callback_str(self.CALLBACK_PREFIX, self.__PREVIOUS_MONTH_CALLBACK, current_date_str)
+		left_arrow_cb = utils.create_callback_str(self.CALLBACK_PREFIX, self._PREVIOUS_MONTH_CALLBACK, current_date_str)
 		left_arrow_button = InlineKeyboardButton("<", callback_data=left_arrow_cb)
 
-		right_arrow_cb = utils.create_callback_str(self.CALLBACK_PREFIX, self.__NEXT_MONTH_CALLBACK, current_date_str)
+		right_arrow_cb = utils.create_callback_str(self.CALLBACK_PREFIX, self._NEXT_MONTH_CALLBACK, current_date_str)
 		right_arrow_button = InlineKeyboardButton(">", callback_data=right_arrow_cb)
 
 		current_month_button = InlineKeyboardButton(f"{current_year} {calendar.month_name[current_month]}", callback_data=config_utils.EMPTY_CALLBACK_DATA_BUTTON)
@@ -206,7 +212,7 @@ class ScheduledMessageDispatcher:
 					button_text = config_utils.BUTTON_TEXTS["CHECK"] + button_text
 				callback = config_utils.EMPTY_CALLBACK_DATA_BUTTON
 				if day > 0:
-					callback = utils.create_callback_str(self.CALLBACK_PREFIX, self.__SELECT_DAY_CALLBACK, f"{day}.{current_date_str}")
+					callback = utils.create_callback_str(self.CALLBACK_PREFIX, self._SELECT_DAY_CALLBACK, f"{day}.{current_date_str}")
 
 				day_button = InlineKeyboardButton(button_text, callback_data=callback)
 				week_buttons.append(day_button)
@@ -215,7 +221,7 @@ class ScheduledMessageDispatcher:
 		return InlineKeyboardMarkup(keyboard_rows)
 
 	def generate_hours_buttons(self, current_date):
-		back_button_callback = utils.create_callback_str(self.CALLBACK_PREFIX, self.__MONTH_CALENDAR_CALLBACK)
+		back_button_callback = utils.create_callback_str(self.CALLBACK_PREFIX, self._MONTH_CALENDAR_CALLBACK)
 		back_button = InlineKeyboardButton("Back", callback_data=back_button_callback)
 
 		keyboard_rows = [[back_button]]
@@ -227,7 +233,7 @@ class ScheduledMessageDispatcher:
 			for j in range(width):
 				hour = i * width + j
 				hour = str(hour).zfill(2)
-				callback = utils.create_callback_str(self.CALLBACK_PREFIX, self.__SELECT_HOUR_CALLBACK, current_date, hour)
+				callback = utils.create_callback_str(self.CALLBACK_PREFIX, self._SELECT_HOUR_CALLBACK, current_date, hour)
 				button = InlineKeyboardButton(f"{hour}:00", callback_data=callback)
 				buttons_row.append(button)
 
@@ -236,7 +242,7 @@ class ScheduledMessageDispatcher:
 		return InlineKeyboardMarkup(keyboard_rows)
 
 	def generate_minutes_buttons(self, current_date, current_hour):
-		back_button_callback = utils.create_callback_str(self.CALLBACK_PREFIX, self.__SELECT_DAY_CALLBACK, current_date)
+		back_button_callback = utils.create_callback_str(self.CALLBACK_PREFIX, self._SELECT_DAY_CALLBACK, current_date)
 		back_button = InlineKeyboardButton("Back", callback_data=back_button_callback)
 
 		keyboard_rows = [[back_button]]
@@ -248,7 +254,7 @@ class ScheduledMessageDispatcher:
 			for j in range(width):
 				minute = (i * width + j) * 5
 				minute = str(minute).zfill(2)
-				callback = utils.create_callback_str(self.CALLBACK_PREFIX, self.__SCHEDULE_MESSAGE_CALLBACK, current_date, current_hour, minute)
+				callback = utils.create_callback_str(self.CALLBACK_PREFIX, self._SCHEDULE_MESSAGE_CALLBACK, current_date, current_hour, minute)
 				button = InlineKeyboardButton(f"{current_hour}:{minute}", callback_data=callback)
 				buttons_row.append(button)
 
