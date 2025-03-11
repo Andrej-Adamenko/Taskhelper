@@ -268,28 +268,36 @@ class TestHandleCallback(TestCase):
 		mock_change_subchannel_button_event.assert_called_once_with(mock_bot, mock_call, subchannel_name)
 
 	@patch("forwarding_utils.change_state_button_event")
-	def test_close(self, mock_change_state_button_event, *args):
+	def test_close(self, mock_change_state_button_event, mock_clear_channel_ticket_settings_state,
+					   mock_get_newest_copied_message, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.CLOSE},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_newest_copied_message.return_value = message_id
 
-		forwarding_utils.handle_callback(mock_bot, mock_call)
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_change_state_button_event.assert_called_once_with(mock_bot, mock_call, False)
+		mock_get_newest_copied_message.assert_not_called()
+		mock_clear_channel_ticket_settings_state.assert_not_called()
 
 	@patch("forwarding_utils.change_state_button_event")
-	def test_open(self, mock_change_state_button_event, *args):
+	def test_open(self, mock_change_state_button_event, mock_clear_channel_ticket_settings_state,
+					   mock_get_newest_copied_message, *args):
 		channel_id = -10012345678
 		message_id = 123
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.OPEN},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_newest_copied_message.return_value = message_id
 
-		forwarding_utils.handle_callback(mock_bot, mock_call)
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_change_state_button_event.assert_called_once_with(mock_bot, mock_call, True)
+		mock_get_newest_copied_message.assert_not_called()
+		mock_clear_channel_ticket_settings_state.assert_not_called()
 
 	@patch("forwarding_utils.forward_and_add_inline_keyboard")
 	def test_save(self, mock_forward_and_add_inline_keyboard, *args):

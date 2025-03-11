@@ -226,8 +226,9 @@ def set_settings_message_id(channel_id, message_id):
 
 
 def is_settings_message(message: telebot.types.Message):
-	string_information_message = get_text_information_text().strip()
-	return string_information_message in message.text
+	is_ticket = db_utils.is_copied_message_exists(message.id, message.chat.id)
+	is_ticket = is_ticket or db_utils.is_main_message_exists(message.id, message.chat.id)
+	return not is_ticket
 
 
 def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
@@ -412,11 +413,14 @@ def generate_remind_keyboard(channel_id):
 def _call_settings_button(bot: telebot.TeleBot, post_data: Message,
 								  keyboard: InlineKeyboardMarkup, ticket_keyboard: InlineKeyboardMarkup,
 								  force_update_info_keyboard:bool = False, force_update_ticket_keyboard:bool = False):
+	message_id = get_settings_message_id(post_data.chat.id)
+
 	if is_settings_message(post_data):
 		update_settings_message(bot, post_data.chat.id, post_data.id, keyboard)
-	message_id = get_settings_message_id(post_data.chat.id)
+
 	if message_id != post_data.id and force_update_info_keyboard:
 		update_settings_message(bot, post_data.chat.id, message_id, keyboard)
+
 	newest_message_id = db_utils.get_newest_copied_message(post_data.chat.id)
 	if newest_message_id == post_data.id or force_update_ticket_keyboard:
 		ticket_keyboard = utils.merge_keyboard_markup(

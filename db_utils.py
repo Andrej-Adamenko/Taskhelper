@@ -261,6 +261,14 @@ def delete_copied_message(copied_message_id, copied_channel_id):
 
 
 @db_thread_lock
+def is_copied_message_exists(copied_message_id, copied_channel_id):
+	sql = "SELECT id FROM copied_messages WHERE copied_message_id=(?) and copied_channel_id=(?)"
+	CURSOR.execute(sql, (copied_message_id, copied_channel_id))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
 def get_copied_message_data(main_message_id, main_channel_id):
 	sql = "SELECT copied_message_id, copied_channel_id FROM copied_messages WHERE main_message_id=(?) and main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))

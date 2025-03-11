@@ -353,16 +353,27 @@ class TestChannelSettingsMessage(TestCase):
 		mock_set_settings_message_id.assert_not_called()
 		self.assertFalse(result)
 
-	@patch("channel_manager.get_text_information_text")
-	def test_is_settings_message(self, mock_get_text_information_text, *args):
-		mock_get_text_information_text.return_value = "123"
-		result = channel_manager.is_settings_message(test_helper.create_mock_message("", []))
+	@patch("db_utils.is_copied_message_exists")
+	@patch("db_utils.is_main_message_exists")
+	def test_is_settings_message(self, mock_is_main_message_exists, mock_is_copied_message_exists, *args):
+		mock_is_copied_message_exists.return_value = True
+		mock_is_main_message_exists.return_value = False
+		result = channel_manager.is_settings_message(test_helper.create_mock_message("", [], -10012345, 123))
 		self.assertFalse(result)
 
-		result = channel_manager.is_settings_message(test_helper.create_mock_message("12345 5678", []))
-		self.assertTrue(result)
+		mock_is_copied_message_exists.return_value = False
+		mock_is_main_message_exists.return_value = True
+		result = channel_manager.is_settings_message(test_helper.create_mock_message("", [], -10012345, 123))
+		self.assertFalse(result)
 
-		result = channel_manager.is_settings_message(test_helper.create_mock_message("2345 1235678", []))
+		mock_is_copied_message_exists.return_value = True
+		mock_is_main_message_exists.return_value = True
+		result = channel_manager.is_settings_message(test_helper.create_mock_message("", [], -10012345, 123))
+		self.assertFalse(result)
+
+		mock_is_copied_message_exists.return_value = False
+		mock_is_main_message_exists.return_value = False
+		result = channel_manager.is_settings_message(test_helper.create_mock_message("", [], -10012345, 123))
 		self.assertTrue(result)
 
 	@patch("channel_manager.is_button_checked", return_value=False)

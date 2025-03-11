@@ -521,9 +521,10 @@ def add_control_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, 
 def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
 	callback_type, other_data = utils.parse_callback_str(call.data)
 
-	newest_message_id = db_utils.get_newest_copied_message(current_channel_id)
-	if newest_message_id == current_message_id:
-		channel_manager.clear_channel_ticket_settings_state(call, channel_manager.TICKET_MENU_TYPE, current_channel_id)
+	if callback_type not in [CB_TYPES.CLOSE, CB_TYPES.OPEN]:
+		newest_message_id = db_utils.get_newest_copied_message(current_channel_id)
+		if newest_message_id == current_message_id:
+			channel_manager.clear_channel_ticket_settings_state(call, channel_manager.TICKET_MENU_TYPE, current_channel_id)
 
 	if callback_type == CB_TYPES.CHANGE_SUBCHANNEL:
 		subchannel_name = other_data[0]
