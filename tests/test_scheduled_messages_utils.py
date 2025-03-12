@@ -128,7 +128,7 @@ class UpdateStatusFromTagsTest(TestCase):
 
 		self.scheduled_message_dispatcher.update_status_from_tags(mock_bot, mock_msg_data, mock_hashtag_data)
 		mock_update_scheduled_time.assert_called_once_with(main_message_id, main_channel_id, 1722517200)
-		mock_add_comment_to_ticket.assert_called_once()
+		mock_add_comment_to_ticket.assert_called_once_with(mock_bot, mock_msg_data, "Ticket was deferred again to 2024-08-01 13:00.")
 
 	@patch("db_utils.is_message_scheduled", return_value=True)
 	@patch("db_utils.get_scheduled_message_send_time", return_value=1800000000)
@@ -226,10 +226,10 @@ class ScheduleMessageTest(TestCase):
 	@patch("hashtag_data.HashtagData.find_scheduled_tag_in_other_hashtags", return_value=None)
 	@patch("hashtag_data.HashtagData.__init__", return_value=None)
 	@patch("db_utils.is_message_scheduled", return_value=True)
-	@patch("utils.add_comment_to_ticket")
 	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
+	@patch("utils.add_comment_to_ticket")
 	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.update_scheduled_time")
-	def test_already_scheduled_message(self, mock_update_scheduled_time, *args):
+	def test_already_scheduled_message(self, mock_update_scheduled_time, mock_add_comment_to_ticket, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 
@@ -242,6 +242,8 @@ class ScheduleMessageTest(TestCase):
 
 		self.scheduled_message_dispatcher.schedule_message(mock_bot, mock_call, send_time)
 		mock_update_scheduled_time.assert_called_once()
+		mock_add_comment_to_ticket.assert_called_once_with(mock_bot, mock_call.message,
+										"Name deferred again the ticket to be sent on 2024-08-01 13:00.")
 
 
 @patch("db_utils.get_newest_copied_message")
