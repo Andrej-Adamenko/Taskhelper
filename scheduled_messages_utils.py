@@ -53,7 +53,7 @@ class ScheduledMessageDispatcher:
 		if db_utils.is_message_scheduled(main_message_id, main_channel_id):
 			self.update_scheduled_time(main_message_id, main_channel_id, send_time)
 
-			comment_text = f"{call.from_user.first_name} rescheduled the ticket to be sent on {date_str}."
+			comment_text = f"{call.from_user.first_name} deferred again the ticket to be sent on {date_str}."
 			utils.add_comment_to_ticket(bot, message, comment_text)
 
 			hashtag_data.set_scheduled_tag(date_str)
@@ -326,7 +326,7 @@ class ScheduledMessageDispatcher:
 			self.update_scheduled_time(main_message_id, main_channel_id, tag_send_time)
 
 			if not hashtag_data.ignore_comments:
-				comment_text = f"Ticket was rescheduled to {datetime_str}."
+				comment_text = f"Ticket was deferred again to {datetime_str}."
 				utils.add_comment_to_ticket(bot, msg_data, comment_text)
 
 	def update_timezone(self, current_timezone: datetime.tzinfo, new_timezone: datetime.tzinfo):
