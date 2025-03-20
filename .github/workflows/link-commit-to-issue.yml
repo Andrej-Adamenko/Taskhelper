@@ -79,5 +79,5 @@ jobs:
           curl -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            -d "{\"body\": \"$comment_body\"}" \
+            -d "{\"body\": \"$(echo "$comment_body" | sed 's/"/\\"/g')\"}" \
             https://api.github.com/repos/${{ github.repository }}/issues/$issue_number/comments
