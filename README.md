@@ -250,6 +250,8 @@ After select or deselect the desired setting option, it is saving to channel set
 If you want to close the setting menu or start the interval check immediately, you should click the "Close & Update" button.
 
 You can open this menu by pressing "Settings ⚙️" button on the last ticket in channel or by pressing "Edit channel settings ⚙️" button on the message with current channel settings.
+If the user opens the settings menu and the menu activated by the control button is already open by the same user, the menu previously opened will be closed.
+If the user opens the menu activated by the control button and the settings menu is already open by the same user, the menu previously opened will be closed.
 
 If you want redirect to the message with current channel settings, you can press the "Help" button in the settings menu on the last ticket.
 
