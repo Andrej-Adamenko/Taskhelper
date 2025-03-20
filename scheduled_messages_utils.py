@@ -116,27 +116,48 @@ class ScheduledMessageDispatcher:
 
 	def handle_callback(self, bot: telebot.TeleBot, call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
 		callback_type, other_data = utils.parse_callback_str(call.data)
+		keyboard = None
 
 		newest_message_id = db_utils.get_newest_copied_message(current_channel_id)
 		if newest_message_id == current_message_id:
 			channel_manager.clear_channel_ticket_settings_state(call, channel_manager.TICKET_MENU_TYPE,
 																current_channel_id)
 
-		if callback_type == self._MONTH_CALENDAR_CALLBACK:
-			keyboard = self.generate_days_buttons()
-			utils.edit_message_keyboard(bot, call.message, keyboard, chat_id=current_channel_id, message_id=current_message_id)
-		elif callback_type == self._SCHEDULE_MESSAGE_CALLBACK:
+		if callback_type == self._SCHEDULE_MESSAGE_CALLBACK:
 			self.schedule_message_event(bot, call, other_data)
-		elif callback_type == self._NEXT_MONTH_CALLBACK:
-			self.change_month_event(bot, call.message, other_data, True, current_channel_id, current_message_id)
-		elif callback_type == self._PREVIOUS_MONTH_CALLBACK:
-			self.change_month_event(bot, call.message, other_data, False, current_channel_id, current_message_id)
-		elif callback_type == self._SELECT_DAY_CALLBACK:
-			self.select_day_event(bot, call.message, other_data, current_channel_id, current_message_id)
-		elif callback_type == self._SELECT_HOUR_CALLBACK:
-			self.select_hour_event(bot, call.message, other_data, current_channel_id, current_message_id)
+			forwarding_utils.set_channel_ticket_keyboard_state(current_channel_id, current_message_id,
+															   call.from_user.id, None)
+		else:
+			keyboard, data_state = self.generate_keyboard(call)
+			forwarding_utils.set_channel_ticket_keyboard_state(current_channel_id, current_message_id,
+															   call.from_user.id, self.CALLBACK_PREFIX, data_state)
 
-	def change_month_event(self, bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list, forward: bool, current_channel_id: int = None, current_message_id: int = None):
+		if keyboard is not None:
+			utils.edit_message_keyboard(bot, call.message, keyboard, chat_id=current_channel_id,
+										message_id=current_message_id)
+
+	def generate_keyboard(self, call: telebot.types.CallbackQuery):
+		callback_type, other_data = utils.parse_callback_str(call.data)
+		data_info = keyboard = data_state = None
+
+		if callback_type in [self._NEXT_MONTH_CALLBACK, self._PREVIOUS_MONTH_CALLBACK]:
+			data_info = self.change_month_event(other_data, callback_type == self._NEXT_MONTH_CALLBACK)
+		elif callback_type == self._MONTH_CALENDAR_CALLBACK:
+			data_info = self.generate_date_info(other_data[0] if len(other_data) > 0 else None)
+
+		if callback_type in [self._MONTH_CALENDAR_CALLBACK, self._NEXT_MONTH_CALLBACK, self._PREVIOUS_MONTH_CALLBACK]:
+			keyboard = self.generate_days_buttons(data_info)
+			data_state = f"{self._MONTH_CALENDAR_CALLBACK},{".".join(str(x) for x in data_info)}"
+		elif callback_type == self._SELECT_DAY_CALLBACK:
+			keyboard = self.select_day_event(other_data)
+			data_state = f"{self._SELECT_DAY_CALLBACK},{",".join(other_data)}"
+		elif callback_type == self._SELECT_HOUR_CALLBACK:
+			keyboard = self.select_hour_event(other_data)
+			data_state = f"{self._SELECT_HOUR_CALLBACK},{",".join(other_data)}"
+
+		return [keyboard, data_state]
+
+	def change_month_event(self, args: list, forward: bool):
 		date_str = args[0]
 		current_month, current_year = [int(num) for num in date_str.split(".")]
 		current_month += 1 if forward else -1
@@ -148,18 +169,15 @@ class ScheduledMessageDispatcher:
 			current_year -= 1
 			current_month = 12
 
-		keyboard = self.generate_days_buttons([current_month, current_year])
-		utils.edit_message_keyboard(bot, msg_data, keyboard, chat_id=current_channel_id, message_id=current_message_id)
+		return [current_month, current_year]
 
-	def select_day_event(self, bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list, current_channel_id: int = None, current_message_id: int = None):
+	def select_day_event(self, args: list):
 		current_date = args[0]
-		keyboard = self.generate_hours_buttons(current_date)
-		utils.edit_message_keyboard(bot, msg_data, keyboard, chat_id=current_channel_id, message_id=current_message_id)
+		return self.generate_hours_buttons(current_date)
 
-	def select_hour_event(self, bot: telebot.TeleBot, msg_data: telebot.types.Message, args: list, current_channel_id: int = None, current_message_id: int = None):
+	def select_hour_event(self, args: list):
 		current_date, current_hour = args
-		keyboard = self.generate_minutes_buttons(current_date, current_hour)
-		utils.edit_message_keyboard(bot, msg_data, keyboard, chat_id=current_channel_id, message_id=current_message_id)
+		return self.generate_minutes_buttons(current_date, current_hour)
 
 	def schedule_message_event(self, bot: telebot.TeleBot, call: telebot.types.CallbackQuery, args: list):
 		date, hour, minute = args
@@ -176,6 +194,18 @@ class ScheduledMessageDispatcher:
 		schedule_button_text = config_utils.BUTTON_TEXTS["SCHEDULE_MESSAGE"]
 		schedule_button = InlineKeyboardButton(schedule_button_text, callback_data=callback_data)
 		return schedule_button
+
+	def generate_date_info(self, date_str:str = None):
+		result = None
+
+		if date_str:
+			result = [int(num) for num in date_str.split(".")]
+		else:
+			timezone = pytz.timezone(config_utils.TIMEZONE_NAME)
+			now = datetime.datetime.now(tz=timezone)
+			result = [now.month, now.year]
+
+		return result
 
 	def generate_days_buttons(self, date_info=None):
 		timezone = pytz.timezone(config_utils.TIMEZONE_NAME)
