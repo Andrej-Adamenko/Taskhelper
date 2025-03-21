@@ -63,7 +63,7 @@ jobs:
           echo "Latest commit hash: $commit_hash"
           echo "Latest commit message: $commit_message"
           echo "COMMIT_HASH=$commit_hash" >> $GITHUB_ENV
-          echo "COMMIT_MESSAGE=$commit_message" >> $GITHUB_ENV
+          echo "COMMIT_MESSAGE=$(echo "$commit_message" | sed 's/"/\\\\\\"/g')" >> $GITHUB_ENV
 
       - name: Link commit to issue with commit details
         run: |
