@@ -208,7 +208,7 @@ def show_settings_keyboard(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 	ticket_keyboard = get_settings_menu(channel_id, user_id=call.from_user.id, menu_type=TICKET_MENU_TYPE)
 	keyboard = get_settings_menu(channel_id, user_id=call.from_user.id, menu_type=INFO_MENU_TYPE)
 	try:
-		_call_settings_button(bot, message, keyboard, ticket_keyboard, force_update_info, force_update_ticket)
+		_call_settings_button(bot, call, keyboard, ticket_keyboard, force_update_info, force_update_ticket)
 	except ApiTelegramException as E:
 		if "message is not modified:" in E.description:
 			logging.error(f"Error during channel settings message update - {E}")
@@ -410,9 +410,10 @@ def generate_remind_keyboard(channel_id):
 	return InlineKeyboardMarkup(rows)
 
 
-def _call_settings_button(bot: telebot.TeleBot, post_data: Message,
+def _call_settings_button(bot: telebot.TeleBot, call: CallbackQuery,
 								  keyboard: InlineKeyboardMarkup, ticket_keyboard: InlineKeyboardMarkup,
 								  force_update_info_keyboard:bool = False, force_update_ticket_keyboard:bool = False):
+	post_data = call.message
 	message_id = get_settings_message_id(post_data.chat.id)
 
 	if is_settings_message(post_data):
@@ -423,8 +424,12 @@ def _call_settings_button(bot: telebot.TeleBot, post_data: Message,
 
 	newest_message_id = db_utils.get_newest_copied_message(post_data.chat.id)
 	if newest_message_id == post_data.id or force_update_ticket_keyboard:
+		call1 = copy.deepcopy(call)
+		main_message_id, main_channel_id = db_utils.get_main_message_from_copied(newest_message_id, post_data.chat.id)
+		call1.message.chat.id = main_channel_id
+		call1.message.id = call1.message.message_id = main_message_id
 		ticket_keyboard = utils.merge_keyboard_markup(
-			forwarding_utils.generate_control_buttons_from_channel_message(bot, post_data, newest_message_id),
+			forwarding_utils.get_keyboard(call1, post_data.chat.id, newest_message_id),
 			ticket_keyboard
 		)
 		bot.edit_message_reply_markup(chat_id=post_data.chat.id, message_id=newest_message_id,
@@ -510,6 +515,7 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		bot.answer_callback_query(call.id)
 		return
 
+	forwarding_utils.clear_channel_ticket_keyboard_by_user(message.chat.id, message.id, call.from_user.id)
 
 	if callback_type in [CB_TYPES.ASSIGNED_SELECTED, CB_TYPES.REPORTED_SELECTED,
 						 CB_TYPES.FOLLOWED_SELECTED, CB_TYPES.REMIND_SELECTED]:

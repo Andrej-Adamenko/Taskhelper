@@ -1,11 +1,11 @@
-import unittest
 from unittest import TestCase, main
 from unittest.mock import patch, Mock, ANY, call
 
 from telebot import TeleBot
-from telebot.types import CallbackQuery
+from telebot.types import CallbackQuery, User, InlineKeyboardMarkup
 
 import channel_manager
+import scheduled_messages_utils
 from tests import test_helper
 from hashtag_data import HashtagData
 
@@ -177,8 +177,8 @@ class ForwardForSubchannelTest(TestCase):
 		hashtag_data = HashtagData()
 		forwarding_utils.forward_to_subchannel(mock_bot, mock_message, hashtag_data)
 
-		mock_generate_control_buttons.assert_has_calls([unittest.mock.call(hashtag_data, mock_message),
-														unittest.mock.call(hashtag_data, mock_message)])
+		mock_generate_control_buttons.assert_has_calls([call(hashtag_data, mock_message),
+														call(hashtag_data, mock_message)])
 		mock_get_ticket_settings_buttons.assert_called_once_with(sub_chat_id, main_chat_id)
 		mock_merge_keyboard_markup.assert_called_once_with(
 			mock_generate_control_buttons.return_value,
@@ -250,142 +250,323 @@ class ForwardForSubchannelTest(TestCase):
 		self.assertEqual(mock_message1.message_id, main_message_id)
 
 
+@patch("scheduled_messages_utils.ScheduledMessageDispatcher.handle_callback")
+@patch("forwarding_utils._get_channel_ticket_keyboard")
+@patch("forwarding_utils._get_channel_ticket_keyboard_state")
+@patch("forwarding_utils.update_show_buttons")
+@patch("forwarding_utils.generate_subchannel_buttons")
+@patch("forwarding_utils.generate_priority_buttons")
+@patch("forwarding_utils.generate_cc_buttons")
+@patch("scheduled_messages_utils.ScheduledMessageDispatcher.generate_keyboard")
+class TestShowKeyboard(TestCase):
+	@patch("forwarding_utils.get_keyboard")
+	@patch("utils.edit_message_keyboard")
+	def test_show_keyboard(self, mock_edit_message_keyboard, mock_get_keyboard, *args):
+		channel_id = -100865467
+		message_id = 323
+		user_id = 867345
+		mock_bot = Mock(spec=TeleBot)
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], -1001234567, 125)
+		mock_call.message.reply_markup = Mock(spec=InlineKeyboardMarkup)
+		mock_call.message.reply_markup.keyboard = []
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {f"{channel_id}_{message_id}": {"state": forwarding_utils.CB_TYPES.SHOW_PRIORITIES, "user": user_id}}
+
+		forwarding_utils.show_keyboard(mock_bot, mock_call, channel_id, message_id)
+		mock_get_keyboard.assert_called_once_with(mock_call, channel_id, message_id)
+		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_call.message, chat_id=channel_id, message_id=message_id)
+
+	def test_get_keyboard_empty(self, mock_generate_keyboard, mock_generate_cc_buttons, mock_generate_priority_buttons,
+								mock_generate_subchannel_buttons, mock_update_show_buttons,
+								mock__get_channel_ticket_keyboard_state, mock__get_channel_ticket_keyboard, *args):
+		channel_id = -100865467
+		message_id = 323
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], -1001234567, 125)
+		mock_call.message.reply_markup = Mock(spec=InlineKeyboardMarkup)
+		mock_call.message.reply_markup.keyboard = []
+		mock__get_channel_ticket_keyboard_state.return_value = None
+
+		forwarding_utils.get_keyboard(mock_call, channel_id, message_id)
+		mock__get_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id)
+		mock__get_channel_ticket_keyboard.assert_not_called()
+		mock_update_show_buttons.assert_called_once_with(mock_call.message, None)
+		mock_generate_subchannel_buttons.assert_not_called()
+		mock_generate_priority_buttons.assert_not_called()
+		mock_generate_cc_buttons.assert_not_called()
+		mock_generate_keyboard.assert_not_called()
+
+	def test_get_keyboard_show_subchannels(self, mock_generate_keyboard, mock_generate_cc_buttons,
+										   mock_generate_priority_buttons, mock_generate_subchannel_buttons,
+										   mock_update_show_buttons, mock__get_channel_ticket_keyboard_state,
+										   mock__get_channel_ticket_keyboard, *args):
+		channel_id = -100865467
+		message_id = 323
+		state = forwarding_utils.CB_TYPES.SHOW_SUBCHANNELS
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], -1001234567, 125)
+		mock_call.message.reply_markup = Mock(spec=InlineKeyboardMarkup)
+		mock_call.message.reply_markup.keyboard = []
+		mock__get_channel_ticket_keyboard_state.return_value = state
+
+		forwarding_utils.get_keyboard(mock_call, channel_id, message_id)
+		mock__get_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id)
+		mock__get_channel_ticket_keyboard.assert_not_called()
+		mock_update_show_buttons.assert_called_once_with(mock_call.message, state)
+		mock_generate_subchannel_buttons.assert_called_once_with(mock_call.message)
+		mock_generate_priority_buttons.assert_not_called()
+		mock_generate_cc_buttons.assert_not_called()
+		mock_generate_keyboard.assert_not_called()
+
+	def test_get_keyboard_show_priorities(self, mock_generate_keyboard, mock_generate_cc_buttons,
+										  mock_generate_priority_buttons, mock_generate_subchannel_buttons,
+										  mock_update_show_buttons, mock__get_channel_ticket_keyboard_state,
+										  mock__get_channel_ticket_keyboard, *args):
+		channel_id = -100865467
+		message_id = 323
+		state = forwarding_utils.CB_TYPES.SHOW_PRIORITIES
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], -1001234567, 125)
+		mock_call.message.reply_markup = Mock(spec=InlineKeyboardMarkup)
+		mock_call.message.reply_markup.keyboard = []
+		mock__get_channel_ticket_keyboard_state.return_value = state
+
+		forwarding_utils.get_keyboard(mock_call, channel_id, message_id)
+		mock__get_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id)
+		mock__get_channel_ticket_keyboard.assert_not_called()
+		mock_update_show_buttons.assert_called_once_with(mock_call.message, state)
+		mock_generate_subchannel_buttons.assert_not_called()
+		mock_generate_priority_buttons.assert_called_once_with(mock_call.message)
+		mock_generate_cc_buttons.assert_not_called()
+		mock_generate_keyboard.assert_not_called()
+
+	def test_get_keyboard_show_cc(self, mock_generate_keyboard, mock_generate_cc_buttons,
+								  mock_generate_priority_buttons, mock_generate_subchannel_buttons,
+								  mock_update_show_buttons, mock__get_channel_ticket_keyboard_state,
+								  mock__get_channel_ticket_keyboard, *args):
+		channel_id = -100865467
+		message_id = 323
+		state = forwarding_utils.CB_TYPES.SHOW_CC
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], -1001234567, 125)
+		mock_call.message.reply_markup = Mock(spec=InlineKeyboardMarkup)
+		mock_call.message.reply_markup.keyboard = []
+		mock__get_channel_ticket_keyboard_state.return_value = state
+
+		forwarding_utils.get_keyboard(mock_call, channel_id, message_id)
+		mock__get_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id)
+		mock__get_channel_ticket_keyboard.assert_not_called()
+		mock_update_show_buttons.assert_called_once_with(mock_call.message, state)
+		mock_generate_subchannel_buttons.assert_not_called()
+		mock_generate_priority_buttons.assert_not_called()
+		mock_generate_cc_buttons.assert_called_once_with(mock_call.message)
+		mock_generate_keyboard.assert_not_called()
+
+	def test_get_keyboard_show_calendar(self, mock_generate_keyboard, mock_generate_cc_buttons,
+										mock_generate_priority_buttons, mock_generate_subchannel_buttons,
+										mock_update_show_buttons, mock__get_channel_ticket_keyboard_state,
+										mock__get_channel_ticket_keyboard, *args):
+		channel_id = -100865467
+		message_id = 323
+		state = scheduled_messages_utils.ScheduledMessageDispatcher.CALLBACK_PREFIX
+		settings_keyboard = {"state": state, "user": 876521,
+						"data": f"{scheduled_messages_utils.ScheduledMessageDispatcher._SELECT_DAY_CALLBACK},11.2025"}
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], -1001234567, 125)
+		mock_call.message.reply_markup = Mock(spec=InlineKeyboardMarkup)
+		mock_call.message.reply_markup.keyboard = []
+		mock_call.data = ""
+		mock__get_channel_ticket_keyboard_state.return_value = state
+		mock__get_channel_ticket_keyboard.return_value = settings_keyboard
+		keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_generate_keyboard.return_value = [keyboard, mock_call.data]
+
+		forwarding_utils.get_keyboard(mock_call, channel_id, message_id)
+		mock__get_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id)
+		mock__get_channel_ticket_keyboard.assert_called_once_with(channel_id, message_id)
+		mock_update_show_buttons.assert_called_once_with(mock_call.message, state)
+		mock_generate_subchannel_buttons.assert_not_called()
+		mock_generate_priority_buttons.assert_not_called()
+		mock_generate_cc_buttons.assert_not_called()
+		mock_generate_keyboard.assert_called_once_with(mock_call)
+		self.assertEqual(mock_call.message.reply_markup, keyboard)
+		self.assertEqual(mock_call.data, f"{state},{settings_keyboard["data"]}")
+
 
 @patch("db_utils.get_newest_copied_message")
 @patch("channel_manager.clear_channel_ticket_settings_state")
+@patch("forwarding_utils.set_channel_ticket_keyboard_state")
 class TestHandleCallback(TestCase):
 	@patch("forwarding_utils.change_subchannel_button_event")
-	def test_change_subchannel(self, mock_change_subchannel_button_event, *args):
+	def test_change_subchannel(self, mock_change_subchannel_button_event, mock_set_channel_ticket_keyboard_state, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		subchannel_name = "CC 1"
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL},{subchannel_name}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
-		forwarding_utils.handle_callback(mock_bot, mock_call)
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_change_subchannel_button_event.assert_called_once_with(mock_bot, mock_call, subchannel_name)
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, None)
 
 	@patch("forwarding_utils.change_state_button_event")
-	def test_close(self, mock_change_state_button_event, mock_clear_channel_ticket_settings_state,
-					   mock_get_newest_copied_message, *args):
+	def test_close(self, mock_change_state_button_event, mock_set_channel_ticket_keyboard_state,
+				   mock_clear_channel_ticket_settings_state, mock_get_newest_copied_message, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.CLOSE},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_get_newest_copied_message.return_value = message_id
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
 		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_change_state_button_event.assert_called_once_with(mock_bot, mock_call, False)
 		mock_get_newest_copied_message.assert_not_called()
 		mock_clear_channel_ticket_settings_state.assert_not_called()
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, None)
+
 
 	@patch("forwarding_utils.change_state_button_event")
-	def test_open(self, mock_change_state_button_event, mock_clear_channel_ticket_settings_state,
-					   mock_get_newest_copied_message, *args):
+	def test_open(self, mock_change_state_button_event, mock_set_channel_ticket_keyboard_state,
+				  mock_clear_channel_ticket_settings_state, mock_get_newest_copied_message, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.OPEN},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_get_newest_copied_message.return_value = message_id
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
 		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_change_state_button_event.assert_called_once_with(mock_bot, mock_call, True)
 		mock_get_newest_copied_message.assert_not_called()
 		mock_clear_channel_ticket_settings_state.assert_not_called()
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, None)
 
 	@patch("forwarding_utils.forward_and_add_inline_keyboard")
-	def test_save(self, mock_forward_and_add_inline_keyboard, *args):
+	def test_save(self, mock_forward_and_add_inline_keyboard, mock_set_channel_ticket_keyboard_state, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.SAVE},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
 		forwarding_utils.handle_callback(mock_bot, mock_call)
 		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_call.message)
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(None, None, user_id, None)
 
 	@patch("forwarding_utils.show_subchannel_buttons")
-	def test_show_subchannels(self, mock_show_subchannel_buttons, *args):
+	def test_show_subchannels(self, mock_show_subchannel_buttons, mock_set_channel_ticket_keyboard_state, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.SHOW_SUBCHANNELS},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
 		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_show_subchannel_buttons.assert_called_once_with(mock_bot, mock_call.message, channel_id, message_id)
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, forwarding_utils.CB_TYPES.SHOW_SUBCHANNELS)
 
 	@patch("forwarding_utils.show_priority_buttons")
-	def test_show_priorities(self, mock_forward_and_add_inline_keyboard, *args):
+	def test_show_priorities(self, mock_forward_and_add_inline_keyboard, mock_set_channel_ticket_keyboard_state, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.SHOW_PRIORITIES},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
 		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_call.message, channel_id, message_id)
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, forwarding_utils.CB_TYPES.SHOW_PRIORITIES)
 
 	@patch("forwarding_utils.change_priority_button_event")
-	def test_change_priority(self, mock_change_priority_button_event, *args):
+	def test_change_priority(self, mock_change_priority_button_event, mock_set_channel_ticket_keyboard_state, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		priority = '2'
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.CHANGE_PRIORITY},{priority}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
-		forwarding_utils.handle_callback(mock_bot, mock_call)
+		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_change_priority_button_event.assert_called_once_with(mock_bot, mock_call, priority)
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, None)
 
 	@patch("forwarding_utils.show_cc_buttons")
-	def test_show_cc(self, mock_show_cc_buttons, mock_clear_channel_ticket_settings_state,
-					 mock_get_newest_copied_message, *args):
+	def test_show_cc(self, mock_show_cc_buttons, mock_set_channel_ticket_keyboard_state,
+					 mock_clear_channel_ticket_settings_state, mock_get_newest_copied_message, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.SHOW_CC},"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_get_newest_copied_message.return_value = message_id
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
 		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_show_cc_buttons.assert_called_once_with(mock_bot, mock_call.message, channel_id, message_id)
 		mock_get_newest_copied_message.assert_called_once_with(channel_id)
 		mock_clear_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.TICKET_MENU_TYPE, channel_id)
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, forwarding_utils.CB_TYPES.SHOW_CC)
 
 	@patch("forwarding_utils.toggle_cc_button_event")
-	def test_toggle_cc(self, mock_toggle_cc_button_event, mock_clear_channel_ticket_settings_state,
-					   mock_get_newest_copied_message, *args):
+	def test_toggle_cc(self, mock_toggle_cc_button_event, mock_set_channel_ticket_keyboard_state,
+					   mock_clear_channel_ticket_settings_state, mock_get_newest_copied_message, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		user = "FF"
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.TOGGLE_CC},{user}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_get_newest_copied_message.return_value = message_id
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
 		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_toggle_cc_button_event.assert_called_once_with(mock_bot, mock_call, user)
 		mock_get_newest_copied_message.assert_called_once_with(channel_id)
 		mock_clear_channel_ticket_settings_state.assert_called_once_with(mock_call, channel_manager.TICKET_MENU_TYPE, channel_id)
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, forwarding_utils.CB_TYPES.SHOW_CC)
 
 	@patch("forwarding_utils.toggle_cc_button_event")
-	def test_hide_settings_menu_no_newest(self, mock_toggle_cc_button_event, mock_clear_channel_ticket_settings_state,
-					   mock_get_newest_copied_message, *args):
+	def test_hide_settings_menu_no_newest(self, mock_toggle_cc_button_event, mock_set_channel_ticket_keyboard_state,
+									mock_clear_channel_ticket_settings_state, mock_get_newest_copied_message, *args):
 		channel_id = -10012345678
 		message_id = 123
+		user_id = 8765
 		newest_message_id = 125
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
@@ -393,11 +574,138 @@ class TestHandleCallback(TestCase):
 		mock_call.data = f"{forwarding_utils.CALLBACK_PREFIX},{forwarding_utils.CB_TYPES.TOGGLE_CC},{user}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_get_newest_copied_message.return_value = newest_message_id
+		mock_call.from_user = Mock(spec=User)
+		mock_call.from_user.id = user_id
 
 		forwarding_utils.handle_callback(mock_bot, mock_call, channel_id, message_id)
 		mock_toggle_cc_button_event.assert_called_once_with(mock_bot, mock_call, user)
 		mock_get_newest_copied_message.assert_called_once_with(channel_id)
 		mock_clear_channel_ticket_settings_state.assert_not_called()
+		mock_set_channel_ticket_keyboard_state.assert_called_once_with(channel_id, message_id, user_id, forwarding_utils.CB_TYPES.SHOW_CC)
+
+
+class TestSetGetChannelTicketKeyboard(TestCase):
+	def test_set_channel_ticket_keyboard_state(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {}
+
+		forwarding_utils.set_channel_ticket_keyboard_state(channel_id, message_id, user_id, state, None)
+		self.assertEqual(forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE, {f"{channel_id}_{message_id}": {"state": state, "data": None, "user": user_id}})
+
+	def test_set_channel_ticket_keyboard_state_data(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = scheduled_messages_utils.ScheduledMessageDispatcher.CALLBACK_PREFIX
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {}
+		data = f"{scheduled_messages_utils.ScheduledMessageDispatcher._MONTH_CALENDAR_CALLBACK},11.2025"
+
+		forwarding_utils.set_channel_ticket_keyboard_state(channel_id, message_id, user_id, state, data)
+		self.assertEqual(forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE, {f"{channel_id}_{message_id}": {"state": state, "data": data, "user": user_id}})
+
+	def test_set_channel_ticket_keyboard_state_empty(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {}
+
+		forwarding_utils.set_channel_ticket_keyboard_state(None, None, user_id, state)
+		self.assertEqual(forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE, {})
+
+	def test_set_channel_ticket_keyboard_state_empty_channel(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {}
+
+		forwarding_utils.set_channel_ticket_keyboard_state(None, message_id, user_id, state)
+		self.assertEqual(forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE, {})
+
+	def test_set_channel_ticket_keyboard_state_empty_message(self, *args):
+		channel_id = -1008765432
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {}
+
+		forwarding_utils.set_channel_ticket_keyboard_state(channel_id, None, user_id, state)
+		self.assertEqual(forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE, {})
+
+	def test_set_channel_ticket_keyboard_state_clear(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {f"{channel_id}_{message_id}": {"state": state, "user": user_id}}
+
+		forwarding_utils.set_channel_ticket_keyboard_state(channel_id, message_id, user_id, None, None)
+		self.assertEqual(forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE,{})
+
+	def test_clear_channel_ticket_keyboard_by_user(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {f"{channel_id}_{message_id}": {"state": state, "user": user_id}}
+
+		forwarding_utils.clear_channel_ticket_keyboard_by_user(channel_id, message_id, user_id)
+		self.assertEqual(forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE, {})
+
+	def test_clear_channel_ticket_keyboard_by_user_another(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {f"{channel_id}_{message_id}": {"state": state, "user": user_id}}
+
+		forwarding_utils.clear_channel_ticket_keyboard_by_user(channel_id, message_id, 8766)
+		self.assertEqual(forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE, {f"{channel_id}_{message_id}": {"state": state, "user": user_id}})
+
+	def test__get_channel_ticket_keyboard(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {f"{channel_id}_{message_id}": {"state": state, "user": user_id}}
+
+		settings = forwarding_utils._get_channel_ticket_keyboard(channel_id, message_id)
+		self.assertEqual(settings, {"state": state, "user": user_id})
+
+	def test__get_channel_ticket_keyboard_empty(self, *args):
+		channel_id = -1008765432
+		channel_id2 = -1008765434
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {f"{channel_id2}_{message_id}": {"state": state, "user": user_id}}
+
+		settings = forwarding_utils._get_channel_ticket_keyboard(channel_id, message_id)
+		self.assertEqual(settings, None)
+
+	def test__get_channel_ticket_keyboard_state(self, *args):
+		channel_id = -1008765432
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {f"{channel_id}_{message_id}": {"state": state, "user": user_id}}
+
+		settings = forwarding_utils._get_channel_ticket_keyboard_state(channel_id, message_id)
+		self.assertEqual(settings, state)
+
+	def test__get_channel_ticket_keyboard_state_empty(self, *args):
+		channel_id = -1008765432
+		channel_id2 = -1008765434
+		message_id = 324
+		user_id = 8765
+		state = forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL
+		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {f"{channel_id2}_{message_id}": {"state": state, "user": user_id}}
+
+		settings = forwarding_utils._get_channel_ticket_keyboard_state(channel_id, message_id)
+		self.assertEqual(settings, None)
 
 
 if __name__ == "__main__":

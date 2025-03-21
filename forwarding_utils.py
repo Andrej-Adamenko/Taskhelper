@@ -26,6 +26,7 @@ CALLBACK_PREFIX = "FWRD"
 
 _FORWARDING_LOCK = threading.RLock()
 
+CHANNEL_TICKET_KEYBOARD_TYPE = {}
 
 class CB_TYPES:
 	CHANGE_SUBCHANNEL = "SUB"
@@ -526,6 +527,13 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, cur
 		if newest_message_id == current_message_id:
 			channel_manager.clear_channel_ticket_settings_state(call, channel_manager.TICKET_MENU_TYPE, current_channel_id)
 
+	if callback_type in [CB_TYPES.SHOW_SUBCHANNELS, CB_TYPES.SHOW_PRIORITIES, CB_TYPES.SHOW_CC]:
+		set_channel_ticket_keyboard_state(current_channel_id, current_message_id, call.from_user.id, callback_type)
+	elif callback_type == CB_TYPES.TOGGLE_CC:
+		set_channel_ticket_keyboard_state(current_channel_id, current_message_id, call.from_user.id, CB_TYPES.SHOW_CC)
+	else:
+		set_channel_ticket_keyboard_state(current_channel_id, current_message_id, call.from_user.id, None)
+
 	if callback_type == CB_TYPES.CHANGE_SUBCHANNEL:
 		subchannel_name = other_data[0]
 		change_subchannel_button_event(bot, call, subchannel_name)
@@ -547,6 +555,73 @@ def handle_callback(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, cur
 	elif callback_type == CB_TYPES.TOGGLE_CC:
 		user = other_data[0]
 		toggle_cc_button_event(bot, call, user)
+
+
+def set_channel_ticket_keyboard_state(channel_id: int, message_id: int, user: int, state: str|None, data: str = None):
+	if channel_id is None or message_id is None:
+		return
+
+	key = f"{channel_id}_{message_id}"
+	if key not in CHANNEL_TICKET_KEYBOARD_TYPE:
+		CHANNEL_TICKET_KEYBOARD_TYPE[key] = {}
+
+	if state is not None:
+		CHANNEL_TICKET_KEYBOARD_TYPE[key] = { "state": state, "data": data, "user": user }
+	else:
+		del CHANNEL_TICKET_KEYBOARD_TYPE[key]
+
+def clear_channel_ticket_keyboard_by_user(channel_id: int, message_id: int, user: int):
+	if channel_id is None or message_id is None:
+		return
+
+	key = f"{channel_id}_{message_id}"
+	if (key in CHANNEL_TICKET_KEYBOARD_TYPE and
+			("user" not in CHANNEL_TICKET_KEYBOARD_TYPE[key] or CHANNEL_TICKET_KEYBOARD_TYPE[key]["user"] == user)):
+		del CHANNEL_TICKET_KEYBOARD_TYPE[key]
+
+
+def _get_channel_ticket_keyboard(channel_id: int, message_id: int) -> dict|None:
+	key = f"{channel_id}_{message_id}"
+	if key in CHANNEL_TICKET_KEYBOARD_TYPE:
+			return CHANNEL_TICKET_KEYBOARD_TYPE[key]
+
+	return None
+
+def _get_channel_ticket_keyboard_state(channel_id: int, message_id: int) -> str|None:
+	settings = _get_channel_ticket_keyboard(channel_id, message_id)
+	if settings is not None:
+		settings = settings["state"]
+
+	return settings
+
+
+def get_keyboard(call: telebot.types.CallbackQuery, current_channel_id: int = None, current_message_id: int = None):
+	message = call.message
+	state = _get_channel_ticket_keyboard_state(current_channel_id, current_message_id)
+	keyboard_markup = None
+	update_show_buttons(message, state)
+
+	if state == CB_TYPES.SHOW_SUBCHANNELS:
+		keyboard_markup = generate_subchannel_buttons(message)
+	elif state == CB_TYPES.SHOW_PRIORITIES:
+		keyboard_markup = generate_priority_buttons(message)
+	elif state == CB_TYPES.SHOW_CC:
+		keyboard_markup = generate_cc_buttons(message)
+	elif state == scheduled_message_dispatcher.CALLBACK_PREFIX:
+		keyboard_settings = _get_channel_ticket_keyboard(current_channel_id, current_message_id)
+		call.data = f"{state},{keyboard_settings["data"]}"
+		keyboard, data = scheduled_message_dispatcher.generate_keyboard(call)
+		message.reply_markup = keyboard
+
+	if keyboard_markup is not None and keyboard_markup:
+		message.reply_markup.keyboard += keyboard_markup.keyboard
+
+	return message.reply_markup
+
+def show_keyboard(bot: telebot.TeleBot, call: telebot.types.CallbackQuery,
+						   current_channel_id: int = None, current_message_id: int = None):
+	get_keyboard(call, current_channel_id, current_message_id)
+	utils.edit_message_keyboard(bot, call.message, chat_id=current_channel_id, message_id=current_message_id)
 
 
 def show_subchannel_buttons(bot: telebot.TeleBot, post_data: telebot.types.Message, current_channel_id: int = None, current_message_id: int = None):
