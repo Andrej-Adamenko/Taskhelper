@@ -189,67 +189,6 @@ class ForwardForSubchannelTest(TestCase):
 												  from_chat_id=main_chat_id, reply_markup=mock_merge_keyboard_markup.return_value)
 		mock_update_copied_message.assert_called_once_with(mock_bot, sub_chat_id, 166)
 
-	@patch("utils.get_message_content_by_id")
-	@patch("db_utils.get_main_message_from_copied")
-	@patch("copy.deepcopy")
-	@patch("forwarding_utils.generate_control_buttons")
-	def test_generate_control_buttons_from_channel_message(self, mock_generate_control_buttons, mock_deepcopy,
-												mock_get_main_message_from_copied, mock_get_message_content_by_id,
-												mock_hashtag, *args):
-		mock_bot = Mock(spec=TeleBot)
-		message_id = 123
-		channel_id = -10012345678
-		dump_channel_id = -100498168751
-		main_message_id = 321
-		main_channel_id = -10087654321
-		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
-		mock_message2 = test_helper.create_mock_message("", [], dump_channel_id, message_id)
-		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
-		mock_deepcopy.return_value = mock_message2
-
-		forwarding_utils.generate_control_buttons_from_channel_message(mock_bot, mock_message, message_id)
-		mock_get_message_content_by_id.assert_not_called()
-		mock_get_main_message_from_copied.assert_called_once_with(message_id, channel_id)
-		mock_deepcopy.assert_called_once_with(mock_message)
-		mock_hashtag.assert_called_once_with(mock_message2, main_channel_id)
-		mock_generate_control_buttons.assert_called_once_with(ANY, mock_message2)
-		self.assertEqual(mock_message2.chat.id, main_channel_id)
-		self.assertEqual(mock_message2.id, main_message_id)
-		self.assertEqual(mock_message2.message_id, main_message_id)
-
-
-	@patch("utils.get_message_content_by_id")
-	@patch("db_utils.get_main_message_from_copied")
-	@patch("copy.deepcopy")
-	@patch("forwarding_utils.generate_control_buttons")
-	def test_generate_control_buttons_from_channel_message(self, mock_generate_control_buttons, mock_deepcopy,
-												mock_get_main_message_from_copied, mock_get_message_content_by_id,
-												mock_hashtag, *args):
-		mock_bot = Mock(spec=TeleBot)
-		message_id = 123
-		other_message_id = 125
-		channel_id = -10012345678
-		dump_channel_id = -100498168751
-		main_message_id = 321
-		main_channel_id = -10087654321
-		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
-		mock_message1 = test_helper.create_mock_message("", [], channel_id, other_message_id)
-		mock_message2 = test_helper.create_mock_message("", [], dump_channel_id, message_id)
-		mock_get_message_content_by_id.return_value = mock_message1
-		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
-		mock_deepcopy.return_value = mock_message2
-
-		forwarding_utils.generate_control_buttons_from_channel_message(mock_bot, mock_message, other_message_id)
-		mock_get_message_content_by_id.assert_called_once_with(mock_bot, channel_id, other_message_id)
-		mock_get_main_message_from_copied.assert_called_once_with(other_message_id, channel_id)
-		mock_deepcopy.assert_called_once_with(mock_message)
-		mock_hashtag.assert_called_once_with(mock_message1, main_channel_id)
-		mock_generate_control_buttons.assert_called_once_with(ANY, mock_message1)
-		self.assertEqual(mock_message1.chat.id, main_channel_id)
-		self.assertEqual(mock_message1.id, main_message_id)
-		self.assertEqual(mock_message1.message_id, main_message_id)
-
-
 @patch("scheduled_messages_utils.ScheduledMessageDispatcher.handle_callback")
 @patch("forwarding_utils._get_channel_ticket_keyboard")
 @patch("forwarding_utils._get_channel_ticket_keyboard_state")
@@ -391,6 +330,68 @@ class TestShowKeyboard(TestCase):
 		mock_generate_keyboard.assert_called_once_with(mock_call)
 		self.assertEqual(mock_call.message.reply_markup, keyboard)
 		self.assertEqual(mock_call.data, f"{state},{settings_keyboard["data"]}")
+
+
+	@patch("utils.get_message_content_by_id")
+	@patch("db_utils.get_main_message_from_copied")
+	@patch("copy.deepcopy")
+	@patch("forwarding_utils.get_keyboard")
+	def test_get_keyboard_from_channel_message(self, mock_get_keyboard, mock_deepcopy,
+												mock_get_main_message_from_copied, mock_get_message_content_by_id, *args):
+		mock_bot = Mock(spec=TeleBot)
+		message_id = 123
+		channel_id = -10012345678
+		dump_channel_id = -100498168751
+		main_message_id = 321
+		main_channel_id = -10087654321
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call2 = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_call2.message = test_helper.create_mock_message("", [], dump_channel_id, message_id)
+		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
+		mock_deepcopy.return_value = mock_call2
+
+		forwarding_utils.get_keyboard_from_channel_message(mock_bot, mock_call, message_id)
+		mock_get_message_content_by_id.assert_not_called()
+		mock_get_main_message_from_copied.assert_called_once_with(message_id, channel_id)
+		mock_deepcopy.assert_called_once_with(mock_call)
+		mock_get_keyboard.assert_called_once_with(mock_call2, channel_id, message_id)
+		self.assertEqual(mock_call2.message.chat.id, main_channel_id)
+		self.assertEqual(mock_call2.message.id, main_message_id)
+		self.assertEqual(mock_call2.message.message_id, main_message_id)
+
+
+	@patch("utils.get_message_content_by_id")
+	@patch("db_utils.get_main_message_from_copied")
+	@patch("copy.deepcopy")
+	@patch("forwarding_utils.get_keyboard")
+	def test_get_keyboard_from_channel_message_on_settings_message(self, mock_get_keyboard, mock_deepcopy,
+												mock_get_main_message_from_copied, mock_get_message_content_by_id, *args):
+		mock_bot = Mock(spec=TeleBot)
+		message_id = 123
+		other_message_id = 125
+		channel_id = -10012345678
+		dump_channel_id = -100498168751
+		main_message_id = 321
+		main_channel_id = -10087654321
+		mock_call = Mock(spec=CallbackQuery)
+		mock_call1 = Mock(spec=CallbackQuery)
+		mock_call2 = Mock(spec=CallbackQuery)
+		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message1 = test_helper.create_mock_message("", [], channel_id, other_message_id)
+		mock_call2.message = test_helper.create_mock_message("", [], dump_channel_id, message_id)
+		mock_get_message_content_by_id.return_value = mock_message1
+		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
+		mock_deepcopy.return_value = mock_call2
+
+		forwarding_utils.get_keyboard_from_channel_message(mock_bot, mock_call, other_message_id)
+		mock_get_message_content_by_id.assert_called_once_with(mock_bot, channel_id, other_message_id)
+		mock_get_main_message_from_copied.assert_called_once_with(other_message_id, channel_id)
+		mock_deepcopy.assert_called_once_with(mock_call)
+		mock_get_keyboard.assert_called_once_with(mock_call2, channel_id, other_message_id)
+		self.assertEqual(mock_message1.chat.id, main_channel_id)
+		self.assertEqual(mock_message1.id, main_message_id)
+		self.assertEqual(mock_message1.message_id, main_message_id)
 
 
 @patch("db_utils.get_newest_copied_message")

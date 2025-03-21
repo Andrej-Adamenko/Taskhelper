@@ -711,9 +711,9 @@ class TestChannelSettingsKeyboard(TestCase):
 	@patch("channel_manager.get_settings_message_id")
 	@patch("channel_manager.update_settings_message")
 	@patch("db_utils.get_newest_copied_message")
-	@patch("forwarding_utils.get_keyboard")
+	@patch("forwarding_utils.get_keyboard_from_channel_message")
 	@patch("utils.merge_keyboard_markup")
-	def test__call_settings_button(self, mock_merge_keyboard_markup, mock_get_keyboard,
+	def test__call_settings_button(self, mock_merge_keyboard_markup, mock_get_keyboard_from_channel_message,
 								 mock_get_newest_copied_message, mock_update_settings_message,
 								 mock_get_settings_message_id, mock_update_settings_keyboard,
 								 mock_is_settings_message, *args):
@@ -735,7 +735,7 @@ class TestChannelSettingsKeyboard(TestCase):
 		mock_get_settings_message_id.assert_called_once_with(mock_call.message.chat.id)
 		mock_update_settings_message.assert_called_once_with(mock_bot, channel_id, message_id, mock_keyboard)
 		mock_get_newest_copied_message.assert_called_once_with(mock_call.message.chat.id)
-		mock_get_keyboard.assert_not_called()
+		mock_get_keyboard_from_channel_message.assert_not_called()
 		mock_merge_keyboard_markup.assert_not_called()
 		mock_bot.edit_message_reply_markup.assert_not_called()
 
@@ -748,10 +748,10 @@ class TestChannelSettingsKeyboard(TestCase):
 	@patch("db_utils.get_newest_copied_message")
 	@patch("copy.deepcopy")
 	@patch("db_utils.get_main_message_from_copied")
-	@patch("forwarding_utils.get_keyboard")
+	@patch("forwarding_utils.get_keyboard_from_channel_message")
 	@patch("utils.merge_keyboard_markup")
 	def test__call_settings_button_force_update_ticket_keyboard(self, mock_merge_keyboard_markup,
-								mock_get_keyboard, mock_get_main_message_from_copied, mock_deepcopy,
+								mock_get_keyboard_from_channel_message, mock_get_main_message_from_copied, mock_deepcopy,
 								mock_get_newest_copied_message, mock_update_settings_message,
 								mock_get_settings_message_id, mock_is_settings_message, *args):
 
@@ -762,15 +762,12 @@ class TestChannelSettingsKeyboard(TestCase):
 		main_message_id = 121
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
-		mock_main_call = Mock(spec=CallbackQuery)
-		mock_main_call.message = test_helper.create_mock_message("", [], main_channel_id, main_message_id)
 		mock_get_settings_message_id.return_value = message_id
 		mock_newest_message_id = 321
 		mock_get_newest_copied_message.return_value = mock_newest_message_id
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		mock_keyboard1 = Mock(spec=InlineKeyboardMarkup)
 		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
-		mock_deepcopy.return_value = mock_main_call
 
 		channel_manager._call_settings_button(mock_bot, mock_call,
 													  mock_keyboard, mock_keyboard1, True, True)
@@ -778,8 +775,9 @@ class TestChannelSettingsKeyboard(TestCase):
 		mock_get_settings_message_id.assert_called_once_with(mock_call.message.chat.id)
 		mock_update_settings_message.assert_called_once_with(mock_bot, mock_call.message.chat.id, mock_call.message.id,mock_keyboard)
 		mock_get_newest_copied_message.assert_called_once_with(mock_call.message.chat.id)
-		mock_get_keyboard.assert_called_once_with(mock_main_call, channel_id, mock_newest_message_id)
-		mock_merge_keyboard_markup.assert_called_once_with(mock_get_keyboard.return_value,
+		mock_deepcopy.assert_not_called()
+		mock_get_keyboard_from_channel_message.assert_called_once_with(mock_bot, mock_call, mock_newest_message_id)
+		mock_merge_keyboard_markup.assert_called_once_with(mock_get_keyboard_from_channel_message.return_value,
 														   mock_keyboard1)
 		mock_bot.edit_message_reply_markup.assert_called_once_with(chat_id=mock_call.message.chat.id,
 																   message_id=mock_newest_message_id,
@@ -792,11 +790,12 @@ class TestChannelSettingsKeyboard(TestCase):
 	@patch("channel_manager.get_settings_message_id")
 	@patch("channel_manager.update_settings_message")
 	@patch("db_utils.get_newest_copied_message")
-	@patch("forwarding_utils.get_keyboard")
+	@patch("forwarding_utils.get_keyboard_from_channel_message")
 	@patch("utils.merge_keyboard_markup")
-	def test__call_settings_button_another_settings_message(self, mock_merge_keyboard_markup, mock_get_keyboard,
-								 mock_get_newest_copied_message, mock_update_settings_message,
-								 mock_get_settings_message_id, mock_is_settings_message, *args):
+	def test__call_settings_button_another_settings_message(self, mock_merge_keyboard_markup,
+								mock_get_keyboard_from_channel_message, mock_get_newest_copied_message,
+								mock_update_settings_message, mock_get_settings_message_id,
+								mock_is_settings_message, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.message = test_helper.create_mock_message("", [], -10012345678, -10012345678)
@@ -812,7 +811,7 @@ class TestChannelSettingsKeyboard(TestCase):
 		mock_update_settings_message.assert_called_once_with(mock_bot, mock_call.message.chat.id,
 															 mock_call.message.id, mock_keyboard)
 		mock_get_newest_copied_message.assert_called_once_with(mock_call.message.chat.id)
-		mock_get_keyboard.assert_not_called()
+		mock_get_keyboard_from_channel_message.assert_not_called()
 		mock_merge_keyboard_markup.assert_not_called()
 		mock_bot.edit_message_reply_markup.assert_not_called()
 
@@ -823,9 +822,9 @@ class TestChannelSettingsKeyboard(TestCase):
 	@patch("channel_manager.get_settings_message_id")
 	@patch("channel_manager.update_settings_message")
 	@patch("db_utils.get_newest_copied_message")
-	@patch("forwarding_utils.get_keyboard")
+	@patch("forwarding_utils.get_keyboard_from_channel_message")
 	@patch("utils.merge_keyboard_markup")
-	def test__call_settings_button_another_settings_message(self, mock_merge_keyboard_markup, mock_get_keyboard,
+	def test__call_settings_button_another_settings_message(self, mock_merge_keyboard_markup, mock_get_keyboard_from_channel_message,
 								 mock_get_newest_copied_message, mock_update_settings_message,
 								 mock_get_settings_message_id, mock_is_settings_message, *args):
 		mock_bot = Mock(spec=TeleBot)
@@ -844,7 +843,7 @@ class TestChannelSettingsKeyboard(TestCase):
 														call(mock_bot, mock_call.message.chat.id,
 															 mock_get_settings_message_id.return_value, mock_keyboard)])
 		mock_get_newest_copied_message.assert_called_once_with(mock_call.message.chat.id)
-		mock_get_keyboard.assert_not_called()
+		mock_get_keyboard_from_channel_message.assert_not_called()
 		mock_merge_keyboard_markup.assert_not_called()
 		mock_bot.edit_message_reply_markup.assert_not_called()
 
@@ -857,9 +856,9 @@ class TestChannelSettingsKeyboard(TestCase):
 	@patch("db_utils.get_newest_copied_message")
 	@patch("copy.deepcopy")
 	@patch("db_utils.get_main_message_from_copied")
-	@patch("forwarding_utils.get_keyboard")
+	@patch("forwarding_utils.get_keyboard_from_channel_message")
 	@patch("utils.merge_keyboard_markup")
-	def test__call_settings_button_last_ticket(self, mock_merge_keyboard_markup, mock_get_keyboard,
+	def test__call_settings_button_last_ticket(self, mock_merge_keyboard_markup, mock_get_keyboard_from_channel_message,
 								 mock_get_main_message_from_copied, mock_deepcopy,
 								 mock_get_newest_copied_message, mock_update_settings_message,
 								 mock_get_settings_message_id, mock_is_settings_message, *args):
@@ -870,14 +869,11 @@ class TestChannelSettingsKeyboard(TestCase):
 		main_message_id = 121
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
-		mock_main_call = Mock(spec=CallbackQuery)
-		mock_main_call.message = test_helper.create_mock_message("", [], main_channel_id, main_message_id)
 		mock_get_settings_message_id.return_value = 123
 		mock_newest_message_id = message_id
 		mock_get_newest_copied_message.return_value = mock_newest_message_id
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		mock_keyboard1 = Mock(spec=InlineKeyboardMarkup)
-		mock_deepcopy.return_value = mock_main_call
 		mock_get_main_message_from_copied.return_value = [main_channel_id, main_message_id]
 
 		channel_manager._call_settings_button(mock_bot, mock_call, mock_keyboard, mock_keyboard1)
@@ -885,8 +881,9 @@ class TestChannelSettingsKeyboard(TestCase):
 		mock_get_settings_message_id.assert_called_once_with(mock_call.message.chat.id)
 		mock_update_settings_message.assert_not_called()
 		mock_get_newest_copied_message.assert_called_once_with(mock_call.message.chat.id)
-		mock_get_keyboard.assert_called_once_with(mock_main_call, channel_id, mock_newest_message_id)
-		mock_merge_keyboard_markup.assert_called_once_with(mock_get_keyboard.return_value,
+		mock_deepcopy.assert_not_called()
+		mock_get_keyboard_from_channel_message.assert_called_once_with(mock_bot, mock_call, mock_newest_message_id)
+		mock_merge_keyboard_markup.assert_called_once_with(mock_get_keyboard_from_channel_message.return_value,
 														   mock_keyboard1)
 		mock_bot.edit_message_reply_markup.assert_called_once_with(chat_id=mock_call.message.chat.id,
 																   message_id=mock_newest_message_id,

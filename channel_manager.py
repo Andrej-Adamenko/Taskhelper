@@ -424,12 +424,8 @@ def _call_settings_button(bot: telebot.TeleBot, call: CallbackQuery,
 
 	newest_message_id = db_utils.get_newest_copied_message(post_data.chat.id)
 	if newest_message_id == post_data.id or force_update_ticket_keyboard:
-		call1 = copy.deepcopy(call)
-		main_message_id, main_channel_id = db_utils.get_main_message_from_copied(newest_message_id, post_data.chat.id)
-		call1.message.chat.id = main_channel_id
-		call1.message.id = call1.message.message_id = main_message_id
 		ticket_keyboard = utils.merge_keyboard_markup(
-			forwarding_utils.get_keyboard(call1, post_data.chat.id, newest_message_id),
+			forwarding_utils.get_keyboard_from_channel_message(bot, call, newest_message_id),
 			ticket_keyboard
 		)
 		bot.edit_message_reply_markup(chat_id=post_data.chat.id, message_id=newest_message_id,
