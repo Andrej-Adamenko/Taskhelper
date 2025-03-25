@@ -609,7 +609,7 @@ def get_keyboard(call: telebot.types.CallbackQuery, current_channel_id: int = No
 		keyboard_markup = generate_cc_buttons(message)
 	elif state == scheduled_message_dispatcher.CALLBACK_PREFIX:
 		keyboard_settings = _get_channel_ticket_keyboard(current_channel_id, current_message_id)
-		call.data = f"{state},{keyboard_settings["data"]}"
+		call.data = f"{state},{keyboard_settings['data']}"
 		keyboard, data = scheduled_message_dispatcher.generate_keyboard(call)
 		message.reply_markup = keyboard
 
