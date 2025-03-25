@@ -147,13 +147,13 @@ class ScheduledMessageDispatcher:
 
 		if callback_type in [self._MONTH_CALENDAR_CALLBACK, self._NEXT_MONTH_CALLBACK, self._PREVIOUS_MONTH_CALLBACK]:
 			keyboard = self.generate_days_buttons(data_info)
-			data_state = f"{self._MONTH_CALENDAR_CALLBACK},{".".join(str(x) for x in data_info)}"
+			data_state = f"{self._MONTH_CALENDAR_CALLBACK},{'.'.join(str(x) for x in data_info)}"
 		elif callback_type == self._SELECT_DAY_CALLBACK:
 			keyboard = self.select_day_event(other_data)
-			data_state = f"{self._SELECT_DAY_CALLBACK},{",".join(other_data)}"
+			data_state = f"{self._SELECT_DAY_CALLBACK},{','.join(other_data)}"
 		elif callback_type == self._SELECT_HOUR_CALLBACK:
 			keyboard = self.select_hour_event(other_data)
-			data_state = f"{self._SELECT_HOUR_CALLBACK},{",".join(other_data)}"
+			data_state = f"{self._SELECT_HOUR_CALLBACK},{','.join(other_data)}"
 
 		return [keyboard, data_state]
 
