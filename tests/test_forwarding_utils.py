@@ -348,6 +348,7 @@ class TestShowKeyboard(TestCase):
 		mock_call2 = Mock(spec=CallbackQuery)
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_call2.message = test_helper.create_mock_message("", [], dump_channel_id, message_id)
+		mock_call2.message.reply_markup = Mock(spec=InlineKeyboardMarkup)
 		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
 		mock_deepcopy.return_value = mock_call2
 
@@ -379,6 +380,7 @@ class TestShowKeyboard(TestCase):
 		mock_call2 = Mock(spec=CallbackQuery)
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_message1 = test_helper.create_mock_message("", [], channel_id, other_message_id)
+		mock_message1.reply_markup = Mock(spec=InlineKeyboardMarkup)
 		mock_call2.message = test_helper.create_mock_message("", [], dump_channel_id, message_id)
 		mock_get_message_content_by_id.return_value = mock_message1
 		mock_get_main_message_from_copied.return_value = [main_message_id, main_channel_id]
