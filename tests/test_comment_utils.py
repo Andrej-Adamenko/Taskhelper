@@ -1,6 +1,7 @@
 from unittest import TestCase, main
 from unittest.mock import patch, call, Mock, ANY
 from telebot import TeleBot
+from telebot.apihelper import ApiTelegramException
 
 from comment_utils import CommentDispatcher
 from tests import test_helper
@@ -116,6 +117,151 @@ class SaveCommentTest(TestCase):
 		comment_dispatcher.save_comment(mock_bot, msg_data)
 		mock_apply_hashtag.assert_called_once_with(mock_bot, msg_data, 33, 3333)
 		mock_update_next_action.assert_not_called()
+
+
+@patch("forwarding_utils.generate_control_buttons")
+@patch("db_utils.delete_comment_message")
+@patch("db_utils.get_reply_comment_message")
+@patch("db_utils.get_main_from_discussion_message")
+@patch("utils.get_main_message_content_by_id")
+@patch("utils.edit_message_keyboard")
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("forwarding_utils.forward_to_subchannel")
+@patch("logging.info")
+@patch("logging.error")
+class  DeleteCommentTest(TestCase):
+	def test_delete_comment(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
+							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
+							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
+							mock_delete_comment_message, mock_generate_control_buttons, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = -10012345678
+		main_message_id = 125
+		chat_id = -10087654321
+		message_id = 1255
+		reply_comment = 1245
+		mock_main_message = test_helper.create_mock_message("", [], main_channel_id, main_message_id)
+		mock_get_reply_comment_message.return_value = reply_comment
+		mock_get_main_from_discussion_message.return_value = main_message_id
+		mock_get_main_message_content_by_id.return_value = mock_main_message
+
+
+		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
+		mock_delete_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_main_from_discussion_message.assert_called_once_with(reply_comment, main_channel_id)
+		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
+		mock_generate_control_buttons.assert_called_once_with(ANY, mock_main_message)
+		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_main_message,
+														   mock_generate_control_buttons.return_value)
+		mock_hashtag_data.assert_called_once_with(mock_main_message, main_channel_id)
+		mock_forward_to_subchannel.assert_called_once_with(mock_bot, mock_main_message, ANY)
+		mock_error.assert_not_called()
+		mock_info.assert_called_once_with(f"Delete comment {message_id} for message {main_message_id}")
+
+	def test_delete_comment_error_get_main_message_id(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
+							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
+							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
+							mock_delete_comment_message, mock_generate_control_buttons, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = -10012345678
+		main_message_id = 125
+		chat_id = -10087654321
+		message_id = 1255
+		reply_comment = 1245
+		mock_main_message = test_helper.create_mock_message("", [], main_channel_id, main_message_id)
+		mock_get_reply_comment_message.return_value = reply_comment
+		mock_get_main_from_discussion_message.return_value = main_message_id
+		mock_get_main_message_content_by_id.side_effect = ApiTelegramException("content", "", {"error_code": 400,
+																							   "description": "Bad Request: message to forward not found"})
+		mock_get_main_message_content_by_id.return_value = mock_main_message
+
+
+		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
+		mock_delete_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_main_from_discussion_message.assert_called_once_with(reply_comment, main_channel_id)
+		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
+		mock_edit_message_keyboard.assert_not_called()
+		mock_hashtag_data.assert_not_called()
+		mock_forward_to_subchannel.assert_not_called()
+		mock_generate_control_buttons.assert_not_called()
+		mock_error.assert_called_once_with(f"Error during getting main message - {mock_get_main_message_content_by_id.side_effect}")
+		mock_info.assert_called_once_with(f"Delete comment {message_id} for message {main_message_id}")
+
+	def test_delete_comment_empty_message_content(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
+							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
+							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
+							mock_delete_comment_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = -10012345678
+		main_message_id = 125
+		chat_id = -10087654321
+		message_id = 1255
+		reply_comment = 1245
+		mock_get_reply_comment_message.return_value = reply_comment
+		mock_get_main_from_discussion_message.return_value = main_message_id
+		mock_get_main_message_content_by_id.return_value = None
+
+
+		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
+		mock_delete_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_main_from_discussion_message.assert_called_once_with(reply_comment, main_channel_id)
+		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
+		mock_edit_message_keyboard.assert_not_called()
+		mock_hashtag_data.assert_not_called()
+		mock_forward_to_subchannel.assert_not_called()
+		mock_error.assert_not_called()
+		mock_info.assert_called_once_with(f"Delete comment {message_id} for message {main_message_id}")
+
+	def test_delete_comment_empty_main_message_id(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
+							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
+							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
+							mock_delete_comment_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = -10012345678
+		main_message_id = None
+		chat_id = -10087654321
+		message_id = 1255
+		reply_comment = 1245
+		mock_get_reply_comment_message.return_value = reply_comment
+		mock_get_main_from_discussion_message.return_value = main_message_id
+
+		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
+		mock_delete_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_main_from_discussion_message.assert_called_once_with(reply_comment, main_channel_id)
+		mock_get_main_message_content_by_id.assert_not_called()
+		mock_edit_message_keyboard.assert_not_called()
+		mock_hashtag_data.assert_not_called()
+		mock_forward_to_subchannel.assert_not_called()
+		mock_error.assert_not_called()
+		mock_info.assert_called_once_with(f"Delete comment {message_id} for message {main_message_id}")
+
+	def test_delete_comment_empty_reply_comment(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
+							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
+							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
+							mock_delete_comment_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = -10012345678
+		main_message_id = 125
+		chat_id = -10087654321
+		message_id = 1255
+		reply_comment = None
+		mock_get_reply_comment_message.return_value = reply_comment
+
+		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
+		mock_delete_comment_message.assert_not_called()
+		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_get_main_from_discussion_message.assert_not_called()
+		mock_get_main_message_content_by_id.assert_not_called()
+		mock_edit_message_keyboard.assert_not_called()
+		mock_hashtag_data.assert_not_called()
+		mock_forward_to_subchannel.assert_not_called()
+		mock_error.assert_not_called()
+		mock_info.assert_not_called()
+
 
 class AddNextActionCommentTest(TestCase):
 	@patch("db_utils.get_next_action_text", return_value="test action")

@@ -7,7 +7,7 @@ from typing import List
 
 import telebot
 from telebot.apihelper import ApiTelegramException
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, User
 
 import channel_manager
 from comment_utils import comment_dispatcher
@@ -96,7 +96,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 
 	for subchannel_id in subchannel_ids:
 		if subchannel_id in unchanged_posts:
-			keyboard_markup = generate_control_buttons(hashtag_data, post_data)
+			call = CallbackQuery(0, User(0, True, "Bot"), "", "", "", message=post_data)
+			keyboard_markup = get_keyboard(call, subchannel_id, unchanged_posts[subchannel_id])
 			utils.edit_message_keyboard(bot, post_data, keyboard_markup, chat_id=subchannel_id, message_id=unchanged_posts[subchannel_id])
 			continue
 
@@ -181,7 +182,7 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 					db_utils.delete_copied_message(oldest_message_id, chat_id)
 					logging.info(f"Message {[oldest_message_id, chat_id]} doesn't exists, deleted from db")
 					continue
-				if oldest_message_data.content_type not in config_utils.SUPPORTED_CONTENT_TYPES:
+				if oldest_message_data.content_type not in config_utils.SUPPORTED_CONTENT_TYPES_TICKET:
 					db_utils.delete_copied_message(oldest_message_id, chat_id)
 					logging.info(f"Deleted message {[oldest_message_id, chat_id]} with not supported content type, deleted from db")
 					oldest_message_data = None
@@ -653,8 +654,7 @@ def update_show_buttons(post_data: telebot.types.Message, current_button_type: s
 	main_channel_id = post_data.chat.id
 	hashtag_data = HashtagData(post_data, main_channel_id)
 
-	control_buttons = generate_control_buttons(hashtag_data, post_data)
-	post_data.reply_markup.keyboard = control_buttons.keyboard
+	post_data.reply_markup = generate_control_buttons(hashtag_data, post_data)
 
 	for button in post_data.reply_markup.keyboard[0]:
 		if button.callback_data is None:

@@ -4,6 +4,7 @@ import time
 import telebot
 from telebot.apihelper import ApiTelegramException
 
+import comment_utils
 import config_utils
 import utils
 import db_utils
@@ -54,7 +55,12 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_messag
 def store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int, discussion_chat_id: int):
 	# retrieve message from discussion chat, get message_id of the message in main channel and save it to db
 
-	forwarded_message = utils.get_message_content_by_id(bot, discussion_chat_id, current_msg_id)
+	try:
+		forwarded_message = utils.get_main_message_content_by_id(bot, discussion_chat_id, current_msg_id)
+	except ApiTelegramException:
+		comment_utils.comment_dispatcher.delete_comment(bot, main_channel_id, discussion_chat_id, current_msg_id)
+		return
+
 	if forwarded_message is None:
 		return
 

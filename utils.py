@@ -328,6 +328,9 @@ def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: in
 		logging.error(f"Error during getting message {[message_id, chat_id]} content - {E}")
 		return
 
+	forwarded_message.chat.id = chat_id
+	forwarded_message.message_id = forwarded_message.id = message_id
+
 	return forwarded_message
 
 
@@ -341,30 +344,8 @@ def remove_keyboard(bot: telebot.TeleBot, chat_id: int, message_id: int):
 	bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
 
 
-@threading_utils.timeout_error_lock
-def get_main_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
-	try:
-		forwarded_message = bot.forward_message(chat_id=config_utils.DUMP_CHAT_ID, from_chat_id=chat_id,
-												message_id=message_id)
-		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
-	except ApiTelegramException as E:
-		if E.error_code == 429:
-			raise E
-		elif E.description == "Bad Request: message to forward not found":
-			raise E
-		elif E.description == "Bad Request: MESSAGE_ID_INVALID":
-			# for some reason telegram throws this error if after deleting a message
-			# no other actions were performed in this channel
-			# instead of regular "message to forward not found" error
-			raise E
-		logging.error(f"Error during getting message content - {E}")
-		return
-
-	return forwarded_message
-
-
 def check_content_type(bot: telebot.TeleBot, message: telebot.types.Message):
-	if message.content_type not in config_utils.SUPPORTED_CONTENT_TYPES:
+	if message.content_type not in config_utils.SUPPORTED_CONTENT_TYPES_TICKET:
 		if message.reply_markup:
 			chat_id = message.chat.id
 			message_id = message.message_id
@@ -398,6 +379,9 @@ def get_main_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_i
 			raise E
 		logging.error(f"Error during getting message content - {E}")
 		return
+
+	forwarded_message.chat.id = chat_id
+	forwarded_message.message_id = forwarded_message.id = message_id
 
 	return forwarded_message
 

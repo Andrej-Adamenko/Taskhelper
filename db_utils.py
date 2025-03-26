@@ -349,11 +349,27 @@ def insert_comment_message(reply_to_message_id, discussion_message_id, discussio
 
 
 @db_thread_lock
+def delete_comment_message(discussion_message_id, discussion_chat_id):
+	sql = "DELETE FROM comment_messages WHERE message_id = (?) and discussion_chat_id = (?)"
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
 def is_comment_exist(discussion_message_id, discussion_chat_id):
 	sql = "SELECT id FROM comment_messages WHERE message_id=(?) and discussion_chat_id=(?)"
 	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
 	result = CURSOR.fetchone()
 	return bool(result)
+
+
+@db_thread_lock
+def get_reply_comment_message(discussion_message_id, discussion_chat_id):
+	sql = "SELECT reply_to_message_id FROM comment_messages WHERE message_id=(?) and discussion_chat_id=(?)"
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
 
 
 @db_thread_lock
