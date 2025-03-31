@@ -122,6 +122,7 @@ class SaveCommentTest(TestCase):
 @patch("forwarding_utils.generate_control_buttons")
 @patch("db_utils.delete_comment_message")
 @patch("db_utils.get_reply_comment_message")
+@patch("db_utils.insert_comment_deleted_message")
 @patch("db_utils.get_main_from_discussion_message")
 @patch("utils.get_main_message_content_by_id")
 @patch("utils.edit_message_keyboard")
@@ -132,8 +133,9 @@ class SaveCommentTest(TestCase):
 class  DeleteCommentTest(TestCase):
 	def test_delete_comment(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
 							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
-							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
-							mock_delete_comment_message, mock_generate_control_buttons, *args):
+							mock_get_main_from_discussion_message, mock_insert_comment_deleted_message,
+							mock_get_reply_comment_message, mock_delete_comment_message,
+							mock_generate_control_buttons, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 125
@@ -149,6 +151,7 @@ class  DeleteCommentTest(TestCase):
 		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
 		mock_delete_comment_message.assert_called_once_with(message_id, chat_id)
 		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_insert_comment_deleted_message.assert_not_called()
 		mock_get_main_from_discussion_message.assert_called_once_with(reply_comment, main_channel_id)
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_generate_control_buttons.assert_called_once_with(ANY, mock_main_message)
@@ -161,8 +164,9 @@ class  DeleteCommentTest(TestCase):
 
 	def test_delete_comment_error_get_main_message_id(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
 							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
-							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
-							mock_delete_comment_message, mock_generate_control_buttons, *args):
+							mock_get_main_from_discussion_message, mock_insert_comment_deleted_message,
+							mock_get_reply_comment_message, mock_delete_comment_message,
+							mock_generate_control_buttons, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 125
@@ -180,6 +184,7 @@ class  DeleteCommentTest(TestCase):
 		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
 		mock_delete_comment_message.assert_called_once_with(message_id, chat_id)
 		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_insert_comment_deleted_message.assert_not_called()
 		mock_get_main_from_discussion_message.assert_called_once_with(reply_comment, main_channel_id)
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_edit_message_keyboard.assert_not_called()
@@ -191,8 +196,8 @@ class  DeleteCommentTest(TestCase):
 
 	def test_delete_comment_empty_message_content(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
 							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
-							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
-							mock_delete_comment_message, *args):
+							mock_get_main_from_discussion_message, mock_insert_comment_deleted_message,
+							mock_get_reply_comment_message, mock_delete_comment_message, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 125
@@ -207,6 +212,7 @@ class  DeleteCommentTest(TestCase):
 		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
 		mock_delete_comment_message.assert_called_once_with(message_id, chat_id)
 		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_insert_comment_deleted_message.assert_not_called()
 		mock_get_main_from_discussion_message.assert_called_once_with(reply_comment, main_channel_id)
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_edit_message_keyboard.assert_not_called()
@@ -217,8 +223,8 @@ class  DeleteCommentTest(TestCase):
 
 	def test_delete_comment_empty_main_message_id(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
 							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
-							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
-							mock_delete_comment_message, *args):
+							mock_get_main_from_discussion_message, mock_insert_comment_deleted_message,
+							mock_get_reply_comment_message, mock_delete_comment_message, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = None
@@ -231,6 +237,7 @@ class  DeleteCommentTest(TestCase):
 		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
 		mock_delete_comment_message.assert_called_once_with(message_id, chat_id)
 		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_insert_comment_deleted_message.assert_not_called()
 		mock_get_main_from_discussion_message.assert_called_once_with(reply_comment, main_channel_id)
 		mock_get_main_message_content_by_id.assert_not_called()
 		mock_edit_message_keyboard.assert_not_called()
@@ -241,11 +248,10 @@ class  DeleteCommentTest(TestCase):
 
 	def test_delete_comment_empty_reply_comment(self, mock_error, mock_info, mock_forward_to_subchannel, mock_hashtag_data,
 							mock_edit_message_keyboard, mock_get_main_message_content_by_id,
-							mock_get_main_from_discussion_message, mock_get_reply_comment_message,
-							mock_delete_comment_message, *args):
+							mock_get_main_from_discussion_message, mock_insert_comment_deleted_message,
+							mock_get_reply_comment_message, mock_delete_comment_message, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
-		main_message_id = 125
 		chat_id = -10087654321
 		message_id = 1255
 		reply_comment = None
@@ -254,13 +260,14 @@ class  DeleteCommentTest(TestCase):
 		comment_dispatcher.delete_comment(mock_bot, main_channel_id, chat_id, message_id)
 		mock_delete_comment_message.assert_not_called()
 		mock_get_reply_comment_message.assert_called_once_with(message_id, chat_id)
+		mock_insert_comment_deleted_message.assert_called_once_with(message_id, chat_id)
 		mock_get_main_from_discussion_message.assert_not_called()
 		mock_get_main_message_content_by_id.assert_not_called()
 		mock_edit_message_keyboard.assert_not_called()
 		mock_hashtag_data.assert_not_called()
 		mock_forward_to_subchannel.assert_not_called()
 		mock_error.assert_not_called()
-		mock_info.assert_not_called()
+		mock_info.assert_called_once_with("Insert deleted message to db as deleted")
 
 
 class AddNextActionCommentTest(TestCase):

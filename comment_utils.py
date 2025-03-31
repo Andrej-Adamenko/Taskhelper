@@ -52,6 +52,8 @@ class CommentDispatcher:
 		reply_comment = db_utils.get_reply_comment_message(discussion_message_id, discussion_chat_id)
 
 		if not reply_comment:
+			db_utils.insert_comment_deleted_message(discussion_message_id, discussion_chat_id)
+			logging.info("Insert deleted message to db as deleted")
 			return
 
 		db_utils.delete_comment_message(discussion_message_id, discussion_chat_id)

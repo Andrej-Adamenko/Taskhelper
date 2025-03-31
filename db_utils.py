@@ -214,6 +214,18 @@ def create_tables():
 
 		CURSOR.execute(custom_channel_hashtags_table_sql)
 
+	if not is_table_exists("comment_deleted_messages"):
+		comment_deleted_messages_table_sql = '''
+					CREATE TABLE "comment_deleted_messages" (
+						"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+						"discussion_chat_id"	INT NOT NULL,
+						"message_id"	INT NOT NULL,
+						"reply_to_message_id"	INT,
+						"sender_id"	INT
+					); '''
+
+		CURSOR.execute(comment_deleted_messages_table_sql)
+
 	DB_CONNECTION.commit()
 
 
@@ -350,6 +362,7 @@ def insert_comment_message(reply_to_message_id, discussion_message_id, discussio
 
 @db_thread_lock
 def delete_comment_message(discussion_message_id, discussion_chat_id):
+	insert_comment_deleted_message(discussion_message_id, discussion_chat_id)
 	sql = "DELETE FROM comment_messages WHERE message_id = (?) and discussion_chat_id = (?)"
 	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id))
 	DB_CONNECTION.commit()
@@ -424,6 +437,40 @@ def get_last_comment(discussion_message_id, discussion_chat_id, ignored_sender_i
 	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id, ignored_sender_id,))
 	result = CURSOR.fetchone()
 	return result[0]
+
+
+@db_thread_lock
+def insert_comment_deleted_message(discussion_message_id, discussion_chat_id):
+	if is_comment_deleted_exist(discussion_message_id, discussion_chat_id):
+		return
+
+	if is_comment_exist(discussion_message_id, discussion_chat_id):
+		sql = ''' INSERT INTO comment_deleted_messages(discussion_chat_id, message_id, reply_to_message_id, sender_id)
+					SELECT discussion_chat_id, message_id, reply_to_message_id, sender_id FROM comment_messages
+					WHERE discussion_chat_id = (?) and message_id = (?) '''
+	else:
+		sql = "INSERT INTO comment_deleted_messages(discussion_chat_id, message_id) VALUES (?, ?)"
+
+	CURSOR.execute(sql, (discussion_chat_id, discussion_message_id))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def is_comment_deleted_exist(discussion_message_id, discussion_chat_id):
+	sql = "SELECT id FROM comment_deleted_messages WHERE message_id=(?) and discussion_chat_id=(?)"
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def get_comment_deleted_message_ids(discussion_chat_id: int, discussion_message_id: list):
+	format_string = ",".join(["?"] * len(discussion_message_id))
+	sql = "SELECT message_id FROM comment_deleted_messages WHERE discussion_chat_id=(?) and message_id IN (%s)"
+	CURSOR.execute(sql % format_string, (discussion_chat_id,) + tuple(discussion_message_id))
+	result = CURSOR.fetchall()
+	if result:
+		return [row[0] for row in result]
 
 
 @db_thread_lock

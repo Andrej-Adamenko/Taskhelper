@@ -32,6 +32,9 @@ def export_chat_comments(discussion_chat_id: int):
 
 	messages = export_messages(discussion_chat_id, last_msg_id)
 	for message in messages:
+		if message.empty and message.id <= last_msg_id:
+			db_utils.delete_comment_message(message.id, discussion_chat_id)
+			continue
 		if message.reply_to_message is None:
 			continue
 

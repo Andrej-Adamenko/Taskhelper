@@ -158,8 +158,13 @@ def check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discus
 		return
 
 	logging.info(f"Starting to check discussion channel: {discussion_chat_id}")
+	deleted_messages = db_utils.get_comment_deleted_message_ids(discussion_chat_id, list(range(1, start_msg_id + 1)))
 
 	for current_msg_id in range(start_msg_id, 0, -1):
+		if current_msg_id in deleted_messages:
+			logging.info(f"Check comment {current_msg_id} in chat {discussion_chat_id} was skipped because it's in db as deleted")
+			continue
+
 		time.sleep(DELAY_AFTER_ONE_SCAN)
 		try:
 			if not _UPDATE_STATUS:
