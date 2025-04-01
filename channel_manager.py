@@ -697,8 +697,8 @@ def _sort_array_settings(array: list, setting_type: str, call: CallbackQuery):
 	return array
 
 
-def add_new_user_tag_to_channels(bot: telebot.TeleBot, main_channel_id: int, user_tag: str):
-	channel_data = db_utils.get_all_individual_channels(main_channel_id)
+def add_new_user_tag_to_channels(bot: telebot.TeleBot, user_tag: str):
+	channel_data = db_utils.get_all_individual_channels()
 	for channel in channel_data:
 		channel_id, settings = channel
 		settings = json.loads(settings)
@@ -724,8 +724,8 @@ def add_new_user_tag_to_channels(bot: telebot.TeleBot, main_channel_id: int, use
 			update_settings_message(bot, channel_id, settings_message_id)
 
 
-def remove_user_tag_from_channels(bot: telebot.TeleBot, main_channel_id: int, user_tag: str):
-	channel_data = db_utils.get_all_individual_channels(main_channel_id)
+def remove_user_tag_from_channels(bot: telebot.TeleBot, user_tag: str):
+	channel_data = db_utils.get_all_individual_channels()
 	for channel in channel_data:
 		channel_id, settings = channel
 		settings = json.loads(settings)

@@ -148,13 +148,13 @@ def handle_main_channel_change(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
 	if msg_data.text.startswith("/set_user_tag"):
 		try:
-			main_channel_id, tag, user = arguments.split(" ")
+			args = arguments.split(" ")
+			if len(args) > 2:
+				main_channel_id, tag, user = args
+			else:
+				tag, user = args
 		except ValueError:
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
-			return
-
-		if not db_utils.is_main_channel_exists(main_channel_id):
-			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
 
 		found_user = core_api.get_user(user)
@@ -173,47 +173,51 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 
 		user = found_user.id
 
-		is_tag_already_exists = db_utils.is_user_tag_exists(main_channel_id, tag)
+		is_tag_already_exists = tag in config_utils.USER_TAGS
 
-		db_utils.insert_or_update_user(main_channel_id, tag, user)
+		config_utils.USER_TAGS[tag] = user
+		config_utils.update_config({"USER_TAGS": config_utils.USER_TAGS})
 		user_utils.load_users(bot)
 
 		if not is_tag_already_exists:
-			channel_manager.add_new_user_tag_to_channels(bot, main_channel_id, tag)
+			channel_manager.add_new_user_tag_to_channels(bot, tag)
 
-		if main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
+		for main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
 			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA.get(main_channel_id)
-			if discussion_channel_id:
-				if is_tag_already_exists:
-					comment_text = f"User tag #{tag} was reassigned to {{USER}}."
-					text, entities = user_utils.insert_user_reference(main_channel_id, tag, comment_text)
-					bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
-				else:
-					comment_text = f"User tag #{tag} was added, assigned user is {{USER}}."
-					text, entities = user_utils.insert_user_reference(main_channel_id, tag, comment_text)
-					bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+			if is_tag_already_exists:
+				comment_text = f"User tag #{tag} was reassigned to {{USER}}."
+				text, entities = user_utils.insert_user_reference(tag, comment_text)
+				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+			else:
+				comment_text = f"User tag #{tag} was added, assigned user is {{USER}}."
+				text, entities = user_utils.insert_user_reference(tag, comment_text)
+				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
 
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was successfully updated.")
 	elif msg_data.text.startswith("/remove_user_tag"):
 		try:
-			main_channel_id, tag = arguments.split(" ")
+			if arguments.strip() == "":
+				raise ValueError
+
+			args = arguments.split(" ")
+			if len(args) > 1:
+				main_channel_id, tag = args
+			else:
+				tag, = args
 		except ValueError:
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
 			return
 
-		if not db_utils.is_main_channel_exists(main_channel_id):
-			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
-			return
-
-		if not db_utils.is_user_tag_exists(main_channel_id, tag):
+		if tag not in config_utils.USER_TAGS:
 			bot.send_message(chat_id=msg_data.chat.id, text="This user tag doesn't exists.")
 			return
 
-		db_utils.delete_user_by_tag(main_channel_id, tag)
-		channel_manager.remove_user_tag_from_channels(bot, main_channel_id, tag)
+		del config_utils.USER_TAGS[tag]
+		config_utils.update_config({"USER_TAGS": config_utils.USER_TAGS})
+		channel_manager.remove_user_tag_from_channels(bot, tag)
 		user_utils.load_users(bot)
 
-		if main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
+		for main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
 			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA.get(main_channel_id)
 			if discussion_channel_id:
 				comment_text = f"User tag #{tag} was deleted."

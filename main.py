@@ -50,7 +50,7 @@ def handle_post(post_data: telebot.types.Message):
 	if post_data.media_group_id:
 		return
 
-	user_id = user_utils.find_user_by_signature(post_data.author_signature, post_data.chat.id)
+	user_id = user_utils.find_user_by_signature(post_data.author_signature)
 	db_utils.insert_main_channel_message(post_data.chat.id, post_data.message_id, user_id)
 
 	main_channel_id_str = str(post_data.chat.id)
