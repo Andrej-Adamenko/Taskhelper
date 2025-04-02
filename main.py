@@ -27,6 +27,7 @@ bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
 
 config_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
+config_utils.add_users_from_db()
 user_utils.load_users(bot)
 
 utils.check_last_messages(bot)

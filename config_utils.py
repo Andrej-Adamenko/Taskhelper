@@ -121,3 +121,21 @@ def update_config(updated_config_data):
 
 	with open(CONFIG_FILE, "w", encoding="utf-8") as f:
 		json.dump(current_config, f, indent=4, ensure_ascii=False)
+
+
+def add_users_from_db():
+	if not db_utils.is_users_table_exists():
+		return
+
+	try:
+		user_data = db_utils.get_all_users()
+	except Exception:
+		user_data = None
+
+	for user in user_data:
+		main_channel_id, user_id, user_tag = user
+		if user_tag not in USER_TAGS:
+			USER_TAGS[user_tag] = user_id
+
+	update_config({"USER_TAGS": USER_TAGS})
+	db_utils.delete_users_table()

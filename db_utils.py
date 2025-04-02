@@ -124,17 +124,6 @@ def create_tables():
 
 		CURSOR.execute(individual_channel_settings_table_sql)
 
-	if not is_table_exists("users"):
-		users_table_sql = '''
-			CREATE TABLE "users" (
-				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
-				"main_channel_id"	INT NOT NULL,
-				"user_id"           INT NOT NULL,
-				"user_tag"          TEXT NOT NULL		
-			); '''
-
-		CURSOR.execute(users_table_sql)
-
 	if not is_table_exists("main_channels"):
 		main_channels_table_sql = '''
 			CREATE TABLE "main_channels" (
@@ -550,6 +539,16 @@ def delete_main_channel(main_channel_id):
 	CURSOR.execute(sql, (main_channel_id,))
 	DB_CONNECTION.commit()
 
+
+@db_thread_lock
+def is_users_table_exists():
+	return is_table_exists("users")
+
+def delete_users_table():
+	table_name = "users"
+	sql = f"DROP TABLE IF EXISTS {table_name}"
+	CURSOR.execute(sql)
+	DB_CONNECTION.commit()
 
 @db_thread_lock
 def get_main_channel_from_user(user_id):  # TODO: remove it
