@@ -129,8 +129,9 @@ def add_users_from_db():
 
 	try:
 		user_data = db_utils.get_all_users()
-	except Exception:
-		user_data = None
+	except Exception as E:
+		logging.error(f"Error with get all users - {E}")
+		return
 
 	for user in user_data:
 		main_channel_id, user_id, user_tag = user
