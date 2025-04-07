@@ -31,7 +31,7 @@ def find_user_by_signature(signature: str):
 def load_users(bot: telebot.TeleBot):
 	global USER_DATA
 
-	USER_DATA = config_utils.USER_TAGS
+	USER_DATA = config_utils.USER_TAGS.copy()
 
 	for user_tag in USER_DATA:
 		user_id = USER_DATA.get(user_tag)

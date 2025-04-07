@@ -11,6 +11,7 @@ import forwarding_utils
 import hashtag_data
 import interval_updating_utils
 import user_utils
+from hashtag_data import HashtagData
 from scheduled_messages_utils import scheduled_message_dispatcher
 
 
@@ -173,7 +174,7 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 
 		user = found_user.id
 
-		is_tag_already_exists = tag in config_utils.USER_TAGS
+		is_tag_already_exists = HashtagData.check_user_tag(tag)
 
 		config_utils.USER_TAGS[tag] = user
 		config_utils.update_config({"USER_TAGS": config_utils.USER_TAGS})
@@ -208,7 +209,7 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong arguments.")
 			return
 
-		if tag not in config_utils.USER_TAGS:
+		if not HashtagData.check_user_tag(tag):
 			bot.send_message(chat_id=msg_data.chat.id, text="This user tag doesn't exists.")
 			return
 

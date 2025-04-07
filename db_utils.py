@@ -519,6 +519,13 @@ def get_main_channel_ids():
 
 
 @db_thread_lock
+def get_main_channel_id():
+	ids = get_main_channel_ids()
+	if ids and len(ids) > 0:
+		return ids[0]
+
+
+@db_thread_lock
 def is_main_channel_exists(main_channel_id):
 	sql = "SELECT id FROM main_channels WHERE channel_id=(?)"
 	CURSOR.execute(sql, (main_channel_id,))
@@ -548,64 +555,6 @@ def delete_users_table():
 	table_name = "users"
 	sql = f"DROP TABLE IF EXISTS {table_name}"
 	CURSOR.execute(sql)
-	DB_CONNECTION.commit()
-
-@db_thread_lock
-def get_main_channel_from_user(user_id):  # TODO: remove it
-	sql = "SELECT main_channel_id FROM users WHERE user_id=(?)"
-	CURSOR.execute(sql, (user_id,))
-	result = CURSOR.fetchone()
-	if result:
-		return result[0]
-
-
-@db_thread_lock
-def get_tags_from_user_id(user_id): # TODO: copy it
-	sql = "SELECT user_tag FROM users WHERE user_id=(?)"
-	CURSOR.execute(sql, (user_id,))
-	result = CURSOR.fetchall()  # one user can have multiple tags assigned to him
-	if result:
-		return [row[0] for row in result]
-	else:
-		return []
-
-
-@db_thread_lock
-def get_main_channel_user_tags(main_channel_id): # TODO: return get_channel_user_tag
-	sql = "SELECT user_tag FROM users WHERE main_channel_id=(?)"
-	CURSOR.execute(sql, (main_channel_id,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-
-
-@db_thread_lock
-def get_main_channel_user_tags_by_user(user_id): # TODO: return get_channel_user_tag
-	sql = ("SELECT DISTINCT u.user_tag FROM users u "
-		   "LEFT JOIN users u1 ON u1.main_channel_id = u.main_channel_id "
-		   "WHERE u1.user_id=(?)"
-		   "ORDER BY u.id")
-	CURSOR.execute(sql, (user_id,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-
-
-@db_thread_lock
-def insert_or_update_user(main_channel_id, user_tag, user_id): # TODO: copy it without main_channel_id
-	if is_user_tag_exists(main_channel_id, user_tag):
-		sql = "UPDATE users SET user_id=(?) WHERE main_channel_id=(?) AND user_tag=(?)"
-	else:
-		sql = "INSERT INTO users(user_id, main_channel_id, user_tag) VALUES (?, ?, ?)"
-
-	CURSOR.execute(sql, (user_id, main_channel_id, user_tag,))
-	DB_CONNECTION.commit()
-
-
-@db_thread_lock
-def delete_user_by_tag(main_channel_id, user_tag): # TODO: copy it without main_channel_id
-	sql = "DELETE FROM users WHERE main_channel_id=(?) AND user_tag=(?)"
-	CURSOR.execute(sql, (main_channel_id, user_tag,))
 	DB_CONNECTION.commit()
 
 
@@ -648,30 +597,11 @@ def is_main_message_exists(main_channel_id, main_message_id):
 
 
 @db_thread_lock
-def is_user_tag_exists(main_channel_id, user_tag): # TODO: copy it without main_channel_id
-	sql = "SELECT id FROM users WHERE main_channel_id=(?) AND user_tag=(?)"
-	CURSOR.execute(sql, (main_channel_id, user_tag,))
-	result = CURSOR.fetchone()
-	return bool(result)
-
-
-@db_thread_lock
-def get_all_users(): # TODO: copy it without main_channel_id
+def get_all_users():
 	sql = "SELECT main_channel_id, user_id, user_tag FROM users"
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
 	return result
-
-
-@db_thread_lock
-def get_channel_user_tags(main_channel_id): # TODO: copy it without main_channel_id and rename to get_user_tags
-	sql = "SELECT user_tag FROM users WHERE main_channel_id=(?)"
-	CURSOR.execute(sql, (main_channel_id,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-	else:
-		return []
 
 
 @db_thread_lock
