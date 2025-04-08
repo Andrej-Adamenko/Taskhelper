@@ -104,7 +104,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		newest_message_id = db_utils.get_newest_copied_message(subchannel_id)
 		keyboard_markup = utils.merge_keyboard_markup(
 			generate_control_buttons(hashtag_data, post_data),
-			channel_manager.get_ticket_settings_buttons(subchannel_id, main_channel_id)
+			channel_manager.get_ticket_settings_buttons(subchannel_id)
 		)
 
 		try:
@@ -348,7 +348,7 @@ def filter_followed_user_channels(channel_data: List, hashtag_data: HashtagData)
 
 def filter_creator_channels(channel_data: List, main_channel_id: int, main_message_id: int):
 	sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
-	user_tags = db_utils.get_tags_from_user_id(sender_id) or []
+	user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, sender_id) or []
 
 	result_channels = []
 	for channel in channel_data:
@@ -418,7 +418,7 @@ def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types
 def generate_subchannel_buttons(post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
 
-	forwarding_data = get_subchannels_forwarding_data(main_channel_id)
+	forwarding_data = get_subchannels_forwarding_data()
 
 	hashtag_data = HashtagData(post_data, main_channel_id)
 	current_subchannel = hashtag_data.get_assigned_user() or ""
@@ -469,7 +469,7 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 	current_subchannel_user = hashtag_data.get_assigned_user()
 	followed_users = hashtag_data.get_followed_users()
 
-	main_channel_user_tags = db_utils.get_main_channel_user_tags(main_channel_id)
+	main_channel_user_tags = config_utils.USER_TAGS.copy()
 
 	if not main_channel_user_tags:
 		return
@@ -491,8 +491,8 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 	return keyboard_markup
 
 
-def get_subchannels_forwarding_data(main_channel_id):
-	user_tags = db_utils.get_main_channel_user_tags(main_channel_id)
+def get_subchannels_forwarding_data():
+	user_tags = config_utils.USER_TAGS.copy()
 	if not user_tags:
 		return []
 
@@ -719,7 +719,7 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 		comment_text += f"changed ticket's priority to {subchannel_priority}."
 
 	if comment_text:
-		text, entities = user_utils.insert_user_reference(main_channel_id, subchannel_user, comment_text)
+		text, entities = user_utils.insert_user_reference(subchannel_user, comment_text)
 		utils.add_comment_to_ticket(bot, post_data, text, entities)
 
 	hashtag_data.assign_to_user(subchannel_user)
@@ -770,7 +770,7 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 		hashtag_data.add_user(selected_user)
 		comment_text = f"{call.from_user.first_name} added {{USER}} to ticket's followers."
 
-	text, entities = user_utils.insert_user_reference(main_channel_id, selected_user, comment_text)
+	text, entities = user_utils.insert_user_reference(selected_user, comment_text)
 	utils.add_comment_to_ticket(bot, post_data, text, entities)
 
 	updated_post_data = hashtag_data.get_updated_post_data()
@@ -789,7 +789,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 	if new_ticket:
 		sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
 		if sender_id:
-			user_tags = db_utils.get_tags_from_user_id(sender_id)
+			user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, sender_id)
 			for user_tag in user_tags:
 				hashtag_data.add_user(user_tag)
 

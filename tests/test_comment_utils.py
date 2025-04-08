@@ -2,7 +2,9 @@ from unittest import TestCase, main
 from unittest.mock import patch, call, Mock, ANY
 from telebot import TeleBot
 from telebot.apihelper import ApiTelegramException
+from telebot.types import User
 
+import config_utils
 from comment_utils import CommentDispatcher
 from tests import test_helper
 
@@ -318,9 +320,9 @@ class AddNextActionCommentTest(TestCase):
 
 @patch("utils.get_main_message_content_by_id")
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
-@patch("db_utils.get_channel_user_tags", return_value=["aa", "bb", "cc"])
 @patch("comment_utils.HASHTAGS", {"OPENED": "o", "CLOSED": "x", "SCHEDULED": "s"})
 @patch("hashtag_data.SCHEDULED_TAG", "s")
+@patch("config_utils.USER_TAGS", {"aa": 1, "bb": 2, "cc": 3})
 class ApplyHashtagsTest(TestCase):
 	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
 	@patch("hashtag_data.HashtagData.set_status_tag")
@@ -474,6 +476,140 @@ class ApplyHashtagsTest(TestCase):
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
 		mock_set_scheduled_tag.assert_not_called()
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
+
+
+@patch("db_utils.get_user_highest_priority")
+@patch("db_utils.get_ticket_data")
+@patch("db_utils.insert_or_update_last_user_interaction")
+@patch("time.time")
+@patch("logging.info")
+class UpdateUserLastInteraction(TestCase):
+	def test_default(self, mock_info, mock_time, mock_insert_or_update_last_user_interaction, mock_get_ticket_data,
+					mock_get_user_highest_priority, *args):
+		main_message_id = -10012345678
+		main_channel_id = 452
+		user_id = 85168453
+		username = "test"
+		user_tag = "CC"
+		priority = 2
+		time = "1235498126"
+		config_utils.USER_TAGS = {"AA": 2163156, "CC": user_id, "DD": 618468}
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.from_user = Mock(spec=User)
+		mock_message.from_user.id = user_id
+		mock_message.from_user.username = username
+		mock_get_user_highest_priority.return_value = priority
+		mock_get_ticket_data.return_value = "", priority, ""
+		mock_time.return_value = time
+
+		comment_dispatcher.update_user_last_interaction(main_message_id, main_channel_id, mock_message)
+		mock_get_user_highest_priority.assert_called_once_with(main_channel_id, user_tag)
+		mock_get_ticket_data.assert_called_once_with(main_message_id, main_channel_id)
+		mock_insert_or_update_last_user_interaction.assert_called_once_with(main_channel_id, user_tag, int(time))
+		mock_info.assert_called_once_with(f"Updated {user_id, user_tag} user last interaction.")
+
+	def test_few_tags(self, mock_info, mock_time, mock_insert_or_update_last_user_interaction, mock_get_ticket_data,
+					mock_get_user_highest_priority, *args):
+		main_message_id = -10012345678
+		main_channel_id = 452
+		user_id = 85168453
+		username = "test"
+		user_tags = ["CC", "DD"]
+		config_utils.USER_TAGS = {"AA": 2163156, "CC": user_id, "DD": user_id}
+		priority = 2
+		time = 1235498126
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.from_user = Mock(spec=User)
+		mock_message.from_user.id = user_id
+		mock_message.from_user.username = username
+		mock_get_user_highest_priority.return_value = priority
+		mock_get_ticket_data.return_value = "", priority, ""
+		mock_time.return_value = time
+
+		manager = Mock()
+		manager.attach_mock(mock_get_user_highest_priority, 'a')
+		manager.attach_mock(mock_get_ticket_data, 'b')
+		manager.attach_mock(mock_insert_or_update_last_user_interaction, 'c')
+		manager.attach_mock(mock_info, 'd')
+		expected_calls = []
+		for tag in user_tags:
+			expected_calls.append(call.a(main_channel_id, tag))
+			expected_calls.append(call.b(main_message_id, main_channel_id))
+			expected_calls.append(call.c(main_channel_id, tag, time))
+			expected_calls.append(call.d(f"Updated {user_id, tag} user last interaction."))
+
+		comment_dispatcher.update_user_last_interaction(main_message_id, main_channel_id, mock_message)
+		self.assertEqual(manager.mock_calls, expected_calls)
+
+	def test_different_priorities(self, mock_info, mock_time, mock_insert_or_update_last_user_interaction, mock_get_ticket_data,
+					mock_get_user_highest_priority, *args):
+		main_message_id = -10012345678
+		main_channel_id = 452
+		user_id = 85168453
+		username = "test"
+		user_tag = "CC"
+		highest_priority = 3
+		priority = 2
+		time = "1235498126"
+		config_utils.USER_TAGS = {"AA": 2163156, "CC": user_id, "DD": 618468}
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.from_user = Mock(spec=User)
+		mock_message.from_user.id = user_id
+		mock_message.from_user.username = username
+		mock_get_user_highest_priority.return_value = highest_priority
+		mock_get_ticket_data.return_value = "", priority, ""
+		mock_time.return_value = time
+
+		comment_dispatcher.update_user_last_interaction(main_message_id, main_channel_id, mock_message)
+		mock_get_user_highest_priority.assert_called_once_with(main_channel_id, user_tag)
+		mock_get_ticket_data.assert_called_once_with(main_message_id, main_channel_id)
+		mock_insert_or_update_last_user_interaction.assert_not_called()
+		mock_info.assert_not_called()
+
+	@patch("utils.get_keys_by_value")
+	def test_no_user_tags(self, mock_get_keys_by_value, mock_info, mock_time, mock_insert_or_update_last_user_interaction,
+						  mock_get_ticket_data, mock_get_user_highest_priority, *args):
+		main_message_id = -10012345678
+		main_channel_id = 452
+		user_id = 85168453
+		username = "test"
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.from_user = Mock(spec=User)
+		mock_message.from_user.id = user_id
+		mock_message.from_user.username = username
+		mock_get_keys_by_value.return_value = None
+
+		manager = Mock()
+		manager.attach_mock(mock_get_keys_by_value, 'a')
+		expected_calls = [call.a(config_utils.USER_TAGS, user_id), call.a(config_utils.USER_TAGS, username)]
+
+		comment_dispatcher.update_user_last_interaction(main_message_id, main_channel_id, mock_message)
+		self.assertEqual(manager.mock_calls, expected_calls)
+		mock_get_user_highest_priority.assert_not_called()
+		mock_get_ticket_data.assert_not_called()
+		mock_insert_or_update_last_user_interaction.assert_not_called()
+		mock_info.assert_not_called()
+
+	@patch("utils.get_keys_by_value")
+	def test_no_user_tags_without_username(self, mock_get_keys_by_value, mock_info, mock_time,
+										   mock_insert_or_update_last_user_interaction, mock_get_ticket_data,
+										   mock_get_user_highest_priority, *args):
+		main_message_id = -10012345678
+		main_channel_id = 452
+		user_id = 85168453
+		username = None
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.from_user = Mock(spec=User)
+		mock_message.from_user.id = user_id
+		mock_message.from_user.username = username
+		mock_get_keys_by_value.return_value = None
+
+		comment_dispatcher.update_user_last_interaction(main_message_id, main_channel_id, mock_message)
+		mock_get_keys_by_value.assert_called_once_with(config_utils.USER_TAGS, user_id)
+		mock_get_user_highest_priority.assert_not_called()
+		mock_get_ticket_data.assert_not_called()
+		mock_insert_or_update_last_user_interaction.assert_not_called()
+		mock_info.assert_not_called()
 
 
 if __name__ == "__main__":

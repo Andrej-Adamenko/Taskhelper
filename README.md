@@ -197,13 +197,13 @@ Changes timezone identifier:
 * Example: /set_timezone Europe/Kiev
 
 Add or change username or user id of the tag:
-* /set_user_tag (MAIN_CHANNEL_ID) (TAG) (USERNAME_OR_USER_ID)
-* Example with username: /set_user_tag -100987987987 aa @username
-* Example with user id: /set_user_tag -100987987987 aa 321123321
+* /set_user_tag (TAG) (USERNAME_OR_USER_ID)
+* Example with username: /set_user_tag aa @username
+* Example with user id: /set_user_tag aa 321123321
 
 Remove user assigned to specified tag:
-* /remove_user_tag (MAIN_CHANNEL_ID) (TAG)
-* Example with username: /remove_user_tag -100987987987 aa
+* /remove_user_tag (TAG)
+* Example with username: /remove_user_tag aa
 
 Changes default user and priority:
 * /set_default_subchannel (MAIN_CHANNEL_ID) (DEFAULT_USER_TAG) (DEFAULT_PRIORITY)

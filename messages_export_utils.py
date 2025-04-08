@@ -76,7 +76,7 @@ def export_main_channel_messages(main_channel_id: int):
 			continue
 		user_id = None
 		if message.author_signature:
-			user_id = user_utils.find_user_by_signature(message.author_signature, main_channel_id)
+			user_id = user_utils.find_user_by_signature(message.author_signature)
 
 		db_utils.insert_main_channel_message(main_channel_id, message.id, user_id)
 		logging.info(f"Exported main message [{main_channel_id}, {message.id}, {user_id}]")

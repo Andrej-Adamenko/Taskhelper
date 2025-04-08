@@ -27,6 +27,7 @@ bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
 
 config_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
+config_utils.add_users_from_db()
 user_utils.load_users(bot)
 
 utils.check_last_messages(bot)
@@ -50,7 +51,7 @@ def handle_post(post_data: telebot.types.Message):
 	if post_data.media_group_id:
 		return
 
-	user_id = user_utils.find_user_by_signature(post_data.author_signature, post_data.chat.id)
+	user_id = user_utils.find_user_by_signature(post_data.author_signature)
 	db_utils.insert_main_channel_message(post_data.chat.id, post_data.message_id, user_id)
 
 	main_channel_id_str = str(post_data.chat.id)

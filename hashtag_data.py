@@ -190,7 +190,7 @@ class HashtagData:
 			return True
 		if tag == OPENED_TAG or tag == CLOSED_TAG:
 			return True
-		if db_utils.is_user_tag_exists(self.main_channel_id, tag):
+		if HashtagData.check_user_tag(tag):
 			return True
 		return False
 
@@ -278,7 +278,7 @@ class HashtagData:
 					status_tag_index = entity_index
 					continue
 
-				if db_utils.is_user_tag_exists(main_channel_id, tag):
+				if self.check_user_tag(tag):
 					user_tag_indexes.insert(0, entity_index)
 					continue
 
@@ -412,7 +412,7 @@ class HashtagData:
 				continue
 
 			tag = self.get_tag_from_entity(entities[entity_index], text)
-			if db_utils.is_user_tag_exists(self.main_channel_id, tag):
+			if HashtagData.check_user_tag(tag):
 				mentioned_users.append(tag)
 				self.add_user(tag)
 		return mentioned_users
@@ -861,6 +861,10 @@ class HashtagData:
 	@staticmethod
 	def get_tag_from_entity(entity: telebot.types.MessageEntity, text: str):
 		return text[entity.offset + 1:entity.offset + entity.length]
+
+	@staticmethod
+	def check_user_tag(tag):
+		return tag in config_utils.USER_TAGS
 
 	@staticmethod
 	def check_priority_tag(tag, priority_tag):

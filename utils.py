@@ -215,7 +215,7 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 
 			# copy keyboard markup object to prevent modification of an original object
 			keyboard_markup = merge_keyboard_markup(keyboard_markup,
-								channel_manager.get_ticket_settings_buttons(chat_id, main_channel_id))
+								channel_manager.get_ticket_settings_buttons(chat_id))
 
 	try:
 		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard_markup)
@@ -256,6 +256,15 @@ def get_key_by_value(d: dict, value: object):
 		return
 
 	return key_list[position]
+
+
+def get_keys_by_value(d: dict, search: object):
+	result = []
+	for key, value in d.items():
+		if value == search:
+			result.append(key)
+
+	return result
 
 
 @threading_utils.timeout_error_lock
