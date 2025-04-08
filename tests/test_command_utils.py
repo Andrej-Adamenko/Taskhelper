@@ -410,6 +410,38 @@ class HandleUserChangeTest(TestCase):
         mock_load_users.assert_not_called()
 
 
+class HandleHelpCommandTest(TestCase):
+    def test_default(self, *args):
+        mock_bot = Mock(spec=TeleBot)
+        chat_id = -10087654321
+        msg_data = test_helper.create_mock_message("", [], chat_id)
+        help_text = ""
+        help_text += "/set_dump_chat_id <CHAT_ID> — changes dump chat id\n\n"
+        help_text += "/set_interval_check_time <MINUTES> — changes delay between interval checks\n\n"
+        help_text += "/add_main_channel <CHANNEL_ID> — add main channel\n\n"
+        help_text += "/remove_main_channel <CHANNEL_ID> — remove main channel\n\n"
+        help_text += "/set_timezone <TIMEZONE> — changes timezone identifier\n"
+        help_text += "Example: /set_timezone Europe/Kiev\n\n"
+        help_text += "/set_user_tag <TAG> <USERNAME_OR_USER_ID> — add or change username or user id of the tag\n"
+        help_text += "Example with username: /set_user_tag aa @username\n"
+        help_text += "Example with user id: /set_user_tag aa 321123321\n\n"
+        help_text += "/remove_user_tag <TAG> — remove user assigned to specified tag\n"
+        help_text += "Example with username: /remove_user_tag aa\n\n"
+        help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — changes default subchannel\n"
+        help_text += "Example: /set_default_subchannel -100987987987 aa 1\n\n"
+        help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — changes text on one of the buttons\n"
+        help_text += "Available buttons: opened, closed, assigned, cc, defer, check, priority\n"
+        help_text += "Example: /set_button_text opened Op\n\n"
+        help_text += "/set_hashtag_text <HASHTAG_NAME> <NEW_VALUE> — changes hashtag text of one of the service hashtags\n"
+        help_text += "Available hashtags: opened, closed, deferred, priority\n"
+        help_text += "Example: /set_hashtag_text opened Op\n\n"
+        help_text += "/set_remind_without_interaction <MINUTES> — changes timeout for skipping daily reminder if user is interacted with tickets within this time\n"
+        help_text += "Example: /set_remind_without_interaction 1440\n\n"
+
+        command_utils.handle_help_command(mock_bot, msg_data, "")
+        mock_bot.send_message.assert_called_once_with(chat_id=chat_id, text=help_text)
+
+
 
 if __name__ == "__main__":
     main()

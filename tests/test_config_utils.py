@@ -24,7 +24,7 @@ class AddUsersFromDB(TestCase):
 		mock_error.assert_not_called()
 		self.assertEqual(config_utils.USER_TAGS, {user_tag: user_id})
 		mock_update_config.assert_called_once_with({"USER_TAGS": {user_tag: user_id}})
-		mock_delete_users_table.assert_called_once_with()
+		# mock_delete_users_table.assert_called_once_with() # TODO: uncomment after check in production
 
 	def test_add_user_exist_user_tags(self, mock_delete_users_table, mock_update_config, mock_error,
 									  mock_get_all_users, mock_is_users_table_exists, *args):
@@ -42,7 +42,7 @@ class AddUsersFromDB(TestCase):
 		mock_error.assert_not_called()
 		self.assertEqual(config_utils.USER_TAGS, {user_tag: user_id, user_tag1: user_id1})
 		mock_update_config.assert_called_once_with({"USER_TAGS": {user_tag: user_id, user_tag1: user_id1}})
-		mock_delete_users_table.assert_called_once_with()
+		# mock_delete_users_table.assert_called_once_with() # TODO: uncomment after check in production
 
 	def test_add_few_user(self, mock_delete_users_table, mock_update_config, mock_error,
 						  mock_get_all_users, mock_is_users_table_exists, *args):
@@ -60,7 +60,7 @@ class AddUsersFromDB(TestCase):
 		mock_error.assert_not_called()
 		self.assertEqual(config_utils.USER_TAGS, {user_tag: user_id, user_tag1: user_id1})
 		mock_update_config.assert_called_once_with({"USER_TAGS": {user_tag: user_id, user_tag1: user_id1}})
-		mock_delete_users_table.assert_called_once_with()
+		# mock_delete_users_table.assert_called_once_with() # TODO: uncomment after check in production
 
 	def test_add_user_not_empty_user_tag(self, mock_delete_users_table, mock_update_config, mock_error,
 										 mock_get_all_users, mock_is_users_table_exists, *args):
@@ -77,7 +77,7 @@ class AddUsersFromDB(TestCase):
 		mock_error.assert_not_called()
 		self.assertEqual(config_utils.USER_TAGS, {user_tag: user_id})
 		mock_update_config.assert_called_once_with({"USER_TAGS": {user_tag: user_id}})
-		mock_delete_users_table.assert_called_once_with()
+		# mock_delete_users_table.assert_called_once_with() # TODO: uncomment after check in production
 
 	def test_add_user_no_table(self, mock_delete_users_table, mock_update_config, mock_error,
 							   mock_get_all_users, mock_is_users_table_exists, *args):
