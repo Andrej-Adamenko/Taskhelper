@@ -469,7 +469,7 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 	current_subchannel_user = hashtag_data.get_assigned_user()
 	followed_users = hashtag_data.get_followed_users()
 
-	main_channel_user_tags = config_utils.USER_TAGS.copy()
+	main_channel_user_tags = config_utils.USER_TAGS.keys()
 
 	if not main_channel_user_tags:
 		return
@@ -492,7 +492,7 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 
 
 def get_subchannels_forwarding_data():
-	user_tags = config_utils.USER_TAGS.copy()
+	user_tags = config_utils.USER_TAGS.keys()
 	if not user_tags:
 		return []
 
