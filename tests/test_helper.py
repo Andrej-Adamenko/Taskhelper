@@ -19,6 +19,7 @@ def create_mock_message(text: str, entities: List[MessageEntity], chat_id: int =
 	message = Mock(spec=Message)
 	message.text = text
 	message.caption = None
+	message.empty = False
 	message.entities = entities
 
 	if chat_id:

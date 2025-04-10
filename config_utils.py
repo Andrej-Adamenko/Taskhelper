@@ -21,11 +21,24 @@ BOT_TOKEN: str = ""
 DUMP_CHAT_ID: str = ""
 DISCUSSION_CHAT_DATA: dict = {}
 DEFAULT_USER_DATA: dict = {}
+USER_TAGS: dict = {}
 UPDATE_INTERVAL: int = 60
 INTERVAL_UPDATE_START_DELAY: int = 10
 MAX_BUTTONS_IN_ROW: int = 3
 DELAY_AFTER_ONE_SCAN: int = 4
-SUPPORTED_CONTENT_TYPES: list = ["animation", "audio", "photo", "voice", "video", "document", "text"]
+SUPPORTED_CONTENT_TYPES_TICKET: list = ["animation", "audio", "photo", "voice", "video", "document", "text"]
+SUPPORTED_CONTENT_TYPES_COMMENT: list = ["text", "audio", "document", "animation", "game", "photo", "sticker",
+										 "video", "video_note", "voice", "location", "contact", "venue", "dice",
+										 "new_chat_members", "left_chat_member", "new_chat_title", "new_chat_photo",
+										 "delete_chat_photo", "group_chat_created", "supergroup_chat_created",
+										 "channel_chat_created", "migrate_to_chat_id", "migrate_from_chat_id",
+										 "pinned_message", "invoice", "successful_payment", "connected_website",
+										 "poll", "passport_data", "proximity_alert_triggered", "video_chat_scheduled",
+										 "video_chat_started", "video_chat_ended", "video_chat_participants_invited",
+										 "web_app_data", "message_auto_delete_timer_changed", "forum_topic_created",
+										 "forum_topic_edited", "forum_topic_closed", "forum_topic_reopened",
+										 "general_forum_topic_hidden", "general_forum_topic_unhidden",
+										 "write_access_allowed", "user_shared", "chat_shared", "story"]
 APP_API_ID: int = 0
 APP_API_HASH: str = ""
 EXPORTED_CHATS: list = []
@@ -108,3 +121,22 @@ def update_config(updated_config_data):
 
 	with open(CONFIG_FILE, "w", encoding="utf-8") as f:
 		json.dump(current_config, f, indent=4, ensure_ascii=False)
+
+
+def add_users_from_db():
+	if not db_utils.is_users_table_exists():
+		return
+
+	try:
+		user_data = db_utils.get_all_users()
+	except Exception as E:
+		logging.error(f"Error with get all users - {E}")
+		return
+
+	for user in user_data:
+		main_channel_id, user_id, user_tag = user
+		if user_tag not in USER_TAGS:
+			USER_TAGS[user_tag] = user_id
+
+	update_config({"USER_TAGS": USER_TAGS})
+	# db_utils.delete_users_table() # TODO: uncomment after check in production

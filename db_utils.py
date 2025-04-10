@@ -124,17 +124,6 @@ def create_tables():
 
 		CURSOR.execute(individual_channel_settings_table_sql)
 
-	if not is_table_exists("users"):
-		users_table_sql = '''
-			CREATE TABLE "users" (
-				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
-				"main_channel_id"	INT NOT NULL,
-				"user_id"           INT NOT NULL,
-				"user_tag"          TEXT NOT NULL		
-			); '''
-
-		CURSOR.execute(users_table_sql)
-
 	if not is_table_exists("main_channels"):
 		main_channels_table_sql = '''
 			CREATE TABLE "main_channels" (
@@ -213,6 +202,18 @@ def create_tables():
 			); '''
 
 		CURSOR.execute(custom_channel_hashtags_table_sql)
+
+	if not is_table_exists("comment_deleted_messages"):
+		comment_deleted_messages_table_sql = '''
+					CREATE TABLE "comment_deleted_messages" (
+						"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
+						"discussion_chat_id"	INT NOT NULL,
+						"message_id"	INT NOT NULL,
+						"reply_to_message_id"	INT,
+						"sender_id"	INT
+					); '''
+
+		CURSOR.execute(comment_deleted_messages_table_sql)
 
 	DB_CONNECTION.commit()
 
@@ -349,11 +350,28 @@ def insert_comment_message(reply_to_message_id, discussion_message_id, discussio
 
 
 @db_thread_lock
+def delete_comment_message(discussion_message_id, discussion_chat_id):
+	insert_comment_deleted_message(discussion_message_id, discussion_chat_id)
+	sql = "DELETE FROM comment_messages WHERE message_id = (?) and discussion_chat_id = (?)"
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
 def is_comment_exist(discussion_message_id, discussion_chat_id):
 	sql = "SELECT id FROM comment_messages WHERE message_id=(?) and discussion_chat_id=(?)"
 	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
 	result = CURSOR.fetchone()
 	return bool(result)
+
+
+@db_thread_lock
+def get_reply_comment_message(discussion_message_id, discussion_chat_id):
+	sql = "SELECT reply_to_message_id FROM comment_messages WHERE message_id=(?) and discussion_chat_id=(?)"
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
+	result = CURSOR.fetchone()
+	if result:
+		return result[0]
 
 
 @db_thread_lock
@@ -408,6 +426,40 @@ def get_last_comment(discussion_message_id, discussion_chat_id, ignored_sender_i
 	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id, ignored_sender_id,))
 	result = CURSOR.fetchone()
 	return result[0]
+
+
+@db_thread_lock
+def insert_comment_deleted_message(discussion_message_id, discussion_chat_id):
+	if is_comment_deleted_exist(discussion_message_id, discussion_chat_id):
+		return
+
+	if is_comment_exist(discussion_message_id, discussion_chat_id):
+		sql = ''' INSERT INTO comment_deleted_messages(discussion_chat_id, message_id, reply_to_message_id, sender_id)
+					SELECT discussion_chat_id, message_id, reply_to_message_id, sender_id FROM comment_messages
+					WHERE discussion_chat_id = (?) and message_id = (?) '''
+	else:
+		sql = "INSERT INTO comment_deleted_messages(discussion_chat_id, message_id) VALUES (?, ?)"
+
+	CURSOR.execute(sql, (discussion_chat_id, discussion_message_id))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def is_comment_deleted_exist(discussion_message_id, discussion_chat_id):
+	sql = "SELECT id FROM comment_deleted_messages WHERE message_id=(?) and discussion_chat_id=(?)"
+	CURSOR.execute(sql, (discussion_message_id, discussion_chat_id,))
+	result = CURSOR.fetchone()
+	return bool(result)
+
+
+@db_thread_lock
+def get_comment_deleted_message_ids(discussion_chat_id: int, discussion_message_id: list):
+	format_string = ",".join(["?"] * len(discussion_message_id))
+	sql = "SELECT message_id FROM comment_deleted_messages WHERE discussion_chat_id=(?) and message_id IN (%s)"
+	CURSOR.execute(sql % format_string, (discussion_chat_id,) + tuple(discussion_message_id))
+	result = CURSOR.fetchall()
+	if result:
+		return [row[0] for row in result]
 
 
 @db_thread_lock
@@ -514,6 +566,13 @@ def get_main_channel_ids():
 
 
 @db_thread_lock
+def get_main_channel_id():
+	ids = get_main_channel_ids()
+	if ids and len(ids) > 0:
+		return ids[0]
+
+
+@db_thread_lock
 def is_main_channel_exists(main_channel_id):
 	sql = "SELECT id FROM main_channels WHERE channel_id=(?)"
 	CURSOR.execute(sql, (main_channel_id,))
@@ -536,61 +595,13 @@ def delete_main_channel(main_channel_id):
 
 
 @db_thread_lock
-def get_main_channel_from_user(user_id):
-	sql = "SELECT main_channel_id FROM users WHERE user_id=(?)"
-	CURSOR.execute(sql, (user_id,))
-	result = CURSOR.fetchone()
-	if result:
-		return result[0]
+def is_users_table_exists():
+	return is_table_exists("users")
 
-
-@db_thread_lock
-def get_tags_from_user_id(user_id):
-	sql = "SELECT user_tag FROM users WHERE user_id=(?)"
-	CURSOR.execute(sql, (user_id,))
-	result = CURSOR.fetchall()  # one user can have multiple tags assigned to him
-	if result:
-		return [row[0] for row in result]
-	else:
-		return []
-
-
-@db_thread_lock
-def get_main_channel_user_tags(main_channel_id):
-	sql = "SELECT user_tag FROM users WHERE main_channel_id=(?)"
-	CURSOR.execute(sql, (main_channel_id,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-
-
-@db_thread_lock
-def get_main_channel_user_tags_by_user(user_id):
-	sql = ("SELECT DISTINCT u.user_tag FROM users u "
-		   "LEFT JOIN users u1 ON u1.main_channel_id = u.main_channel_id "
-		   "WHERE u1.user_id=(?)"
-		   "ORDER BY u.id")
-	CURSOR.execute(sql, (user_id,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-
-
-@db_thread_lock
-def insert_or_update_user(main_channel_id, user_tag, user_id):
-	if is_user_tag_exists(main_channel_id, user_tag):
-		sql = "UPDATE users SET user_id=(?) WHERE main_channel_id=(?) AND user_tag=(?)"
-	else:
-		sql = "INSERT INTO users(user_id, main_channel_id, user_tag) VALUES (?, ?, ?)"
-
-	CURSOR.execute(sql, (user_id, main_channel_id, user_tag,))
-	DB_CONNECTION.commit()
-
-
-@db_thread_lock
-def delete_user_by_tag(main_channel_id, user_tag):
-	sql = "DELETE FROM users WHERE main_channel_id=(?) AND user_tag=(?)"
-	CURSOR.execute(sql, (main_channel_id, user_tag,))
+def delete_users_table():
+	table_name = "users"
+	sql = f"DROP TABLE IF EXISTS {table_name}"
+	CURSOR.execute(sql)
 	DB_CONNECTION.commit()
 
 
@@ -633,30 +644,11 @@ def is_main_message_exists(main_channel_id, main_message_id):
 
 
 @db_thread_lock
-def is_user_tag_exists(main_channel_id, user_tag):
-	sql = "SELECT id FROM users WHERE main_channel_id=(?) AND user_tag=(?)"
-	CURSOR.execute(sql, (main_channel_id, user_tag,))
-	result = CURSOR.fetchone()
-	return bool(result)
-
-
-@db_thread_lock
 def get_all_users():
 	sql = "SELECT main_channel_id, user_id, user_tag FROM users"
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
 	return result
-
-
-@db_thread_lock
-def get_channel_user_tags(main_channel_id):
-	sql = "SELECT user_tag FROM users WHERE main_channel_id=(?)"
-	CURSOR.execute(sql, (main_channel_id,))
-	result = CURSOR.fetchall()
-	if result:
-		return [row[0] for row in result]
-	else:
-		return []
 
 
 @db_thread_lock
@@ -927,9 +919,9 @@ def find_copied_message_in_channel(individual_channel_id, main_message_id):
 
 
 @db_thread_lock
-def get_all_individual_channels(main_channel_id):
-	sql = "SELECT channel_id, settings FROM individual_channel_settings WHERE main_channel_id=(?)"
-	CURSOR.execute(sql, (main_channel_id,))
+def get_all_individual_channels():
+	sql = "SELECT channel_id, settings FROM individual_channel_settings"
+	CURSOR.execute(sql)
 	result = CURSOR.fetchall()
 	if result:
 		return result

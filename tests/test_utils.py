@@ -2,6 +2,7 @@ from unittest import TestCase, main
 from unittest.mock import Mock
 
 from pyrogram.types import InlineKeyboardMarkup
+from telebot import TeleBot
 from telebot.types import MessageEntity, Message, InlineKeyboardButton
 
 import config_utils
@@ -176,6 +177,43 @@ class MergeKeyboardMarkupTest(TestCase):
 
 		result = utils.merge_keyboard_markup(mock_keyboard, mock_keyboard2, empty_button=None)
 		self.assertEqual(result.keyboard, mock_keyboard.keyboard + mock_keyboard2.keyboard)
+
+
+class GetMessageContentByIdTest(TestCase):
+	def test_get_message_content_by_id(self):
+		mock_bot = Mock(spec=TeleBot)
+		chat_id = -10012345678
+		message_id = 125
+		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
+		dump_message_id = 345
+		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_bot.forward_message.return_value = mock_message
+
+		result = utils.get_message_content_by_id(mock_bot, chat_id, message_id)
+		mock_bot.forward_message.assert_called_once_with(chat_id=dump_chat_id, from_chat_id=chat_id, message_id=message_id)
+		mock_bot.delete_message.assert_called_once_with(chat_id=dump_chat_id, message_id=dump_message_id)
+		self.assertEqual(result.chat.id, chat_id)
+		self.assertEqual(result.message_id, message_id)
+		self.assertEqual(result.id, message_id)
+
+	def test_get_main_message_content_by_id(self):
+		mock_bot = Mock(spec=TeleBot)
+		chat_id = -10012345678
+		message_id = 125
+		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
+		dump_message_id = 345
+		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_bot.forward_message.return_value = mock_message
+
+		result = utils.get_main_message_content_by_id(mock_bot, chat_id, message_id)
+		mock_bot.forward_message.assert_called_once_with(chat_id=dump_chat_id, from_chat_id=chat_id, message_id=message_id)
+		mock_bot.delete_message.assert_called_once_with(chat_id=dump_chat_id, message_id=dump_message_id)
+		self.assertEqual(result.chat.id, chat_id)
+		self.assertEqual(result.message_id, message_id)
+		self.assertEqual(result.id, message_id)
+
+
+
 
 
 if __name__ == "__main__":

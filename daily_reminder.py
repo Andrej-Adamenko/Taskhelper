@@ -93,9 +93,8 @@ def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str)
 
 
 def send_daily_reminders(bot: telebot.TeleBot):
-	user_data = db_utils.get_all_users()
-	for user in user_data:
-		main_channel_id, user_id, user_tag = user
+	main_channel_id = db_utils.get_main_channel_id()
+	for (user_tag, user_id) in config_utils.USER_TAGS.items():
 		if not db_utils.is_user_reminder_data_exists(main_channel_id, user_tag):
 			db_utils.insert_or_update_last_user_interaction(main_channel_id, user_tag, None)
 
