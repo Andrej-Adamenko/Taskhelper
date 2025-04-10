@@ -714,6 +714,8 @@ def add_new_user_tag_to_channels(bot: telebot.TeleBot, user_tag: str):
 		if settings_message_id:
 			update_settings_message(bot, channel_id, settings_message_id)
 
+		_update_user_tags_in_settings_menu_ticket(bot, channel_id)
+
 
 def remove_user_tag_from_channels(bot: telebot.TeleBot, user_tag: str):
 	channel_data = db_utils.get_all_individual_channels()
@@ -740,3 +742,16 @@ def remove_user_tag_from_channels(bot: telebot.TeleBot, user_tag: str):
 		settings_message_id = settings.get(SETTING_TYPES.SETTINGS_MESSAGE_ID)
 		if settings_message_id:
 			update_settings_message(bot, channel_id, settings_message_id)
+
+		_update_user_tags_in_settings_menu_ticket(bot, channel_id)
+
+
+def _update_user_tags_in_settings_menu_ticket(bot, channel_id):
+	if _get_channel_ticket_settings_state(channel_id, TICKET_MENU_TYPE) in [CB_TYPES.ASSIGNED_SELECTED, CB_TYPES.REPORTED_SELECTED,
+					 CB_TYPES.FOLLOWED_SELECTED, CB_TYPES.OPEN_CHANNEL_SETTINGS]:
+		newest_message_id = db_utils.get_newest_copied_message(channel_id)
+		post_data = utils.get_message_content_by_id(bot, channel_id, newest_message_id)
+		call = CallbackQuery(0, post_data.from_user, "", "", "", message=post_data)
+		keyboard = forwarding_utils.get_keyboard_from_channel_message(bot, call, newest_message_id)
+		utils.edit_message_keyboard(bot, post_data, keyboard_markup=keyboard, chat_id=channel_id,
+									message_id=newest_message_id)

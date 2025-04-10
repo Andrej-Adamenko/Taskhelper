@@ -1,5 +1,5 @@
 from unittest import TestCase, main
-from unittest.mock import patch, Mock, call
+from unittest.mock import patch, Mock, call, ANY
 
 from telebot import TeleBot
 from telebot.types import CallbackQuery, User, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberOwner
@@ -9,12 +9,15 @@ from tests import test_helper
 import channel_manager
 
 
+@patch("telebot.types.CallbackQuery.__init__", return_value=None)
 @patch("channel_manager.NEW_USER_TYPE", "+")
+@patch("channel_manager._update_user_tags_in_settings_menu_ticket")
+@patch("db_utils.update_individual_channel_settings")
+@patch("channel_manager.update_settings_message")
+@patch("db_utils.get_all_individual_channels")
 class AddNewUserTagToChannelsTest(TestCase):
-	@patch("channel_manager.update_settings_message")
-	@patch("db_utils.update_individual_channel_settings")
-	@patch("db_utils.get_all_individual_channels")
-	def test_add_new_user(self, mock_get_all_individual_channels, mock_update_individual_channel_settings, *args):
+	def test_add_new_user(self, mock_get_all_individual_channels, mock_update_settings_message,
+						  mock_update_individual_channel_settings, mock__update_user_tags_in_settings_menu_ticket, *args):
 		channel_settings = '{"assigned": ["FF", "+"], "cc": ["FF"]}'
 		channel_id = -10012345678
 		mock_get_all_individual_channels.return_value = [[channel_id, channel_settings]]
@@ -24,11 +27,11 @@ class AddNewUserTagToChannelsTest(TestCase):
 		channel_manager.add_new_user_tag_to_channels(mock_bot, new_user_tag)
 		mock_get_all_individual_channels.assert_called_once_with()
 		mock_update_individual_channel_settings.assert_called_once_with(channel_id, '{"assigned": ["FF", "+", "NN"], "cc": ["FF"]}')
+		mock_update_settings_message.assert_not_called()
+		mock__update_user_tags_in_settings_menu_ticket.assert_called_once_with(mock_bot, channel_id)
 
-	@patch("db_utils.update_individual_channel_settings")
-	@patch("channel_manager.update_settings_message")
-	@patch("db_utils.get_all_individual_channels")
-	def test_update_settings_message(self, mock_get_all_individual_channels, mock_update_settings_message, *args):
+	def test_update_settings_message(self, mock_get_all_individual_channels, mock_update_settings_message,
+									 mock_update_individual_channel_settings, mock__update_user_tags_in_settings_menu_ticket, *args):
 		channel_settings = '{"assigned": ["FF", "+"], "cc": ["FF"], "settings_message_id": 3079}'
 		channel_id = -10012345678
 		mock_get_all_individual_channels.return_value = [[channel_id, channel_settings]]
@@ -37,14 +40,19 @@ class AddNewUserTagToChannelsTest(TestCase):
 
 		channel_manager.add_new_user_tag_to_channels(mock_bot, new_user_tag)
 		mock_get_all_individual_channels.assert_called_once_with()
+		mock_update_individual_channel_settings.assert_called_once_with(channel_id, '{"assigned": ["FF", "+", "NN"], "cc": ["FF"], "settings_message_id": 3079}')
 		mock_update_settings_message.assert_called_once_with(mock_bot, channel_id, 3079)
+		mock__update_user_tags_in_settings_menu_ticket.assert_called_once_with(mock_bot, channel_id)
 
 
+@patch("telebot.types.CallbackQuery.__init__", return_value=None)
+@patch("channel_manager._update_user_tags_in_settings_menu_ticket")
+@patch("db_utils.update_individual_channel_settings")
+@patch("channel_manager.update_settings_message")
+@patch("db_utils.get_all_individual_channels")
 class RemoveUserTagFromChannelsTest(TestCase):
-	@patch("channel_manager.update_settings_message")
-	@patch("db_utils.update_individual_channel_settings")
-	@patch("db_utils.get_all_individual_channels")
-	def test_remove_user(self, mock_get_all_individual_channels, mock_update_individual_channel_settings, *args):
+	def test_remove_user(self, mock_get_all_individual_channels, mock_update_settings_message,
+						 mock_update_individual_channel_settings, mock__update_user_tags_in_settings_menu_ticket, *args):
 		channel_settings = '{"assigned": ["FF", "NN"], "cc": ["NN"]}'
 		channel_id = -10012345678
 		mock_get_all_individual_channels.return_value = [[channel_id, channel_settings]]
@@ -54,11 +62,11 @@ class RemoveUserTagFromChannelsTest(TestCase):
 		channel_manager.remove_user_tag_from_channels(mock_bot, user_tag)
 		mock_get_all_individual_channels.assert_called_once_with()
 		mock_update_individual_channel_settings.assert_called_once_with(channel_id, '{"assigned": ["FF"], "cc": []}')
+		mock_update_settings_message.assert_not_called()
+		mock__update_user_tags_in_settings_menu_ticket.assert_called_once_with(mock_bot, channel_id)
 
-	@patch("db_utils.update_individual_channel_settings")
-	@patch("channel_manager.update_settings_message")
-	@patch("db_utils.get_all_individual_channels")
-	def test_update_settings_message(self, mock_get_all_individual_channels, mock_update_settings_message, *args):
+	def test_update_settings_message(self, mock_get_all_individual_channels, mock_update_settings_message,
+									 mock_update_individual_channel_settings, mock__update_user_tags_in_settings_menu_ticket, *args):
 		channel_settings = '{"assigned": ["FF", "NN"], "cc": ["NN"], "settings_message_id": 3079}'
 		channel_id = -10012345678
 		mock_get_all_individual_channels.return_value = [[channel_id, channel_settings]]
@@ -67,7 +75,139 @@ class RemoveUserTagFromChannelsTest(TestCase):
 
 		channel_manager.remove_user_tag_from_channels(mock_bot, user_tag)
 		mock_get_all_individual_channels.assert_called_once_with()
+		mock_update_individual_channel_settings.assert_called_once_with(channel_id, '{"assigned": ["FF"], "cc": [], "settings_message_id": 3079}')
 		mock_update_settings_message.assert_called_once_with(mock_bot, channel_id, 3079)
+		mock__update_user_tags_in_settings_menu_ticket.assert_called_once_with(mock_bot, channel_id)
+
+
+@patch("utils.edit_message_keyboard")
+@patch("forwarding_utils.get_keyboard_from_channel_message")
+@patch("utils.get_message_content_by_id")
+@patch("db_utils.get_newest_copied_message")
+class UpdateUserTagsInSettingsMenuTicket(TestCase):
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {channel_manager.TICKET_MENU_TYPE: {
+							"user": 1, "state": channel_manager.CB_TYPES.ASSIGNED_SELECTED}}})
+	def test_update_last_ticket_keyboard_assigned(self, mock_get_newest_copied_message, mock_get_message_content_by_id,
+										  mock_get_keyboard_from_channel_message, mock_edit_message_keyboard, *args):
+		channel_id = -10012345678
+		newest_message_id = 156
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], channel_id, newest_message_id)
+		mock_message.from_user = Mock(id=15345)
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_newest_copied_message.return_value = newest_message_id
+		mock_get_message_content_by_id.return_value = mock_message
+		mock_get_keyboard_from_channel_message.return_value = mock_keyboard
+
+		channel_manager._update_user_tags_in_settings_menu_ticket(mock_bot, channel_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id(mock_bot, channel_id, newest_message_id)
+		mock_get_keyboard_from_channel_message.assert_called_once_with(mock_bot, ANY, newest_message_id)
+		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_message, keyboard_markup=mock_keyboard,
+														   chat_id=channel_id, message_id=newest_message_id)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {channel_manager.TICKET_MENU_TYPE: {
+							"user": 1, "state": channel_manager.CB_TYPES.REPORTED_SELECTED}}})
+	def test_update_last_ticket_keyboard_reported(self, mock_get_newest_copied_message, mock_get_message_content_by_id,
+										  mock_get_keyboard_from_channel_message, mock_edit_message_keyboard, *args):
+		channel_id = -10012345678
+		newest_message_id = 156
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], channel_id, newest_message_id)
+		mock_message.from_user = Mock(id=15345)
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_newest_copied_message.return_value = newest_message_id
+		mock_get_message_content_by_id.return_value = mock_message
+		mock_get_keyboard_from_channel_message.return_value = mock_keyboard
+
+		channel_manager._update_user_tags_in_settings_menu_ticket(mock_bot, channel_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id(mock_bot, channel_id, newest_message_id)
+		mock_get_keyboard_from_channel_message.assert_called_once_with(mock_bot, ANY, newest_message_id)
+		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_message, keyboard_markup=mock_keyboard,
+														   chat_id=channel_id, message_id=newest_message_id)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {channel_manager.TICKET_MENU_TYPE: {
+							"user": 1, "state": channel_manager.CB_TYPES.FOLLOWED_SELECTED}}})
+	def test_update_last_ticket_keyboard_followed(self, mock_get_newest_copied_message, mock_get_message_content_by_id,
+										  mock_get_keyboard_from_channel_message, mock_edit_message_keyboard, *args):
+		channel_id = -10012345678
+		newest_message_id = 156
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], channel_id, newest_message_id)
+		mock_message.from_user = Mock(id=15345)
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_newest_copied_message.return_value = newest_message_id
+		mock_get_message_content_by_id.return_value = mock_message
+		mock_get_keyboard_from_channel_message.return_value = mock_keyboard
+
+		channel_manager._update_user_tags_in_settings_menu_ticket(mock_bot, channel_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id(mock_bot, channel_id, newest_message_id)
+		mock_get_keyboard_from_channel_message.assert_called_once_with(mock_bot, ANY, newest_message_id)
+		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_message, keyboard_markup=mock_keyboard,
+														   chat_id=channel_id, message_id=newest_message_id)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {channel_manager.TICKET_MENU_TYPE: {
+							"user": 1, "state": channel_manager.CB_TYPES.OPEN_CHANNEL_SETTINGS}}})
+	def test_update_last_ticket_keyboard_open_channel(self, mock_get_newest_copied_message, mock_get_message_content_by_id,
+										  mock_get_keyboard_from_channel_message, mock_edit_message_keyboard, *args):
+		channel_id = -10012345678
+		newest_message_id = 156
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], channel_id, newest_message_id)
+		mock_message.from_user = Mock(id=15345)
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_newest_copied_message.return_value = newest_message_id
+		mock_get_message_content_by_id.return_value = mock_message
+		mock_get_keyboard_from_channel_message.return_value = mock_keyboard
+
+		channel_manager._update_user_tags_in_settings_menu_ticket(mock_bot, channel_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id.assert_called_once_with(mock_bot, channel_id, newest_message_id)
+		mock_get_keyboard_from_channel_message.assert_called_once_with(mock_bot, ANY, newest_message_id)
+		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_message, keyboard_markup=mock_keyboard,
+														   chat_id=channel_id, message_id=newest_message_id)
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {-10012345678: {channel_manager.TICKET_MENU_TYPE: {
+							"user": 1, "state": channel_manager.CB_TYPES.REMIND_SELECTED}}})
+	def test_update_last_ticket_keyboard_remind(self, mock_get_newest_copied_message, mock_get_message_content_by_id,
+										  mock_get_keyboard_from_channel_message, mock_edit_message_keyboard, *args):
+		channel_id = -10012345678
+		newest_message_id = 156
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], channel_id, newest_message_id)
+		mock_message.from_user = Mock(id=15345)
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_newest_copied_message.return_value = newest_message_id
+		mock_get_message_content_by_id.return_value = mock_message
+		mock_get_keyboard_from_channel_message.return_value = mock_keyboard
+
+		channel_manager._update_user_tags_in_settings_menu_ticket(mock_bot, channel_id)
+		mock_get_newest_copied_message.assert_not_called()
+		mock_get_message_content_by_id.assert_not_called()
+		mock_get_keyboard_from_channel_message.assert_not_called()
+		mock_edit_message_keyboard.assert_not_called()
+
+	@patch("channel_manager.CHANNEL_TICKET_SETTINGS_BUTTONS", {})
+	def test_update_last_ticket_keyboard_empty(self, mock_get_newest_copied_message, mock_get_message_content_by_id,
+										  mock_get_keyboard_from_channel_message, mock_edit_message_keyboard, *args):
+		channel_id = -10012345678
+		newest_message_id = 156
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message("", [], channel_id, newest_message_id)
+		mock_message.from_user = Mock(id=15345)
+		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
+		mock_get_newest_copied_message.return_value = newest_message_id
+		mock_get_message_content_by_id.return_value = mock_message
+		mock_get_keyboard_from_channel_message.return_value = mock_keyboard
+
+		channel_manager._update_user_tags_in_settings_menu_ticket(mock_bot, channel_id)
+		mock_get_newest_copied_message.assert_not_called()
+		mock_get_message_content_by_id.assert_not_called()
+		mock_get_keyboard_from_channel_message.assert_not_called()
+		mock_edit_message_keyboard.assert_not_called()
+
 
 @patch("db_utils.get_oldest_copied_message", return_value=False)
 class TestChannelSettingsMessage(TestCase):
