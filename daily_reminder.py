@@ -28,13 +28,13 @@ def ticket_update_time_comparator(ticket):
 	return max(update_time or 0, remind_time or 0)
 
 
-def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str):
-	ticket_data = db_utils.get_tickets_for_reminding(main_channel_id, user_id, user_tag)
+def get_message_for_reminding(user_id: int, user_tag: str):
+	ticket_data = db_utils.get_tickets_for_reminding(user_id, user_tag)
 	if not ticket_data:
-		logging.info(f"No tickets for reminding were found in {user_tag, main_channel_id}")
+		logging.info(f"No tickets for reminding were found in {user_tag}")
 		return
 
-	channel_ids = db_utils.get_user_individual_channels(main_channel_id, user_id)
+	channel_ids = db_utils.get_user_individual_channels(user_id)
 	channel_data = {}
 	for channel_id, settings in channel_ids:
 		channel_data[channel_id] = json.loads(settings)
@@ -83,7 +83,7 @@ def get_message_for_reminding(main_channel_id: int, user_id: int, user_tag: str)
 	filtered_ticket_data = filtered_by_priority
 
 	if not filtered_ticket_data:
-		logging.info(f"No forwarded tickets for reminding were found in {user_tag, main_channel_id}")
+		logging.info(f"No forwarded tickets for reminding were found in {user_tag}")
 		return
 
 	filtered_ticket_data.sort(key=ticket_update_time_comparator)
@@ -105,7 +105,7 @@ def send_daily_reminders(bot: telebot.TeleBot):
 
 		message_to_remind = None
 		while not message_to_remind:
-			message_to_remind = get_message_for_reminding(main_channel_id, user_id, user_tag)
+			message_to_remind = get_message_for_reminding(user_id, user_tag)
 			if not message_to_remind:
 				break
 			message_id_to_remind, copied_channel_id, copied_message_id = message_to_remind

@@ -287,7 +287,7 @@ def filter_due_deferred_tickets(main_channel_id: int, main_message_id: int, hash
 def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
 	subchannel_ids = set()
 	priority = hashtag_data.get_priority_number_or_default()
-	channel_data = db_utils.get_individual_channels_by_priority(main_channel_id, priority)
+	channel_data = db_utils.get_individual_channels_by_priority(priority)
 	channel_data = [[channel_id, json.loads(settings)] for channel_id, settings in channel_data]
 
 	channel_data = filter_due_deferred_tickets(main_channel_id, main_message_id, hashtag_data, channel_data)

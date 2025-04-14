@@ -31,6 +31,13 @@ def is_table_exists(table_name):
 	return bool(result)
 
 
+def is_column_exists(table_name, column_name):
+	sql = "SELECT count(name) FROM pragma_table_info(?) WHERE name=(?)"
+	CURSOR.execute(sql, (table_name,column_name))
+	result = CURSOR.fetchone()[0]
+	return bool(result)
+
+
 def create_tables():
 	if not is_table_exists("discussion_messages"):
 		discussion_messages_table_sql = '''
@@ -115,7 +122,6 @@ def create_tables():
 		individual_channel_settings_table_sql = '''
 			CREATE TABLE "individual_channel_settings" (
 				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
-				"main_channel_id"	INT NOT NULL,
 				"channel_id"        INT NOT NULL,
 				"priorities"        TEXT,
 				"settings"          TEXT,
@@ -123,6 +129,10 @@ def create_tables():
 			); '''
 
 		CURSOR.execute(individual_channel_settings_table_sql)
+	elif is_column_exists("individual_channel_settings", "main_channel_id"):
+		individual_channel_settings_drop_column_sql = "ALTER TABLE individual_channel_settings DROP COLUMN main_channel_id"
+		CURSOR.execute(individual_channel_settings_drop_column_sql)
+
 
 	if not is_table_exists("main_channels"):
 		main_channels_table_sql = '''
@@ -809,11 +819,11 @@ def get_individual_channel_settings(channel_id):
 
 
 @db_thread_lock
-def insert_individual_channel(main_channel_id, channel_id, settings, user_id):
+def insert_individual_channel(channel_id, settings, user_id):
 	if is_individual_channel_exists(channel_id):
 		return
-	sql = "INSERT INTO individual_channel_settings (main_channel_id, channel_id, settings, user_id) VALUES (?, ?, ?, ?)"
-	CURSOR.execute(sql, (main_channel_id, channel_id, settings, user_id,))
+	sql = "INSERT INTO individual_channel_settings (channel_id, settings, user_id) VALUES (?, ?, ?)"
+	CURSOR.execute(sql, (channel_id, settings, user_id,))
 	DB_CONNECTION.commit()
 
 
@@ -839,12 +849,9 @@ def delete_individual_channel(channel_id):
 
 
 @db_thread_lock
-def get_individual_channels_by_priority(main_channel_id, priority):
-	sql = '''
-		SELECT channel_id, settings FROM individual_channel_settings WHERE main_channel_id=(?) AND
-		priorities LIKE '%' || ? || '%'
-	'''
-	CURSOR.execute(sql, (main_channel_id, priority,))
+def get_individual_channels_by_priority(priority):
+	sql = "SELECT channel_id, settings FROM individual_channel_settings WHERE priorities LIKE '%' || ? || '%'"
+	CURSOR.execute(sql, (priority,))
 	result = CURSOR.fetchall()
 	if result:
 		return result
@@ -860,9 +867,9 @@ def update_individual_channel_user(channel_id, user_id):
 
 
 @db_thread_lock
-def get_user_individual_channels(main_channel_id, user_id):
-	sql = "SELECT channel_id, settings FROM individual_channel_settings WHERE main_channel_id=(?) AND user_id=(?)"
-	CURSOR.execute(sql, (main_channel_id, user_id,))
+def get_user_individual_channels(user_id):
+	sql = "SELECT channel_id, settings FROM individual_channel_settings WHERE user_id=(?)"
+	CURSOR.execute(sql, (user_id,))
 	result = CURSOR.fetchall()
 	if result:
 		return result
@@ -871,7 +878,7 @@ def get_user_individual_channels(main_channel_id, user_id):
 
 
 @db_thread_lock
-def get_tickets_for_reminding(main_channel_id, user_id, user_tag):
+def get_tickets_for_reminding(user_id, user_tag):
 	# finds all forwarded tickets from every channel where user is channel's owner
 	# that match priority and is opened (deferred tickets is ignored)
 	sql = '''
@@ -885,13 +892,13 @@ def get_tickets_for_reminding(main_channel_id, user_id, user_tag):
 		reminded_tickets.main_message_id = copied_messages.main_message_id AND
 		reminded_tickets.user_tag = (?)
 		WHERE copied_channel_id IN (
-			SELECT channel_id FROM individual_channel_settings WHERE user_id = (?) AND main_channel_id = (?)
+			SELECT channel_id FROM individual_channel_settings WHERE user_id = (?)
 		) AND copied_messages.main_message_id NOT IN (
 			SELECT main_message_id FROM scheduled_messages WHERE main_channel_id = copied_messages.main_channel_id
 		) AND tickets_data.is_opened=1;
 	'''
 
-	CURSOR.execute(sql, (user_tag, user_id, main_channel_id,))
+	CURSOR.execute(sql, (user_tag, user_id))
 	result = CURSOR.fetchall()
 	return result
 
@@ -900,11 +907,11 @@ def get_tickets_for_reminding(main_channel_id, user_id, user_tag):
 def find_copied_message_from_main(main_message_id, main_channel_id, user_id, priority):
 	sql = '''
 		SELECT copied_message_id, copied_channel_id FROM copied_messages WHERE copied_channel_id IN (
-			SELECT channel_id FROM individual_channel_settings WHERE user_id=(?) AND main_channel_id=(?)
+			SELECT channel_id FROM individual_channel_settings WHERE user_id=(?)
 			AND priorities LIKE '%' || ? || '%'
 		) AND main_message_id=(?) AND main_channel_id=(?)
 	'''
-	CURSOR.execute(sql, (user_id, main_channel_id, priority, main_message_id, main_channel_id))
+	CURSOR.execute(sql, (user_id, priority, main_message_id, main_channel_id))
 	result = CURSOR.fetchone()
 	return result
 

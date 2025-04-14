@@ -150,6 +150,8 @@ class ForwardForSubchannelTest(TestCase):
 		]
 		self.assertEqual(manager.mock_calls, expected_calls)
 
+	@patch("db_utils.insert_copied_message")
+	@patch("db_utils.insert_or_update_last_msg_id")
 	@patch("db_utils.get_main_message_from_copied")
 	@patch("forwarding_utils.generate_control_buttons")
 	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
@@ -248,6 +250,37 @@ class ForwardForSubchannelTest(TestCase):
 		result_channels = forwarding_utils.filter_creator_channels(channel_data, main_channel_id, main_message_id)
 		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
 		self.assertEqual(result_channels, [-10012345678, -10087654321])
+
+
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("db_utils.get_scheduled_message_send_time", return_value=False)
+@patch("config_utils.USER_TAGS", {"AA": 123456, "BB": 516224})
+@patch("db_utils.get_main_message_sender", return_value=123456)
+@patch("db_utils.get_custom_hashtag", return_value=None)
+@patch("db_utils.get_individual_channels_by_priority")
+class GetSubchannelIdsFromHashtags(TestCase):
+	def test_default(self, mock_get_individual_channel_by_priority, mock_get_custom_hashtag, *args):
+		main_channel_id = -10087654321
+		main_message_id = 216
+		priority = 2
+		channel_datum1 = [1, '{"due": true, "deferred": true, "assigned": ["AA", "BB"], "reported": ["BB", "CC"], "cc": ["CC", "DD", "FF"]}']
+		channel_datum2 = [2, '{"due": true, "deferred": true, "assigned": ["AA", "BB", "FF"], "reported": ["BB", "CC"], "cc": ["CC", "DD"]}']
+		channel_datum3 = [3, '{"due": false, "deferred": true, "assigned": ["AA", "BB", "FF"], "reported": ["BB", "CC"], "cc": ["CC", "DD"]}']
+		channel_datum4 = [4, '{"due": true, "deferred": true, "assigned": ["AA", "BB"], "reported": ["BB", "CC"], "cc": ["CC", "DD", "BB"]}']
+		channel_datum5 = [5, '{"due": false, "deferred": true, "assigned": ["AA", "BB"], "reported": ["BB", "CC"], "cc": ["CC", "DD", "BB"]}']
+		channel_datum6 = [6, '{"due": true, "deferred": true, "assigned": ["AA", "BB"], "reported": ["AA", "BB", "CC"], "cc": ["CC", "DD"]}']
+		channel_datum7 = [7, '{"due": false, "deferred": true, "assigned": ["AA", "BB"], "reported": ["AA", "BB", "CC"], "cc": ["CC", "DD"]}']
+		channel_data = [channel_datum1, channel_datum2, channel_datum3, channel_datum4, channel_datum5, channel_datum6, channel_datum7]
+		mock_hashtag_data = Mock(spec=HashtagData)
+		mock_hashtag_data.get_assigned_user.return_value = "FF"
+		mock_hashtag_data.get_followed_users.return_value = ["AA", "BB"]
+		mock_hashtag_data.get_priority_number_or_default.return_value = priority
+		mock_get_individual_channel_by_priority.return_value = channel_data
+
+		result = forwarding_utils.get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, mock_hashtag_data)
+		mock_hashtag_data.get_priority_number_or_default.assert_called_once_with()
+		mock_get_individual_channel_by_priority.assert_called_once_with(priority)
+		self.assertEqual(result, {2, 4, 6})
 
 
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
