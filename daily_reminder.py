@@ -89,16 +89,15 @@ def get_message_for_reminding(user_id: int, user_tag: str):
 	filtered_ticket_data.sort(key=ticket_update_time_comparator)
 	copied_channel_id, copied_message_id, main_channel_id, main_message_id, _, _, _, _ = filtered_ticket_data[0]
 
-	return main_message_id, copied_channel_id, copied_message_id
+	return main_channel_id, main_message_id, copied_channel_id, copied_message_id
 
 
 def send_daily_reminders(bot: telebot.TeleBot):
-	main_channel_id = db_utils.get_main_channel_id()
 	for (user_tag, user_id) in config_utils.USER_TAGS.items():
-		if not db_utils.is_user_reminder_data_exists(main_channel_id, user_tag):
-			db_utils.insert_or_update_last_user_interaction(main_channel_id, user_tag, None)
+		if not db_utils.is_user_reminder_data_exists(user_tag):
+			db_utils.insert_or_update_last_user_interaction(user_tag, None)
 
-		last_interaction_time = db_utils.get_last_interaction_time(main_channel_id, user_tag) or 0
+		last_interaction_time = db_utils.get_last_interaction_time(user_tag) or 0
 		seconds_since_last_interaction = time.time() - last_interaction_time
 		if seconds_since_last_interaction < config_utils.REMINDER_TIME_WITHOUT_INTERACTION * 60:
 			continue
@@ -108,7 +107,7 @@ def send_daily_reminders(bot: telebot.TeleBot):
 			message_to_remind = get_message_for_reminding(user_id, user_tag)
 			if not message_to_remind:
 				break
-			message_id_to_remind, copied_channel_id, copied_message_id = message_to_remind
+			main_channel_id, message_id_to_remind, copied_channel_id, copied_message_id = message_to_remind
 
 			forwarding_utils.delete_forwarded_message(bot, copied_channel_id, copied_message_id)
 			interval_updating_utils.update_older_message(bot, main_channel_id, message_id_to_remind)
@@ -120,7 +119,7 @@ def send_daily_reminders(bot: telebot.TeleBot):
 		if not message_to_remind:
 			continue
 
-		message_id_to_remind, _, _ = message_to_remind
+		main_channel_id, message_id_to_remind, _, _ = message_to_remind
 		db_utils.insert_or_update_remind_time(message_id_to_remind, main_channel_id, user_tag, int(time.time()))
 		logging.info(f"Sent reminder to {user_id, user_tag}, message: {message_id_to_remind, main_channel_id}.")
 

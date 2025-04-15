@@ -184,12 +184,14 @@ def create_tables():
 		user_interactions_table_sql = '''
 			CREATE TABLE "user_reminder_data" (
 				"id"	INTEGER PRIMARY KEY AUTOINCREMENT,
-				"main_channel_id"           INT NOT NULL,
 				"user_tag"                  TEXT NOT NULL,
 				"last_interaction_time"     INT
 			); '''
 
 		CURSOR.execute(user_interactions_table_sql)
+	elif is_column_exists("user_reminder_data", "main_channel_id"):
+		user_reminder_data_drop_column_sql = "ALTER TABLE user_reminder_data DROP COLUMN main_channel_id"
+		CURSOR.execute(user_reminder_data_drop_column_sql)
 
 	if not is_table_exists("reminded_tickets"):
 		reminded_tickets_table_sql = '''
@@ -730,28 +732,28 @@ def delete_ticket_data(main_message_id, main_channel_id):
 
 
 @db_thread_lock
-def insert_or_update_last_user_interaction(main_channel_id, user_tag, interaction_time):
-	if is_user_reminder_data_exists(main_channel_id, user_tag):
-		sql = "UPDATE user_reminder_data SET last_interaction_time=(?) WHERE user_tag=(?) AND main_channel_id=(?)"
+def insert_or_update_last_user_interaction(user_tag, interaction_time):
+	if is_user_reminder_data_exists(user_tag):
+		sql = "UPDATE user_reminder_data SET last_interaction_time=(?) WHERE user_tag=(?)"
 	else:
-		sql = "INSERT INTO user_reminder_data(last_interaction_time, user_tag, main_channel_id) VALUES (?, ?, ?)"
-	CURSOR.execute(sql, (interaction_time, user_tag, main_channel_id,))
+		sql = "INSERT INTO user_reminder_data(last_interaction_time, user_tag) VALUES (?, ?, ?)"
+	CURSOR.execute(sql, (interaction_time, user_tag))
 	DB_CONNECTION.commit()
 
 
 @db_thread_lock
-def get_last_interaction_time(main_channel_id, user_tag):
-	sql = "SELECT last_interaction_time FROM user_reminder_data WHERE user_tag=(?) AND main_channel_id=(?)"
-	CURSOR.execute(sql, (user_tag, main_channel_id,))
+def get_last_interaction_time(user_tag):
+	sql = "SELECT last_interaction_time FROM user_reminder_data WHERE user_tag=(?)"
+	CURSOR.execute(sql, (user_tag,))
 	result = CURSOR.fetchone()
 	if result:
 		return result[0]
 
 
 @db_thread_lock
-def is_user_reminder_data_exists(main_channel_id, user_tag):
-	sql = "SELECT id FROM user_reminder_data WHERE user_tag=(?) AND main_channel_id=(?)"
-	CURSOR.execute(sql, (user_tag, main_channel_id,))
+def is_user_reminder_data_exists(user_tag):
+	sql = "SELECT id FROM user_reminder_data WHERE user_tag=(?)"
+	CURSOR.execute(sql, (user_tag,))
 	result = CURSOR.fetchone()
 	return bool(result)
 
