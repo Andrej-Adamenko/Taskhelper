@@ -567,7 +567,7 @@ def clear_updates_in_progress():
 
 
 @db_thread_lock
-def get_main_channel_ids():
+def get_main_channel_ids() -> list:
 	sql = "SELECT channel_id FROM main_channels"
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
@@ -575,13 +575,6 @@ def get_main_channel_ids():
 		return [row[0] for row in result]
 	else:
 		return []
-
-
-@db_thread_lock
-def get_main_channel_id():
-	ids = get_main_channel_ids()
-	if ids and len(ids) > 0:
-		return ids[0]
 
 
 @db_thread_lock

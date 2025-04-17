@@ -80,6 +80,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 	copied_message = None
+	utils.add_channel_id_to_post_data(post_data)
 
 	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
@@ -108,12 +109,8 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 		)
 
 		try:
-			if post_data.text is None:
-				text, entities = utils.get_post_content(post_data)
-				copied_message = bot.send_message(chat_id=subchannel_id, text=text, entities=entities, reply_markup=keyboard_markup)
-			else:
-				copied_message = utils.copy_message(bot, chat_id=subchannel_id, message_id=main_message_id,
-			                                    from_chat_id=main_channel_id, reply_markup=keyboard_markup)
+			text, entities = utils.get_post_content(post_data)
+			copied_message = bot.send_message(chat_id=subchannel_id, text=text, entities=entities, reply_markup=keyboard_markup)
 			logging.info(f"Successfully forwarded post [{main_message_id}, {main_channel_id}] to {subchannel_id} subchannel by tags: {hashtag_data.get_hashtag_list()}")
 			db_utils.insert_copied_message(main_message_id, main_channel_id, copied_message.message_id, subchannel_id)
 			db_utils.insert_or_update_last_msg_id(copied_message.message_id, subchannel_id)
