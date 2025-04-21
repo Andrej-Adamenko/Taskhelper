@@ -139,4 +139,4 @@ def add_users_from_db():
 			USER_TAGS[user_tag] = user_id
 
 	update_config({"USER_TAGS": USER_TAGS})
-	# db_utils.delete_users_table() # TODO: uncomment after check in production
+	db_utils.delete_users_table()
