@@ -271,13 +271,8 @@ def initialize_channel(bot: telebot.TeleBot, channel_id: int, user_id: int = Non
 			if user_id is None:
 				raise E
 
-		main_channel_id = db_utils.get_main_channel_id()
-		if not main_channel_id:
-			bot.send_message(chat_id=channel_id, text="Can't recognize the user who called this command")
-			return
-
 		settings_str = json.dumps(_DEFAULT_SETTINGS)
-		db_utils.insert_individual_channel(main_channel_id, channel_id, settings_str, user_id)
+		db_utils.insert_individual_channel(channel_id, settings_str, user_id)
 
 	create_settings_message(bot, channel_id)
 

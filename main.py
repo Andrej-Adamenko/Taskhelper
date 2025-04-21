@@ -100,6 +100,13 @@ def handle_discussion_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(discussion_message_id, discussion_chat_id)
 
 
+@bot.channel_post_handler(func=main_channel_filter, content_types=['new_chat_title'])
+def handle_edit_channel_title(post_data: telebot.types.Message):
+	if len(db_utils.get_main_channel_ids()) > 1:
+		logging.info(f"Main channel {post_data.chat.id} name is changed")
+		interval_updating_utils.start_interval_updating(bot)
+
+
 @bot.edited_channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES_TICKET)
 def handle_edited_post(post_data: telebot.types.Message):
 	if post_data.media_group_id:
