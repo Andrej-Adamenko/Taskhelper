@@ -353,11 +353,40 @@ def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: in
 		logging.error(f"Error during getting message {[message_id, chat_id]} content - {E}")
 		return
 
-	forwarded_message.chat.id = chat_id
-	forwarded_message.message_id = forwarded_message.id = message_id
-
+	_update_forwarded_message_chat(forwarded_message, chat_id, message_id)
 	return forwarded_message
 
+
+@threading_utils.timeout_error_lock
+def get_main_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	try:
+		forwarded_message = bot.forward_message(chat_id=config_utils.DUMP_CHAT_ID, from_chat_id=chat_id,
+												message_id=message_id)
+		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
+	except ApiTelegramException as E:
+		if E.error_code == 429:
+			raise E
+		elif E.description == "Bad Request: message to forward not found":
+			raise E
+		elif E.description == "Bad Request: MESSAGE_ID_INVALID":
+			# for some reason telegram throws this error if after deleting a message
+			# no other actions were performed in this channel
+			# instead of regular "message to forward not found" error
+			raise E
+		logging.error(f"Error during getting message content - {E}")
+		return
+
+	_update_forwarded_message_chat(forwarded_message, chat_id, message_id)
+	return forwarded_message
+
+
+def _update_forwarded_message_chat(post_data: telebot.types.Message, chat_id: int, message_id: int):
+	if post_data.forward_from_chat and post_data.forward_from_chat.id == chat_id:
+		post_data.chat = post_data.forward_from_chat
+	else:
+		post_data.chat.id = chat_id
+
+	post_data.message_id = post_data.id = message_id
 
 @threading_utils.timeout_error_lock
 def copy_message(bot: telebot.TeleBot, **kwargs):
@@ -384,31 +413,6 @@ def parse_datetime(datetime_str, template_str):
 		return datetime.datetime.strptime(datetime_str, template_str)
 	except ValueError:
 		return
-
-
-@threading_utils.timeout_error_lock
-def get_main_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
-	try:
-		forwarded_message = bot.forward_message(chat_id=config_utils.DUMP_CHAT_ID, from_chat_id=chat_id,
-												message_id=message_id)
-		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
-	except ApiTelegramException as E:
-		if E.error_code == 429:
-			raise E
-		elif E.description == "Bad Request: message to forward not found":
-			raise E
-		elif E.description == "Bad Request: MESSAGE_ID_INVALID":
-			# for some reason telegram throws this error if after deleting a message
-			# no other actions were performed in this channel
-			# instead of regular "message to forward not found" error
-			raise E
-		logging.error(f"Error during getting message content - {E}")
-		return
-
-	forwarded_message.chat.id = chat_id
-	forwarded_message.message_id = forwarded_message.id = message_id
-
-	return forwarded_message
 
 
 @threading_utils.timeout_error_lock

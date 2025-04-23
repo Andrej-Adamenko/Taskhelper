@@ -3,11 +3,12 @@ from unittest.mock import Mock, patch
 
 from pyrogram.types import InlineKeyboardMarkup
 from telebot import TeleBot
-from telebot.types import MessageEntity, Message, InlineKeyboardButton
+from telebot.types import MessageEntity, Message, InlineKeyboardButton, Chat
 
 import config_utils
 from tests import test_helper
 import utils
+from tests.test_helper import create_mock_chat
 
 
 class GetPostContentTest(TestCase):
@@ -186,7 +187,9 @@ class GetMessageContentByIdTest(TestCase):
 		message_id = 125
 		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
 		dump_message_id = 345
+		mock_chat = create_mock_chat(chat_id, "Test_message")
 		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_message.forward_from_chat = None
 		mock_bot.forward_message.return_value = mock_message
 
 		result = utils.get_message_content_by_id(mock_bot, chat_id, message_id)
@@ -195,6 +198,26 @@ class GetMessageContentByIdTest(TestCase):
 		self.assertEqual(result.chat.id, chat_id)
 		self.assertEqual(result.message_id, message_id)
 		self.assertEqual(result.id, message_id)
+		self.assertNotEqual(result.chat, mock_chat)
+
+	def test_get_message_content_by_id_forward_from_chat(self):
+		mock_bot = Mock(spec=TeleBot)
+		chat_id = -10012345678
+		message_id = 125
+		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
+		dump_message_id = 345
+		mock_chat = create_mock_chat(chat_id, "Test_message")
+		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_message.forward_from_chat = mock_chat
+		mock_bot.forward_message.return_value = mock_message
+
+		result = utils.get_message_content_by_id(mock_bot, chat_id, message_id)
+		mock_bot.forward_message.assert_called_once_with(chat_id=dump_chat_id, from_chat_id=chat_id, message_id=message_id)
+		mock_bot.delete_message.assert_called_once_with(chat_id=dump_chat_id, message_id=dump_message_id)
+		self.assertEqual(result.chat.id, chat_id)
+		self.assertEqual(result.message_id, message_id)
+		self.assertEqual(result.id, message_id)
+		self.assertEqual(result.chat, mock_chat)
 
 	def test_get_main_message_content_by_id(self):
 		mock_bot = Mock(spec=TeleBot)
@@ -202,7 +225,9 @@ class GetMessageContentByIdTest(TestCase):
 		message_id = 125
 		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
 		dump_message_id = 345
+		mock_chat = create_mock_chat(chat_id, "Test_message")
 		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_message.forward_from_chat = None
 		mock_bot.forward_message.return_value = mock_message
 
 		result = utils.get_main_message_content_by_id(mock_bot, chat_id, message_id)
@@ -211,6 +236,26 @@ class GetMessageContentByIdTest(TestCase):
 		self.assertEqual(result.chat.id, chat_id)
 		self.assertEqual(result.message_id, message_id)
 		self.assertEqual(result.id, message_id)
+		self.assertNotEqual(result.chat, mock_chat)
+
+	def test_get_main_message_content_by_id_forward_from_chat(self):
+		mock_bot = Mock(spec=TeleBot)
+		chat_id = -10012345678
+		message_id = 125
+		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
+		dump_message_id = 345
+		mock_chat = create_mock_chat(chat_id, "Test_message")
+		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_message.forward_from_chat = mock_chat
+		mock_bot.forward_message.return_value = mock_message
+
+		result = utils.get_main_message_content_by_id(mock_bot, chat_id, message_id)
+		mock_bot.forward_message.assert_called_once_with(chat_id=dump_chat_id, from_chat_id=chat_id, message_id=message_id)
+		mock_bot.delete_message.assert_called_once_with(chat_id=dump_chat_id, message_id=dump_message_id)
+		self.assertEqual(result.chat.id, chat_id)
+		self.assertEqual(result.message_id, message_id)
+		self.assertEqual(result.id, message_id)
+		self.assertEqual(result.chat, mock_chat)
 
 
 @patch("utils.set_post_content")
