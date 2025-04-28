@@ -262,6 +262,7 @@ def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
 
 def initialize_channel(bot: telebot.TeleBot, channel_id: int, user_id: int = None):
 	if not db_utils.is_individual_channel_exists(channel_id):
+		return
 		try:
 			channel_admins = bot.get_chat_administrators(channel_id)
 			channel_owner = next((user for user in channel_admins if type(user) == ChatMemberOwner), None)
