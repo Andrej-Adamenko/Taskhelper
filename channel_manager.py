@@ -205,8 +205,8 @@ def show_settings_keyboard(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 						   force_update_info: bool = False, force_update_ticket: bool = False):
 	message = call.message
 	channel_id = message.chat.id
-	ticket_keyboard = get_settings_menu(channel_id, user_id=call.from_user.id, menu_type=TICKET_MENU_TYPE)
-	keyboard = get_settings_menu(channel_id, user_id=call.from_user.id, menu_type=INFO_MENU_TYPE)
+	ticket_keyboard = get_settings_menu(channel_id, TICKET_MENU_TYPE)
+	keyboard = get_settings_menu(channel_id, INFO_MENU_TYPE)
 	try:
 		_call_settings_button(bot, call, keyboard, ticket_keyboard, force_update_info, force_update_ticket)
 	except ApiTelegramException as E:
@@ -271,13 +271,8 @@ def initialize_channel(bot: telebot.TeleBot, channel_id: int, user_id: int = Non
 			if user_id is None:
 				raise E
 
-		main_channel_id = db_utils.get_main_channel_from_user(user_id)
-		if not main_channel_id:
-			bot.send_message(chat_id=channel_id, text="Can't recognize the user who called this command")
-			return
-
 		settings_str = json.dumps(_DEFAULT_SETTINGS)
-		db_utils.insert_individual_channel(main_channel_id, channel_id, settings_str, user_id)
+		db_utils.insert_individual_channel(channel_id, settings_str, user_id)
 
 	create_settings_message(bot, channel_id)
 
@@ -354,18 +349,16 @@ def generate_current_settings_text(channel_id: int):
 	return text
 
 
-def generate_user_keyboard(main_channel_id: int, channel_id: int, setting_type: str):
+def generate_user_keyboard(channel_id: int, setting_type: str):
 	settings, priorities = get_individual_channel_settings(channel_id)
 	active_user_tags = []
 	if setting_type in settings:
 		active_user_tags = settings[setting_type]
 
-	user_tags = db_utils.get_main_channel_user_tags(main_channel_id)
-
 	nop_callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.NOP)
 	text_button = InlineKeyboardButton(MENU_TITLES[setting_type], callback_data=nop_callback)
 	buttons = [text_button]
-	for user_tag in user_tags:
+	for user_tag in config_utils.USER_TAGS:
 		callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_USER, setting_type, user_tag)
 		button_text = f"#{user_tag}" if user_tag != NEW_USER_TYPE else "New users"
 		user_button = InlineKeyboardButton(button_text, callback_data=callback)
@@ -460,43 +453,37 @@ def get_button_settings_keyboard(text: str = "Edit channel settings ⚙️"):
 	return telebot.types.InlineKeyboardMarkup([[settings_button]])
 
 
-def get_ticket_settings_buttons(channel_id: int, main_channel_id: int = None, user_id:int = None) -> (InlineKeyboardMarkup, InlineKeyboardMarkup):
-	keyboard = get_settings_menu(channel_id, main_channel_id, user_id, TICKET_MENU_TYPE)
+def get_ticket_settings_buttons(channel_id: int) -> (InlineKeyboardMarkup, InlineKeyboardMarkup):
+	keyboard = get_settings_menu(channel_id, TICKET_MENU_TYPE)
 
 	return keyboard
 
 
-def get_settings_menu(channel_id: int, main_channel_id: int = None, user_id:int = None, menu_type: str = None) -> (InlineKeyboardMarkup, InlineKeyboardMarkup):
+def get_settings_menu(channel_id: int, menu_type: str = None) -> (InlineKeyboardMarkup, InlineKeyboardMarkup):
 	channel_menu = None
 	if channel_id in CHANNEL_TICKET_SETTINGS_BUTTONS:
 		if menu_type in CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id]:
 			channel_menu = CHANNEL_TICKET_SETTINGS_BUTTONS[channel_id][menu_type]['state']
 
-	return _get_settings_menu_by_type(channel_id, main_channel_id, user_id, channel_menu, menu_type == TICKET_MENU_TYPE)
+	return _get_settings_menu_by_type(channel_id, channel_menu, menu_type == TICKET_MENU_TYPE)
 
 
-def _get_settings_menu_by_type(channel_id: int, main_channel_id: int = None, user_id: int = None,
-								state: str = None, is_ticket: bool = False) -> (InlineKeyboardMarkup, InlineKeyboardMarkup):
+def _get_settings_menu_by_type(channel_id: int, state: str = None, is_ticket: bool = False) \
+																-> (InlineKeyboardMarkup, InlineKeyboardMarkup):
 	if is_ticket:
 		keyboard = get_button_settings_keyboard("Settings ⚙️")
 	else:
 		keyboard = get_button_settings_keyboard()
 
 	if state is not None:
-		if state in [CB_TYPES.ASSIGNED_SELECTED, CB_TYPES.FOLLOWED_SELECTED, CB_TYPES.REPORTED_SELECTED]:
-			if main_channel_id is None and user_id is None:
-				logging.error(f"Error during getting user menu '{state}': main_channel_id and user_id are None")
-			if main_channel_id is None:
-				main_channel_id = db_utils.get_main_channel_from_user(user_id)
-
 		if state == CB_TYPES.OPEN_CHANNEL_SETTINGS:
 			keyboard = generate_settings_keyboard(channel_id, is_ticket)
 		elif state == CB_TYPES.ASSIGNED_SELECTED:
-			keyboard = generate_user_keyboard(main_channel_id, channel_id, SETTING_TYPES.ASSIGNED)
+			keyboard = generate_user_keyboard(channel_id, SETTING_TYPES.ASSIGNED)
 		elif state == CB_TYPES.FOLLOWED_SELECTED:
-			keyboard = generate_user_keyboard(main_channel_id, channel_id, SETTING_TYPES.FOLLOWED)
+			keyboard = generate_user_keyboard(channel_id, SETTING_TYPES.FOLLOWED)
 		elif state == CB_TYPES.REPORTED_SELECTED:
-			keyboard = generate_user_keyboard(main_channel_id, channel_id, SETTING_TYPES.REPORTED)
+			keyboard = generate_user_keyboard(channel_id, SETTING_TYPES.REPORTED)
 		elif state == CB_TYPES.REMIND_SELECTED:
 			keyboard = generate_remind_keyboard(channel_id)
 
@@ -650,7 +637,7 @@ def save_toggle_button(bot: telebot.TeleBot, call:CallbackQuery, setting_type:st
 			settings[setting_type] = settings[setting_type] if setting_type in settings else []
 			if cb_data not in settings[setting_type]:
 				settings[setting_type].append(cb_data)
-				settings[setting_type] = _sort_array_settings(settings[setting_type], setting_type, call)
+				settings[setting_type] = _sort_array_settings(settings[setting_type], setting_type)
 		elif cb_data in settings[setting_type]:
 			settings[setting_type].remove(cb_data)
 	elif not is_enable and (setting_type == SETTING_TYPES.DUE and not settings[SETTING_TYPES.DEFERRED] or
@@ -672,15 +659,14 @@ def save_toggle_button(bot: telebot.TeleBot, call:CallbackQuery, setting_type:st
 	show_settings_keyboard(bot, call, True, force_update_ticket)
 
 
-def _sort_array_settings(array: list, setting_type: str, call: CallbackQuery):
+def _sort_array_settings(array: list, setting_type: str):
 	array.sort()
 	update_sort_array = False
 	sorted_array = []
 
 	if setting_type in [SETTING_TYPES.ASSIGNED, SETTING_TYPES.REPORTED, SETTING_TYPES.FOLLOWED]:
-		user_tags = db_utils.get_main_channel_user_tags_by_user(call.from_user.id)
 		update_sort_array = True
-		for user_tag in user_tags:
+		for user_tag in config_utils.USER_TAGS:
 			if user_tag in array:
 				sorted_array.append(user_tag)
 		if NEW_USER_TYPE in array:
@@ -697,8 +683,8 @@ def _sort_array_settings(array: list, setting_type: str, call: CallbackQuery):
 	return array
 
 
-def add_new_user_tag_to_channels(bot: telebot.TeleBot, main_channel_id: int, user_tag: str):
-	channel_data = db_utils.get_all_individual_channels(main_channel_id)
+def add_new_user_tag_to_channels(bot: telebot.TeleBot, user_tag: str):
+	channel_data = db_utils.get_all_individual_channels()
 	for channel in channel_data:
 		channel_id, settings = channel
 		settings = json.loads(settings)
@@ -723,9 +709,11 @@ def add_new_user_tag_to_channels(bot: telebot.TeleBot, main_channel_id: int, use
 		if settings_message_id:
 			update_settings_message(bot, channel_id, settings_message_id)
 
+		_update_user_tags_in_settings_menu_ticket(bot, channel_id)
 
-def remove_user_tag_from_channels(bot: telebot.TeleBot, main_channel_id: int, user_tag: str):
-	channel_data = db_utils.get_all_individual_channels(main_channel_id)
+
+def remove_user_tag_from_channels(bot: telebot.TeleBot, user_tag: str):
+	channel_data = db_utils.get_all_individual_channels()
 	for channel in channel_data:
 		channel_id, settings = channel
 		settings = json.loads(settings)
@@ -749,3 +737,16 @@ def remove_user_tag_from_channels(bot: telebot.TeleBot, main_channel_id: int, us
 		settings_message_id = settings.get(SETTING_TYPES.SETTINGS_MESSAGE_ID)
 		if settings_message_id:
 			update_settings_message(bot, channel_id, settings_message_id)
+
+		_update_user_tags_in_settings_menu_ticket(bot, channel_id)
+
+
+def _update_user_tags_in_settings_menu_ticket(bot, channel_id):
+	if _get_channel_ticket_settings_state(channel_id, TICKET_MENU_TYPE) in [CB_TYPES.ASSIGNED_SELECTED, CB_TYPES.REPORTED_SELECTED,
+					 CB_TYPES.FOLLOWED_SELECTED, CB_TYPES.OPEN_CHANNEL_SETTINGS]:
+		newest_message_id = db_utils.get_newest_copied_message(channel_id)
+		post_data = utils.get_message_content_by_id(bot, channel_id, newest_message_id)
+		call = CallbackQuery(0, post_data.from_user, "", "", "", message=post_data)
+		keyboard = forwarding_utils.get_keyboard_from_channel_message(bot, call, newest_message_id)
+		utils.edit_message_keyboard(bot, post_data, keyboard_markup=keyboard, chat_id=channel_id,
+									message_id=newest_message_id)

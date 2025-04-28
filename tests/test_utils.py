@@ -1,12 +1,14 @@
 from unittest import TestCase, main
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from pyrogram.types import InlineKeyboardMarkup
-from telebot.types import MessageEntity, Message, InlineKeyboardButton
+from telebot import TeleBot
+from telebot.types import MessageEntity, Message, InlineKeyboardButton, Chat
 
 import config_utils
 from tests import test_helper
 import utils
+from tests.test_helper import create_mock_chat
 
 
 class GetPostContentTest(TestCase):
@@ -176,6 +178,201 @@ class MergeKeyboardMarkupTest(TestCase):
 
 		result = utils.merge_keyboard_markup(mock_keyboard, mock_keyboard2, empty_button=None)
 		self.assertEqual(result.keyboard, mock_keyboard.keyboard + mock_keyboard2.keyboard)
+
+
+class GetMessageContentByIdTest(TestCase):
+	def test_get_message_content_by_id(self):
+		mock_bot = Mock(spec=TeleBot)
+		chat_id = -10012345678
+		message_id = 125
+		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
+		dump_message_id = 345
+		mock_chat = create_mock_chat(chat_id, "Test_message")
+		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_message.forward_from_chat = None
+		mock_bot.forward_message.return_value = mock_message
+
+		result = utils.get_message_content_by_id(mock_bot, chat_id, message_id)
+		mock_bot.forward_message.assert_called_once_with(chat_id=dump_chat_id, from_chat_id=chat_id, message_id=message_id)
+		mock_bot.delete_message.assert_called_once_with(chat_id=dump_chat_id, message_id=dump_message_id)
+		self.assertEqual(result.chat.id, chat_id)
+		self.assertEqual(result.message_id, message_id)
+		self.assertEqual(result.id, message_id)
+		self.assertNotEqual(result.chat, mock_chat)
+
+	def test_get_message_content_by_id_forward_from_chat(self):
+		mock_bot = Mock(spec=TeleBot)
+		chat_id = -10012345678
+		message_id = 125
+		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
+		dump_message_id = 345
+		mock_chat = create_mock_chat(chat_id, "Test_message")
+		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_message.forward_from_chat = mock_chat
+		mock_bot.forward_message.return_value = mock_message
+
+		result = utils.get_message_content_by_id(mock_bot, chat_id, message_id)
+		mock_bot.forward_message.assert_called_once_with(chat_id=dump_chat_id, from_chat_id=chat_id, message_id=message_id)
+		mock_bot.delete_message.assert_called_once_with(chat_id=dump_chat_id, message_id=dump_message_id)
+		self.assertEqual(result.chat.id, chat_id)
+		self.assertEqual(result.message_id, message_id)
+		self.assertEqual(result.id, message_id)
+		self.assertEqual(result.chat, mock_chat)
+
+	def test_get_main_message_content_by_id(self):
+		mock_bot = Mock(spec=TeleBot)
+		chat_id = -10012345678
+		message_id = 125
+		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
+		dump_message_id = 345
+		mock_chat = create_mock_chat(chat_id, "Test_message")
+		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_message.forward_from_chat = None
+		mock_bot.forward_message.return_value = mock_message
+
+		result = utils.get_main_message_content_by_id(mock_bot, chat_id, message_id)
+		mock_bot.forward_message.assert_called_once_with(chat_id=dump_chat_id, from_chat_id=chat_id, message_id=message_id)
+		mock_bot.delete_message.assert_called_once_with(chat_id=dump_chat_id, message_id=dump_message_id)
+		self.assertEqual(result.chat.id, chat_id)
+		self.assertEqual(result.message_id, message_id)
+		self.assertEqual(result.id, message_id)
+		self.assertNotEqual(result.chat, mock_chat)
+
+	def test_get_main_message_content_by_id_forward_from_chat(self):
+		mock_bot = Mock(spec=TeleBot)
+		chat_id = -10012345678
+		message_id = 125
+		dump_chat_id = int(config_utils.DUMP_CHAT_ID)
+		dump_message_id = 345
+		mock_chat = create_mock_chat(chat_id, "Test_message")
+		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
+		mock_message.forward_from_chat = mock_chat
+		mock_bot.forward_message.return_value = mock_message
+
+		result = utils.get_main_message_content_by_id(mock_bot, chat_id, message_id)
+		mock_bot.forward_message.assert_called_once_with(chat_id=dump_chat_id, from_chat_id=chat_id, message_id=message_id)
+		mock_bot.delete_message.assert_called_once_with(chat_id=dump_chat_id, message_id=dump_message_id)
+		self.assertEqual(result.chat.id, chat_id)
+		self.assertEqual(result.message_id, message_id)
+		self.assertEqual(result.id, message_id)
+		self.assertEqual(result.chat, mock_chat)
+
+
+@patch("utils.set_post_content")
+@patch("utils.offset_entities")
+@patch("utils.get_post_content", side_effect=lambda post_data:
+				(post_data.text, utils.align_entities_to_utf8(post_data.text, post_data.entities)))
+@patch("db_utils.get_main_channel_ids", return_value=[-10012345678, -10087654321])
+class AddChanelIdToPostDataTest(TestCase):
+	def test_add_channel_id_with_few_channels(self, mock_get_main_channel_ids, mock_get_post_content,
+						  mock_offset_entities, mock_set_post_content, *args):
+		url_channel_id = 12345678
+		channel_name = "main_channel_item"
+		message_id = 124
+		text = f"{message_id}. test_message"
+		new_text = f"{channel_name}.{message_id}. test_message"
+		entities = [MessageEntity(type="text_link", offset=0, length=len(f"{message_id}"), url=f"https://t.me/c/{url_channel_id}/{message_id}")]
+		mock_message = test_helper.create_mock_message(text, entities, -10087654321, 153)
+		mock_message.chat.title = channel_name
+		text, entities = mock_get_post_content.side_effect(mock_message)
+
+		utils.add_channel_id_to_post_data(mock_message)
+		mock_get_main_channel_ids.assert_called_once_with()
+		mock_get_post_content.assert_called_once_with(mock_message)
+		mock_offset_entities.assert_called_once_with(entities, len(channel_name) + 1, [0])
+		mock_set_post_content.assert_called_once_with(mock_message, new_text, entities)
+		self.assertEqual(mock_message.entities[0].length, len(f"{channel_name}.{message_id}"))
+
+	def test_add_channel_id_with_one_channel(self, mock_get_main_channel_ids, mock_get_post_content,
+						  mock_offset_entities, mock_set_post_content, *args):
+		url_channel_id = 12345678
+		channel_name = "main_channel_item"
+		message_id = 124
+		text = f"{message_id}. test_message"
+		entities = [MessageEntity(type="text_link", offset=0, length=len(f"{message_id}"), url=f"https://t.me/c/{url_channel_id}/{message_id}")]
+		mock_message = test_helper.create_mock_message(text, entities, -10087654321, 153)
+		mock_message.chat.title = channel_name
+		mock_get_main_channel_ids.return_value = [-10012345678]
+
+		utils.add_channel_id_to_post_data(mock_message)
+		mock_get_main_channel_ids.assert_called_once_with()
+		mock_get_post_content.assert_not_called()
+		mock_offset_entities.assert_not_called()
+		mock_set_post_content.assert_not_called()
+		self.assertEqual(mock_message.entities[0].length, len(f"{message_id}"))
+
+	def test_add_no_channel_id(self, mock_get_main_channel_ids, mock_get_post_content,
+						  mock_offset_entities, mock_set_post_content, *args):
+		channel_id = -10087654321
+		url_channel_id = 87654321
+		channel_name = "main_channel_item"
+		message_id = 124
+		text = f"{message_id}. test_message"
+		new_text = f"{channel_name}.{message_id}. test_message"
+		entities = [MessageEntity(type="text_link", offset=0, length=len(f"{message_id}"), url=f"https://t.me/c/{url_channel_id}/{message_id}")]
+		mock_message = test_helper.create_mock_message(text, entities, channel_id, 153)
+		mock_message.chat.title = channel_name
+		text, entities = mock_get_post_content.side_effect(mock_message)
+
+		utils.add_channel_id_to_post_data(mock_message)
+		mock_get_main_channel_ids.assert_called_once_with()
+		mock_get_post_content.assert_called_once_with(mock_message)
+		mock_offset_entities.assert_called_once_with(entities, len(channel_name) + 1, [0])
+		mock_set_post_content.assert_called_once_with(mock_message, new_text, entities)
+		self.assertEqual(mock_message.entities[0].length, len(f"{channel_name}.{message_id}"))
+
+	def test_add_exist_channel_id(self, mock_get_main_channel_ids, mock_get_post_content,
+						  mock_offset_entities, mock_set_post_content, *args):
+		channel_id = -10087654321
+		url_channel_id = 87654321
+		channel_name = "main_channel_item"
+		message_id = 124
+		text = f"{channel_name}.{message_id}. test_message"
+		entities = [MessageEntity(type="text_link", offset=0, length=len(f"{channel_name}.{message_id}"), url=f"https://t.me/c/{url_channel_id}/{message_id}")]
+		mock_message = test_helper.create_mock_message(text, entities, channel_id, 153)
+		mock_message.chat.title = channel_name
+		text, entities = mock_get_post_content.side_effect(mock_message)
+
+		utils.add_channel_id_to_post_data(mock_message)
+		mock_get_main_channel_ids.assert_called_once_with()
+		mock_get_post_content.assert_called_once_with(mock_message)
+		mock_offset_entities.assert_not_called()
+		mock_set_post_content.assert_called_once_with(mock_message, text, entities)
+		self.assertEqual(mock_message.entities[0].length, len(f"{channel_name}.{message_id}"))
+
+	def test_no_entity_on_ticket_id(self, mock_get_main_channel_ids, mock_get_post_content,
+						  mock_offset_entities, mock_set_post_content, *args):
+		message_id = 124
+		channel_name = "main_channel_item"
+		text = f"{message_id}. test_message #cc"
+		entities = [MessageEntity(type="hashtag", offset=25, length=len("#cc"), url="#cc")]
+		mock_message = test_helper.create_mock_message(text, entities, -10087654321, 153)
+		mock_message.chat.title = channel_name
+		text, entities = mock_get_post_content.side_effect(mock_message)
+
+		utils.add_channel_id_to_post_data(mock_message)
+		mock_get_main_channel_ids.assert_called_once_with()
+		mock_get_post_content.assert_called_once_with(mock_message)
+		mock_offset_entities.assert_not_called()
+		mock_set_post_content.assert_called_once_with(mock_message, text, entities)
+		self.assertEqual(mock_message.entities[0].length, len("#cc"))
+
+	def test_no_channel_in_channel_ids(self, mock_get_main_channel_ids, mock_get_post_content,
+						  mock_offset_entities, mock_set_post_content, *args):
+		url_channel_id = 12345678
+		channel_name = "main_channel_item"
+		message_id = 124
+		text = f"{message_id}. test_message"
+		entities = [MessageEntity(type="text_link", offset=0, length=len(f"{message_id}"), url=f"https://t.me/c/{url_channel_id}/{message_id}")]
+		mock_message = test_helper.create_mock_message(text, entities, -10087654546, 153)
+		mock_message.chat.title = channel_name
+
+		utils.add_channel_id_to_post_data(mock_message)
+		mock_get_main_channel_ids.assert_called_once_with()
+		mock_get_post_content.assert_not_called()
+		mock_offset_entities.assert_not_called()
+		mock_set_post_content.assert_not_called()
+		self.assertEqual(mock_message.entities[0].length, len(f"{message_id}"))
 
 
 if __name__ == "__main__":

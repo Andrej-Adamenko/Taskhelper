@@ -1,8 +1,11 @@
+from mailbox import Message
 from unittest import TestCase, main
-from unittest.mock import patch
+from unittest.mock import patch, call, Mock
 
 import telebot.types
+from pyrogram.types import MessageEntity
 
+import config_utils
 import hashtag_data as hashtag_data_module
 from hashtag_data import HashtagData
 from tests import test_helper
@@ -11,15 +14,10 @@ from tests import test_helper
 @patch("hashtag_data.PRIORITY_TAG", "p")
 @patch("hashtag_data.OPENED_TAG", "o")
 class FindCopyUsersFromText(TestCase):
-	@patch("db_utils.is_user_tag_exists")
 	@patch("hashtag_data.HashtagData.__init__")
-	def test_find_mentioned_users(self, mock_hashtag_data_init, mock_is_user_tag_exists):
+	def test_find_mentioned_users(self, mock_hashtag_data_init):
 		mock_hashtag_data_init.return_value = None
-
-		user_tags = ["aa", "bb", "cc"]
-		is_user_tag = lambda channel_id, user_tag: user_tag in user_tags
-		mock_is_user_tag_exists.side_effect = is_user_tag
-
+		config_utils.USER_TAGS = {"aa": 1, "bb": 2, "cc": 3}
 		text = f"text #aa #bb\n#o #cc #p #user_tag"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
@@ -34,19 +32,13 @@ class FindCopyUsersFromText(TestCase):
 		self.assertEqual(result, ["aa", "bb"])
 		self.assertEqual(hashtag_data.user_tags, ["cc", "aa", "bb"])
 
-	@patch("db_utils.is_user_tag_exists")
 	@patch("hashtag_data.HashtagData.__init__")
-	def test_no_mentioned_users(self, mock_hashtag_data_init, mock_is_user_tag_exists):
+	def test_no_mentioned_users(self, mock_hashtag_data_init):
 		mock_hashtag_data_init.return_value = None
-
-		user_tags = ["cc"]
-		is_user_tag = lambda channel_id, user_tag: user_tag in user_tags
-		mock_is_user_tag_exists.side_effect = is_user_tag
-
+		config_utils.USER_TAGS = {"cc": 3}
 		text = f"text test\n#o #cc #p #user_tag"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
-
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -58,19 +50,13 @@ class FindCopyUsersFromText(TestCase):
 		self.assertEqual(result, [])
 		self.assertEqual(hashtag_data.user_tags, ["cc"])
 
-	@patch("db_utils.is_user_tag_exists")
 	@patch("hashtag_data.HashtagData.__init__")
-	def test_assign_user(self, mock_hashtag_data_init, mock_is_user_tag_exists):
+	def test_assign_user(self, mock_hashtag_data_init):
 		mock_hashtag_data_init.return_value = None
-
-		user_tags = ["aa", "bb"]
-		is_user_tag = lambda channel_id, user_tag: user_tag in user_tags
-		mock_is_user_tag_exists.side_effect = is_user_tag
-
+		config_utils.USER_TAGS = {"aa": 1, "bb": 2}
 		text = f"text #aa #bb test\n#o #p"
 		entities = test_helper.create_hashtag_entity_list(text)
 		post_data = test_helper.create_mock_message(text, entities)
-
 		main_channel_id = 123
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
@@ -186,6 +172,86 @@ class GetEntitiesToIgnoreTest(TestCase):
 		hashtag_data.is_hashtag_line_present = True
 		result = hashtag_data.get_entities_to_ignore(text, entities)
 		self.assertEqual(result, range(2, 2))
+
+	@patch("hashtag_data.HashtagData.__init__", return_value=None)
+	def test_is_service_tag(self, *args):
+		hashtag_data_module.OPENED_TAG = "open"
+		hashtag_data_module.CLOSED_TAG = "closed"
+		hashtag_data_module.PRIORITY_TAG = "p"
+		hashtag_data_module.SCHEDULED_TAG = "sch"
+
+		main_message_id = -10087461354
+		mock_message = test_helper.create_mock_message("", [])
+		hashtag_data = HashtagData(mock_message, main_message_id)
+		hashtag_data.main_channel_id = main_message_id
+		config_utils.USER_TAGS = {"CC": 5164, "DD": 16835}
+
+		self.assertEqual(hashtag_data.is_service_tag("sch 2025-03-12"), True)
+		self.assertEqual(hashtag_data.is_service_tag("sch"), True)
+		self.assertEqual(hashtag_data.is_service_tag("p1"), True)
+		self.assertEqual(hashtag_data.is_service_tag("open"), True)
+		self.assertEqual(hashtag_data.is_service_tag("closed"), True)
+		self.assertEqual(hashtag_data.is_service_tag("CC"), True)
+		self.assertEqual(hashtag_data.is_service_tag("AA"), False)
+
+
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("hashtag_data.HashtagData.update_scheduled_tag_entity_length")
+@patch("hashtag_data.HashtagData.get_entities_to_ignore")
+@patch("hashtag_data.HashtagData.check_old_scheduled_tag", side_effect=lambda tag: (tag.startswith("sch ") or tag == "sch"))
+@patch("hashtag_data.HashtagData.check_scheduled_tag", side_effect=lambda tag, sch_tag: (tag.startswith(f"{sch_tag} ") or tag == sch_tag))
+@patch("hashtag_data.HashtagData.check_old_status_tag", side_effect=lambda tag: (tag == "open" or tag == "closed"))
+@patch("hashtag_data.HashtagData.check_user_tag", side_effect=lambda tag: (tag in ["CC", "DD"]))
+@patch("hashtag_data.HashtagData.check_old_priority_tag", side_effect=lambda tag: (tag.startswith("p")))
+@patch("hashtag_data.HashtagData.check_priority_tag", side_effect=lambda tag, p_tag: (tag.startswith(p_tag)))
+class FindHashtagIndexes(TestCase):
+	def setUp(self):
+		hashtag_data_module.OPENED_TAG = "open"
+		hashtag_data_module.CLOSED_TAG = "closed"
+		hashtag_data_module.PRIORITY_TAG = "p"
+		hashtag_data_module.SCHEDULED_TAG = "sch"
+		config_utils.USER_TAGS = {"CC": 5164, "DD": 16835}
+
+	def test_all_tags(self, mock_check_priority_tag, mock_check_old_priority_tag, mock_check_user_tag,
+					  mock_check_old_status_tag, mock_check_scheduled_tag, mock_check_old_scheduled_tag,
+					  mock_get_entities_to_ignore, mock_update_scheduled_tag_entity_length, *args):
+		main_channel_id = -10087654321
+		tags = ["sch", "AA", "CC", "p2", "closed", "open"]
+		text = "#open #closed #p2 #CC #AA #sch 2025-12-10"
+		entities = test_helper.create_hashtag_entity_list(text)
+		mock_get_entities_to_ignore.return_value = []
+
+		manager = Mock()
+		manager.attach_mock(mock_check_old_scheduled_tag, "a")
+		manager.attach_mock(mock_check_scheduled_tag, "b")
+		manager.attach_mock(mock_check_old_status_tag, "c")
+		manager.attach_mock(mock_check_user_tag, "d")
+		manager.attach_mock(mock_check_old_priority_tag, "e")
+		manager.attach_mock(mock_check_priority_tag, "f")
+		expected_calls = [
+			call.a(tags[0]),
+
+			call.a(tags[1]), call.b(tags[1], hashtag_data_module.SCHEDULED_TAG), call.c(tags[1]), call.d(tags[1]),
+			call.e(tags[1]), call.f(tags[1], hashtag_data_module.PRIORITY_TAG),
+
+			call.a(tags[2]), call.b(tags[2], hashtag_data_module.SCHEDULED_TAG), call.c(tags[2]), call.d(tags[2]),
+
+			call.a(tags[3]), call.b(tags[3], hashtag_data_module.SCHEDULED_TAG), call.c(tags[3]), call.d(tags[3]),
+			call.e(tags[3]),
+
+			call.a(tags[4]), call.b(tags[4], hashtag_data_module.SCHEDULED_TAG), call.c(tags[4]),
+
+			call.a(tags[5]), call.b(tags[5], hashtag_data_module.SCHEDULED_TAG), call.c(tags[5])
+		]
+
+		hashtag_data = HashtagData()
+		result = hashtag_data.find_hashtag_indexes(text, entities, main_channel_id)
+		mock_update_scheduled_tag_entity_length.assert_has_calls([call(text, entities, 0), call(text, entities, 1),
+																  call(text, entities, 2), call(text, entities, 3),
+																  call(text, entities, 4), call(text, entities, 5)])
+		mock_get_entities_to_ignore.assert_called_once_with(text, entities)
+		self.assertEqual(manager.mock_calls, expected_calls)
+		self.assertEqual(result, (5, 0, [3], 2))
 
 
 class RemoveDuplicatesTest(TestCase):
@@ -832,7 +898,6 @@ class ExtractScheduledTagFromTextTest(TestCase):
 		self.assertEqual(result, "s 2024-05-16 02:05")
 
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
-@patch("db_utils.is_user_tag_exists", return_value=None)
 @patch("hashtag_data.SCHEDULED_TAG", "s")
 class ExtractHashtagsScheduledTest(TestCase):
 	def test_time_without_zeros(self, *args):

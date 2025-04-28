@@ -4,6 +4,7 @@ import telebot
 import time
 from telebot.apihelper import ApiTelegramException
 
+import config_utils
 import forwarding_utils
 import db_utils
 import interval_updating_utils
@@ -48,6 +49,32 @@ class CommentDispatcher:
 			self.update_user_last_interaction(main_message_id, main_channel_id, msg_data)
 			db_utils.set_ticket_update_time(main_message_id, main_channel_id, int(time.time()))
 
+	def delete_comment(self, bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int, discussion_message_id: int):
+		reply_comment = db_utils.get_reply_comment_message(discussion_message_id, discussion_chat_id)
+
+		if not reply_comment:
+			db_utils.insert_comment_deleted_message(discussion_message_id, discussion_chat_id)
+			logging.info("Insert deleted message to db as deleted")
+			return
+
+		db_utils.delete_comment_message(discussion_message_id, discussion_chat_id)
+		main_message_id = db_utils.get_main_from_discussion_message(reply_comment, main_channel_id)
+		post_data = None
+
+		if main_message_id:
+			try:
+				post_data = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
+			except ApiTelegramException as E:
+				logging.error(f"Error during getting main message - {E}")
+
+		if post_data:
+			hashtag_data = HashtagData(post_data, main_channel_id)
+			keyboard = forwarding_utils.generate_control_buttons(hashtag_data, post_data)
+			utils.edit_message_keyboard(bot, post_data, keyboard)
+			forwarding_utils.forward_to_subchannel(bot, post_data, hashtag_data)
+
+		logging.info(f"Delete comment {discussion_message_id} for message {main_message_id}")
+
 	@staticmethod
 	def apply_hashtags(bot: telebot.TeleBot, msg_data: telebot.types.Message, main_message_id: int, main_channel_id: int,
 					   main_message_data:telebot.types.Message = None):
@@ -57,7 +84,7 @@ class CommentDispatcher:
 		opened_hashtag = HASHTAGS["OPENED"]
 		closed_hashtag = HASHTAGS["CLOSED"]
 		scheduled_hashtag = HASHTAGS["SCHEDULED"]
-		user_tags = db_utils.get_channel_user_tags(main_channel_id)
+		user_tags = list(config_utils.USER_TAGS.keys())
 		service_hashtags = [opened_hashtag, closed_hashtag, scheduled_hashtag] + user_tags
 
 		is_service_hashtag_exists = False
@@ -186,9 +213,9 @@ class CommentDispatcher:
 
 	@staticmethod
 	def update_user_last_interaction(main_message_id: int, main_channel_id: int, msg_data: telebot.types.Message):
-		user_tags = db_utils.get_tags_from_user_id(msg_data.from_user.id)
+		user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, msg_data.from_user.id)
 		if not user_tags and msg_data.from_user.username:
-			user_tags = db_utils.get_tags_from_user_id(msg_data.from_user.username)
+			user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, msg_data.from_user.username)
 
 		if not user_tags:
 			return

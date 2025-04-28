@@ -32,6 +32,9 @@ def export_chat_comments(discussion_chat_id: int):
 
 	messages = export_messages(discussion_chat_id, last_msg_id)
 	for message in messages:
+		if message.empty and message.id <= last_msg_id:
+			db_utils.delete_comment_message(message.id, discussion_chat_id)
+			continue
 		if message.reply_to_message is None:
 			continue
 
@@ -73,7 +76,7 @@ def export_main_channel_messages(main_channel_id: int):
 			continue
 		user_id = None
 		if message.author_signature:
-			user_id = user_utils.find_user_by_signature(message.author_signature, main_channel_id)
+			user_id = user_utils.find_user_by_signature(message.author_signature)
 
 		db_utils.insert_main_channel_message(main_channel_id, message.id, user_id)
 		logging.info(f"Exported main message [{main_channel_id}, {message.id}, {user_id}]")

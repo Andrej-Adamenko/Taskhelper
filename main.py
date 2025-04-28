@@ -17,7 +17,8 @@ import user_utils
 import utils
 
 import messages_export_utils
-from config_utils import BOT_TOKEN, DISCUSSION_CHAT_DATA, SUPPORTED_CONTENT_TYPES, INTERVAL_UPDATE_START_DELAY
+from config_utils import (BOT_TOKEN, DISCUSSION_CHAT_DATA, SUPPORTED_CONTENT_TYPES_TICKET,
+						  SUPPORTED_CONTENT_TYPES_COMMENT, INTERVAL_UPDATE_START_DELAY)
 
 db_utils.initialize_db()
 logging.basicConfig(format='%(asctime)s - {%(pathname)s:%(lineno)d} %(levelname)s: %(message)s', level=logging.INFO)
@@ -26,6 +27,7 @@ bot = telebot.TeleBot(BOT_TOKEN, num_threads=1)
 
 config_utils.BOT_ID = bot.user.id
 config_utils.load_discussion_chat_ids(bot)
+config_utils.add_users_from_db()
 user_utils.load_users(bot)
 
 utils.check_last_messages(bot)
@@ -43,13 +45,13 @@ main_channel_filter = lambda message_data: db_utils.is_main_channel_exists(messa
 subchannel_filter = lambda message_data: db_utils.is_individual_channel_exists(message_data.chat.id)
 
 
-@bot.channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
+@bot.channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES_TICKET)
 def handle_post(post_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(post_data.message_id, post_data.chat.id)
 	if post_data.media_group_id:
 		return
 
-	user_id = user_utils.find_user_by_signature(post_data.author_signature, post_data.chat.id)
+	user_id = user_utils.find_user_by_signature(post_data.author_signature)
 	db_utils.insert_main_channel_message(post_data.chat.id, post_data.message_id, user_id)
 
 	main_channel_id_str = str(post_data.chat.id)
@@ -58,7 +60,7 @@ def handle_post(post_data: telebot.types.Message):
 		forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, new_ticket=True)
 
 
-@bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward, content_types=SUPPORTED_CONTENT_TYPES)
+@bot.message_handler(func=lambda msg_data: msg_data.is_automatic_forward, content_types=SUPPORTED_CONTENT_TYPES_TICKET)
 def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(msg_data.message_id, msg_data.chat.id)
 
@@ -87,7 +89,7 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 
 
 @bot.message_handler(func=lambda msg_data: msg_data.chat.id in DISCUSSION_CHAT_DATA.values(),
-					 content_types=SUPPORTED_CONTENT_TYPES)
+					 content_types=SUPPORTED_CONTENT_TYPES_COMMENT)
 def handle_discussion_message(msg_data: telebot.types.Message):
 	discussion_message_id = msg_data.message_id
 	discussion_chat_id = msg_data.chat.id
@@ -98,7 +100,14 @@ def handle_discussion_message(msg_data: telebot.types.Message):
 	db_utils.insert_or_update_last_msg_id(discussion_message_id, discussion_chat_id)
 
 
-@bot.edited_channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES)
+@bot.channel_post_handler(func=main_channel_filter, content_types=['new_chat_title'])
+def handle_edit_channel_title(post_data: telebot.types.Message):
+	if len(db_utils.get_main_channel_ids()) > 1:
+		logging.info(f"Main channel {post_data.chat.id} name is changed")
+		interval_updating_utils.start_interval_updating(bot)
+
+
+@bot.edited_channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES_TICKET)
 def handle_edited_post(post_data: telebot.types.Message):
 	if post_data.media_group_id:
 		return

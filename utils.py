@@ -8,6 +8,7 @@ from telebot.apihelper import ApiTelegramException
 
 import config_utils
 import db_utils
+import post_link_utils
 import threading_utils
 import channel_manager
 from config_utils import MAX_BUTTONS_IN_ROW
@@ -78,12 +79,13 @@ def parse_callback_str(callback_str: str):
 	return callback_type, arguments
 
 
-def offset_entities(entities, offset):
+def offset_entities(entities, offset, expect_offsets: list=None):
 	if not entities:
 		return []
 
 	for entity in entities:
-		entity.offset += offset
+		if not expect_offsets or entity.offset not in expect_offsets:
+			entity.offset += offset
 
 	return entities
 
@@ -153,9 +155,9 @@ def edit_message_content(bot: telebot.TeleBot, post_data: telebot.types.Message,
 			return
 
 
-def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.types.Message):
-	text1, entities1 = get_post_content(post_data1)
-	text2, entities2 = get_post_content(post_data2)
+def is_post_data_equal(post_data: telebot.types.Message, post_data_original: telebot.types.Message):
+	text1, entities1 = get_post_content(post_data)
+	text2, entities2 = get_post_content(post_data_original)
 
 	entities1 = [e for e in entities1 if e.type != "phone_number"]
 	entities2 = [e for e in entities2 if e.type != "phone_number"]
@@ -181,6 +183,21 @@ def is_post_data_equal(post_data1: telebot.types.Message, post_data2: telebot.ty
 			return e1.length == e2.length
 
 	return True
+
+
+def add_channel_id_to_post_data(post_data: telebot.types.Message):
+	channel_id = post_data.chat.id
+
+	channel_ids = db_utils.get_main_channel_ids()
+	if len(channel_ids) > 1 and channel_id in channel_ids:
+		channel_name = post_data.chat.title
+		text, entities = get_post_content(post_data)
+		if entities[0].type == 'text_link' and entities[0].offset == 0 and entities[0].length == len(str(post_data.id)):
+			offset_entities(entities, len(str(channel_name)) + 1, [0])
+			text = f"{channel_name}.{text}"
+			entities[0].length += len(str(channel_name)) + 1
+
+		set_post_content(post_data, text, entities)
 
 
 def place_buttons_in_rows(buttons: List[telebot.types.InlineKeyboardButton]):
@@ -211,11 +228,10 @@ def edit_message_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message
 	if db_utils.is_individual_channel_exists(chat_id):
 		newest_message_id = db_utils.get_newest_copied_message(chat_id)
 		if message_id == newest_message_id:
-			main_message_id, main_channel_id = db_utils.get_main_message_from_copied(newest_message_id, chat_id)
 
 			# copy keyboard markup object to prevent modification of an original object
 			keyboard_markup = merge_keyboard_markup(keyboard_markup,
-								channel_manager.get_ticket_settings_buttons(chat_id, main_channel_id))
+								channel_manager.get_ticket_settings_buttons(chat_id))
 
 	try:
 		bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=keyboard_markup)
@@ -256,6 +272,15 @@ def get_key_by_value(d: dict, value: object):
 		return
 
 	return key_list[position]
+
+
+def get_keys_by_value(d: dict, search: object):
+	result = []
+	for key, value in d.items():
+		if value == search:
+			result.append(key)
+
+	return result
 
 
 @threading_utils.timeout_error_lock
@@ -328,17 +353,8 @@ def get_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: in
 		logging.error(f"Error during getting message {[message_id, chat_id]} content - {E}")
 		return
 
+	_update_forwarded_message_chat(forwarded_message, chat_id, message_id)
 	return forwarded_message
-
-
-@threading_utils.timeout_error_lock
-def copy_message(bot: telebot.TeleBot, **kwargs):
-	return bot.copy_message(**kwargs)
-
-
-@threading_utils.timeout_error_lock
-def remove_keyboard(bot: telebot.TeleBot, chat_id: int, message_id: int):
-	bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
 
 
 @threading_utils.timeout_error_lock
@@ -360,11 +376,30 @@ def get_main_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_i
 		logging.error(f"Error during getting message content - {E}")
 		return
 
+	_update_forwarded_message_chat(forwarded_message, chat_id, message_id)
 	return forwarded_message
 
 
+def _update_forwarded_message_chat(post_data: telebot.types.Message, chat_id: int, message_id: int):
+	if post_data.forward_from_chat and post_data.forward_from_chat.id == chat_id:
+		post_data.chat = post_data.forward_from_chat
+	else:
+		post_data.chat.id = chat_id
+
+	post_data.message_id = post_data.id = message_id
+
+@threading_utils.timeout_error_lock
+def copy_message(bot: telebot.TeleBot, **kwargs):
+	return bot.copy_message(**kwargs)
+
+
+@threading_utils.timeout_error_lock
+def remove_keyboard(bot: telebot.TeleBot, chat_id: int, message_id: int):
+	bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
+
+
 def check_content_type(bot: telebot.TeleBot, message: telebot.types.Message):
-	if message.content_type not in config_utils.SUPPORTED_CONTENT_TYPES:
+	if message.content_type not in config_utils.SUPPORTED_CONTENT_TYPES_TICKET:
 		if message.reply_markup:
 			chat_id = message.chat.id
 			message_id = message.message_id
@@ -378,28 +413,6 @@ def parse_datetime(datetime_str, template_str):
 		return datetime.datetime.strptime(datetime_str, template_str)
 	except ValueError:
 		return
-
-
-@threading_utils.timeout_error_lock
-def get_main_message_content_by_id(bot: telebot.TeleBot, chat_id: int, message_id: int):
-	try:
-		forwarded_message = bot.forward_message(chat_id=config_utils.DUMP_CHAT_ID, from_chat_id=chat_id,
-												message_id=message_id)
-		bot.delete_message(chat_id=config_utils.DUMP_CHAT_ID, message_id=forwarded_message.message_id)
-	except ApiTelegramException as E:
-		if E.error_code == 429:
-			raise E
-		elif E.description == "Bad Request: message to forward not found":
-			raise E
-		elif E.description == "Bad Request: MESSAGE_ID_INVALID":
-			# for some reason telegram throws this error if after deleting a message
-			# no other actions were performed in this channel
-			# instead of regular "message to forward not found" error
-			raise E
-		logging.error(f"Error during getting message content - {E}")
-		return
-
-	return forwarded_message
 
 
 @threading_utils.timeout_error_lock

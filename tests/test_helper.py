@@ -19,14 +19,21 @@ def create_mock_message(text: str, entities: List[MessageEntity], chat_id: int =
 	message = Mock(spec=Message)
 	message.text = text
 	message.caption = None
+	message.empty = False
 	message.entities = entities
 
 	if chat_id:
-		message.chat = Mock(spec=Chat)
-		message.chat.id = chat_id
+		message.chat = create_mock_chat(chat_id, "")
 
 	if message_id:
 		message.message_id = message_id
 		message.id = message_id
 
 	return message
+
+def create_mock_chat(id: int, name: str):
+	chat = Mock(spec=Chat)
+	chat.id = id
+	chat.name = name
+
+	return chat
