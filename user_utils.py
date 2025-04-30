@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time
 from typing import Union
 
 import telebot.types
@@ -6,11 +8,10 @@ from telebot.apihelper import ApiTelegramException
 
 import config_utils
 import core_api
-import db_utils
 import threading_utils
 
 USER_DATA: dict = {}
-
+MEMBER_CACHE = {}
 
 def get_signature(user: Union[telebot.types.User, telebot.types.Chat]):
 	if user.first_name and user.last_name:
@@ -69,6 +70,25 @@ def get_user(bot: telebot.TeleBot, user: Union[str, int]):
 		)
 
 	logging.error(f"Error during loading info about user {user} using core api")
+
+
+def get_member_ids_channel(channel_id) -> list:
+	now = time.time()
+
+	if channel_id not in MEMBER_CACHE or now - MEMBER_CACHE[channel_id]["time"] > 5 * 60:
+		user_ids = set_member_ids_channel(channel_id)
+		MEMBER_CACHE[channel_id] = {
+			"user_ids": user_ids,
+			"time": now
+		}
+
+	return MEMBER_CACHE[channel_id]["user_ids"]
+
+
+def set_member_ids_channel(channel_id) -> list:
+	loop = asyncio.get_event_loop()
+	users = loop.run_until_complete(core_api.get_members(channel_id))
+	return list(map(lambda user: user.id, users))
 
 
 def insert_user_reference(user_tag: str, text: str):
