@@ -86,7 +86,11 @@ def get_member_ids_channel(channel_id) -> list:
 
 
 def set_member_ids_channel(channel_id) -> list:
-	loop = asyncio.get_event_loop()
+	try:
+		loop = asyncio.get_event_loop()
+	except RuntimeError:
+		loop = asyncio.new_event_loop()
+
 	users = loop.run_until_complete(core_api.get_members(channel_id))
 	return list(map(lambda user: user.id, users))
 
