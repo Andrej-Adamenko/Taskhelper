@@ -208,8 +208,8 @@ def handle_channel_bot_command(msg_data: telebot.types.Message):
 	command_utils.handle_channel_command(bot, msg_data)
 
 
-@bot.chat_member_handler()
-def handle_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
+@bot.chat_member_handler(func=subchannel_filter)
+def handle_changed_permissions_subchannel(member_update: telebot.types.ChatMemberUpdated):
 	chat_id = member_update.chat.id
 	if db_utils.is_individual_channel_exists(chat_id):
 		chat_admins = bot.get_chat_administrators(chat_id)
@@ -218,6 +218,22 @@ def handle_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
 			return
 		owner_id = chat_owner.user.id
 		db_utils.update_individual_channel_user(chat_id, owner_id)
+
+@bot.chat_member_handler(func=main_channel_filter)
+def handler_check_new_member(member_update: telebot.types.ChatMemberUpdated):
+	if member_update.difference != {"status": ["left", "member"]}:
+		return
+
+	new_user = member_update.new_chat_member.user
+	user_id = new_user.id
+	channel = member_update.chat
+
+	if user_id not in config_utils.USER_TAGS.values():
+		try:
+			bot.kick_chat_member(channel.id, user_id, revoke_messages=True)
+			logging.info(f"Kicking member {user_id} from '{channel.title}")
+		except Exception as e:
+			logging.error(f"Error in kicking member {user_id} from '{channel.title}': {e}")
 
 
 bot.infinity_polling(allowed_updates=[

@@ -3,11 +3,13 @@ from typing import Union
 
 import telebot.types
 from telebot.apihelper import ApiTelegramException
+from telebot.types import ChatMemberBanned
 
 import config_utils
 import core_api
 import db_utils
 import threading_utils
+import utils
 
 USER_DATA: dict = {}
 
@@ -69,6 +71,22 @@ def get_user(bot: telebot.TeleBot, user: Union[str, int]):
 		)
 
 	logging.error(f"Error during loading info about user {user} using core api")
+
+
+def check_members_on_main_channels(bot: telebot.TeleBot, user_id: int):
+	in_user_tag = user_id in config_utils.USER_TAGS.values()
+	channel_ids = db_utils.get_main_channel_ids()
+	for channel_id in channel_ids:
+		try:
+			member = bot.get_chat_member(channel_id, user_id)
+		except ApiTelegramException:
+			member = None
+
+		if member and member.status != "left":
+			if in_user_tag and member.status == "kicked":
+				bot.unban_chat_member(channel_id, user_id, True)
+			elif not in_user_tag and member.status != "kicked":
+				bot.kick_chat_member(channel_id, user_id)
 
 
 def insert_user_reference(user_tag: str, text: str):
