@@ -85,6 +85,7 @@ def forward_to_subchannel(bot: telebot.TeleBot, post_data: telebot.types.Message
 	daily_reminder.update_ticket_data(main_message_id, main_channel_id, hashtag_data)
 
 	subchannel_ids = get_subchannel_ids_from_hashtags(main_channel_id, main_message_id, hashtag_data)
+	subchannel_ids = filter_subchannels_by_members(main_channel_id, subchannel_ids)
 
 	unchanged_posts = get_unchanged_posts(bot, post_data, list(subchannel_ids))
 
@@ -281,7 +282,7 @@ def filter_due_deferred_tickets(main_channel_id: int, main_message_id: int, hash
 	return list(filter(due_filter, channel_data))
 
 
-def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData):
+def get_subchannel_ids_from_hashtags(main_channel_id: int, main_message_id: int, hashtag_data: HashtagData) -> set:
 	subchannel_ids = set()
 	priority = hashtag_data.get_priority_number_or_default()
 	channel_data = db_utils.get_individual_channels_by_priority(priority)
@@ -356,6 +357,18 @@ def filter_creator_channels(channel_data: List, main_channel_id: int, main_messa
 				result_channels.append(channel_id)
 
 	return result_channels
+
+
+def filter_subchannels_by_members(main_channel_id: int, subchannel_ids: set) -> list:
+	result_subchannels = []
+	main_members = user_utils.get_member_ids_channel(main_channel_id)
+
+	for subchannel_id in subchannel_ids:
+		members = user_utils.get_member_ids_channel(subchannel_id)
+		if not len([a for a in members if a not in main_members]):
+			result_subchannels.append(subchannel_id)
+
+	return result_subchannels
 
 
 def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types.Message):

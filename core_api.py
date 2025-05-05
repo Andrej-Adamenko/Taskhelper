@@ -1,6 +1,6 @@
 import logging
 
-from pyrogram import Client, utils
+from pyrogram import Client, utils, enums
 from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH
 
 '''
@@ -39,6 +39,15 @@ def core_api_function(func):
 	return inner_function
 
 
+def core_api_function_async(func):
+	async def inner_function(*args, **kwargs):
+		if not app.is_initialized:
+			logging.info("Starting pyrogram client")
+			await app.start()
+		return await func(*args, **kwargs)
+	return inner_function
+
+
 def close_client():
 	if app.is_initialized:
 		logging.info("Closing pyrogram client")
@@ -48,6 +57,15 @@ def close_client():
 @core_api_function
 def get_messages(chat_id, message_ids):
 	return app.get_messages(chat_id, message_ids)
+
+
+@core_api_function_async
+async def get_members(chat_id):
+	users = []
+	async for member in app.get_chat_members(chat_id):
+		users.append(member.user)
+
+	return users
 
 
 @core_api_function
