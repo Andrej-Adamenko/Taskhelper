@@ -147,6 +147,9 @@ def handle_main_channel_change(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 
 
 def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
+	prev_user = None
+	cur_user = None
+
 	if msg_data.text.startswith("/set_user_tag"):
 		try:
 			args = arguments.split(" ")
@@ -176,6 +179,8 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 
 		is_tag_already_exists = HashtagData.check_user_tag(tag)
 
+		cur_user = user
+		prev_user = config_utils.USER_TAGS[tag] if tag in config_utils.USER_TAGS else None
 		config_utils.USER_TAGS[tag] = user
 		config_utils.update_config({"USER_TAGS": config_utils.USER_TAGS})
 		user_utils.load_users(bot)
@@ -213,6 +218,7 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 			bot.send_message(chat_id=msg_data.chat.id, text="This user tag doesn't exists.")
 			return
 
+		prev_user = config_utils.USER_TAGS[tag]
 		del config_utils.USER_TAGS[tag]
 		config_utils.update_config({"USER_TAGS": config_utils.USER_TAGS})
 		channel_manager.remove_user_tag_from_channels(bot, tag)
@@ -225,6 +231,12 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 				bot.send_message(chat_id=discussion_channel_id, text=comment_text)
 
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was removed.")
+
+	if prev_user != cur_user:
+		if prev_user:
+			user_utils.check_members_on_main_channels(bot, prev_user)
+		if cur_user:
+			user_utils.check_members_on_main_channels(bot, cur_user)
 
 
 def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):

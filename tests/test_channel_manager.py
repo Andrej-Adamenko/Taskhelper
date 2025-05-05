@@ -1642,7 +1642,6 @@ class InitializeChannelTest(TestCase):
 					 mock_warning, mock_is_individual_channel_exists, *args):
 		mock_bot = Mock(spec=TeleBot)
 		channel_id = -10087654321
-		main_channel_id = -10012345678
 		user_id = 852364
 		settings_str = "{\"due\": true, \"deferred\": true, \"remind\": [\"assigned\"]}"
 		mock_bot.get_chat_administrators.return_value = []
