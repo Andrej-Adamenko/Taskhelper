@@ -8,7 +8,12 @@ from telebot.apihelper import ApiTelegramException
 
 import config_utils
 import core_api
+import db_utils
 import threading_utils
+
+class MEMBER_CACHE_KEYS:
+	USER = "user_ids"
+	TIME = "time"
 
 USER_DATA: dict = {}
 MEMBER_CACHE = {}
@@ -72,27 +77,45 @@ def get_user(bot: telebot.TeleBot, user: Union[str, int]):
 	logging.error(f"Error during loading info about user {user} using core api")
 
 
-def get_member_ids_channel(channel_id) -> list:
+def get_member_ids_channels(channel_ids: list) -> dict:
 	now = time.time()
+	set_channel_ids = []
+	for channel_id in channel_ids:
+		if channel_id not in MEMBER_CACHE or now - MEMBER_CACHE[channel_id][MEMBER_CACHE_KEYS.TIME] > 0.5 * 60:
+			set_channel_ids.append(channel_id)
 
-	if channel_id not in MEMBER_CACHE or now - MEMBER_CACHE[channel_id]["time"] > 5 * 60:
-		user_ids = set_member_ids_channel(channel_id)
+	if len(set_channel_ids) > 0:
+		set_member_ids_channels(set_channel_ids)
+
+	result = {}
+	for channel_id in channel_ids:
+		if channel_id in MEMBER_CACHE:
+			result[channel_id] = MEMBER_CACHE[channel_id][MEMBER_CACHE_KEYS.USER]
+	return result
+
+
+def set_member_ids_channels(channel_ids: list) -> None:
+	now = time.time()
+	channel_users = asyncio.run(core_api.get_members(channel_ids))
+	for channel_id in channel_ids:
+		users = []
+		if channel_id in channel_users:
+			users = list(map(lambda user: user.id, channel_users[channel_id]))
+
 		MEMBER_CACHE[channel_id] = {
-			"user_ids": user_ids,
-			"time": now
+			MEMBER_CACHE_KEYS.USER: users,
+			MEMBER_CACHE_KEYS.TIME: now
 		}
 
-	return MEMBER_CACHE[channel_id]["user_ids"]
 
+def update_all_channel_members():
+	channels = db_utils.get_main_channel_ids()
 
-def set_member_ids_channel(channel_id) -> list:
-	try:
-		loop = asyncio.get_event_loop()
-	except RuntimeError:
-		loop = asyncio.new_event_loop()
+	for channel_id, _ in db_utils.get_all_individual_channels():
+		if channel_id not in channels:
+			channels.append(channel_id)
 
-	users = loop.run_until_complete(core_api.get_members(channel_id))
-	return list(map(lambda user: user.id, users))
+	set_member_ids_channels(channels)
 
 
 def insert_user_reference(user_tag: str, text: str):

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from pyrogram import Client, utils, enums
@@ -23,12 +24,15 @@ def get_peer_type_fixed(peer_id: int) -> str:
 # replace original function with fixed version
 utils.get_peer_type = get_peer_type_fixed
 
-app = Client(
-	"pyrogram_bot",
-	api_id=APP_API_ID, api_hash=APP_API_HASH,
-	bot_token=BOT_TOKEN
-)
+def create_client():
+	return Client(
+		"pyrogram_bot",
+		api_id=APP_API_ID, api_hash=APP_API_HASH,
+		bot_token=BOT_TOKEN
+	)
 
+
+app = create_client()
 
 def core_api_function(func):
 	def inner_function(*args, **kwargs):
@@ -59,11 +63,14 @@ def get_messages(chat_id, message_ids):
 	return app.get_messages(chat_id, message_ids)
 
 
-@core_api_function_async
-async def get_members(chat_id):
-	users = []
-	async for member in app.get_chat_members(chat_id):
-		users.append(member.user)
+async def get_members(chat_ids: list) -> dict:
+	app_item = create_client()
+	users = {}
+	async with app_item:
+		for chat_id in chat_ids:
+			users[chat_id] = []
+			async for member in app_item.get_chat_members(chat_id):
+				users[chat_id].append(member.user)
 
 	return users
 

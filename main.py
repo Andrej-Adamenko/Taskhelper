@@ -39,12 +39,7 @@ scheduled_message_dispatcher.start_scheduled_thread(bot)
 daily_reminder.start_reminder_thread(bot)
 
 messages_export_utils.start_exporting()
-
-for channel_id in db_utils.get_main_channel_ids():
-	user_utils.get_member_ids_channel(channel_id)
-
-for channel_id, _ in db_utils.get_all_individual_channels():
-	user_utils.get_member_ids_channel(channel_id)
+user_utils.update_all_channel_members()
 
 interval_updating_utils.start_interval_updating(bot, INTERVAL_UPDATE_START_DELAY)
 
