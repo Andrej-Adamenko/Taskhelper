@@ -7,21 +7,11 @@ import user_utils
 import core_api
 from config_utils import DISCUSSION_CHAT_DATA, EXPORTED_CHATS
 
-_EXPORT_BATCH_SIZE = 50
+_EXPORT_BATCH_SIZE = 75
 
 
-def export_messages(chat_id: int, last_message_id: int):
-	message_ids = list(range(1, last_message_id + 1))
-	read_counter = 0
-	exported_messages = []
-
-	while read_counter < len(message_ids):
-		exported_messages += core_api.get_messages(chat_id, message_ids[read_counter:read_counter + _EXPORT_BATCH_SIZE])
-		read_counter += _EXPORT_BATCH_SIZE
-		logging.info(f"Exporting progress: {read_counter}/{len(message_ids)}")
-		time.sleep(10)
-
-	return exported_messages
+def export_messages(chat_id: int, last_message_id: int) -> list:
+	return core_api.get_messages(chat_id, last_message_id, _EXPORT_BATCH_SIZE, 8)
 
 
 def export_chat_comments(discussion_chat_id: int):
@@ -97,4 +87,3 @@ def export_main_channels():
 def start_exporting():
 	export_comments_from_discussion_chats()
 	export_main_channels()
-	core_api.close_client()  # close client to prevent different event loop error

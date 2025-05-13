@@ -96,7 +96,7 @@ def get_member_ids_channels(channel_ids: list) -> dict:
 
 def set_member_ids_channels(channel_ids: list) -> None:
 	now = time.time()
-	channel_users = asyncio.run(core_api.get_members(channel_ids))
+	channel_users = core_api.get_members(channel_ids)
 	for channel_id in channel_ids:
 		users = []
 		if channel_id in channel_users:
