@@ -262,7 +262,6 @@ def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
 
 def initialize_channel(bot: telebot.TeleBot, channel_id: int, user_id: int = None):
 	if not db_utils.is_individual_channel_exists(channel_id):
-		return
 		try:
 			channel_admins = bot.get_chat_administrators(channel_id)
 			channel_owner = next((user for user in channel_admins if type(user) == ChatMemberOwner), None)
@@ -510,10 +509,12 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		_set_channel_ticket_settings_state(call, CB_TYPES.OPEN_CHANNEL_SETTINGS)
 		show_settings_keyboard(bot, call)
 	elif callback_type == CB_TYPES.SAVE_AND_HIDE_SETTINGS_MENU:
+		ticket_old_state = _get_channel_ticket_settings_state(message.chat.id, TICKET_MENU_TYPE)
+		info_old_state = _get_channel_ticket_settings_state(message.chat.id, INFO_MENU_TYPE)
 		clear_channel_ticket_settings_state(call)
 		show_settings_keyboard(bot, call,
-							   _get_channel_ticket_settings_state(message.chat.id, INFO_MENU_TYPE) is None,
-							   _get_channel_ticket_settings_state(message.chat.id, TICKET_MENU_TYPE) is None)
+		   info_old_state is not None and _get_channel_ticket_settings_state(message.chat.id, INFO_MENU_TYPE) is None,
+		   ticket_old_state is not None and _get_channel_ticket_settings_state(message.chat.id, TICKET_MENU_TYPE) is None)
 		interval_updating_utils.start_interval_updating(bot)
 	elif callback_type == CB_TYPES.NOP:
 		bot.answer_callback_query(call.id)
@@ -574,6 +575,7 @@ def is_button_checked(buttons: List[InlineKeyboardButton], target_cb_type: str):
 		btn_cb_type, btn_cb_data = utils.parse_callback_str(btn.callback_data)
 		if btn_cb_type == target_cb_type:
 			return btn.text.endswith(config_utils.BUTTON_TEXTS["CHECK"])
+	return None
 
 
 def toggle_button(bot: telebot.TeleBot, call: CallbackQuery, cb_type: str, cb_data: list):

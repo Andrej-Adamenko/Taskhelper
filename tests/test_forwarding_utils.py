@@ -96,7 +96,6 @@ class DeleteMainMessageTest(TestCase):
 		mock_bot.send_message.assert_called_once_with(chat_id=87654321, text=ANY)
 		self.assertEqual(manager.mock_calls, expected_calls)
 
-@patch("daily_reminder.update_ticket_data")
 @patch("hashtag_data.HashtagData.is_closed", return_value=False)
 @patch("hashtag_data.HashtagData.get_assigned_user", return_value="NN")
 @patch("hashtag_data.HashtagData.get_priority_number", return_value="2")
@@ -106,18 +105,20 @@ class DeleteMainMessageTest(TestCase):
 @patch("hashtag_data.HashtagData.get_hashtag_list", return_value=[None, "", "NN", ""])
 @patch("db_utils.get_newest_copied_message", return_value=166)
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("daily_reminder.update_ticket_data")
 @patch("forwarding_utils.get_unchanged_posts", return_value=[])
 class ForwardForSubchannelTest(TestCase):
 	@patch("forwarding_utils.generate_control_buttons")
 	@patch("utils.add_channel_id_to_post_data")
 	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
-	@patch("utils.copy_message")
+	@patch("forwarding_utils.filter_subchannels_by_members")
 	@patch("db_utils.insert_copied_message")
 	@patch("db_utils.insert_or_update_last_msg_id")
 	@patch("forwarding_utils.update_copied_message")
 	@patch("utils.edit_message_keyboard")
-	def test_order_add_remove_settings_button(self, mock_edit_message_keyboard, mock_update_copied_message, mock_insert_or_update_last_msg_id,
-											  mock_insert_copied_message, mock_copy_message, mock_get_subchannel_ids_from_hashtags,
+	def test_order_add_remove_settings_button(self, mock_edit_message_keyboard, mock_update_copied_message,
+											  mock_insert_or_update_last_msg_id, mock_insert_copied_message,
+											  mock_filter_subchannels_by_members, mock_get_subchannel_ids_from_hashtags,
 											  mock_add_channel_id_to_post_data, mock_generate_control_buttons, *args):
 		main_chat_id = 12345678
 		main_message_id = 157
@@ -131,7 +132,7 @@ class ForwardForSubchannelTest(TestCase):
 
 		mock_copied_message = test_helper.create_mock_message(test, [], sub_chat_id, sub_message_id)
 		mock_bot.send_message.return_value = mock_copied_message
-		mock_get_subchannel_ids_from_hashtags.return_value = [sub_chat_id]
+		mock_filter_subchannels_by_members.return_value = [sub_chat_id]
 
 		hashtag_data = HashtagData()
 
@@ -143,6 +144,8 @@ class ForwardForSubchannelTest(TestCase):
 
 		forwarding_utils.forward_to_subchannel(mock_bot, mock_message, hashtag_data)
 		mock_add_channel_id_to_post_data.assert_called_once_with(mock_message)
+		mock_get_subchannel_ids_from_hashtags.assert_called_once_with(main_chat_id, main_message_id, hashtag_data)
+		mock_filter_subchannels_by_members.assert_called_once_with(main_chat_id, mock_get_subchannel_ids_from_hashtags.return_value)
 
 		expected_calls = [
 			call.a(main_message_id, main_chat_id, sub_message_id, sub_chat_id),
@@ -157,13 +160,14 @@ class ForwardForSubchannelTest(TestCase):
 	@patch("db_utils.get_main_message_from_copied")
 	@patch("forwarding_utils.generate_control_buttons")
 	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
+	@patch("forwarding_utils.filter_subchannels_by_members")
 	@patch("channel_manager.get_ticket_settings_buttons")
 	@patch("utils.merge_keyboard_markup")
-	@patch("utils.copy_message")
 	@patch("forwarding_utils.update_copied_message")
-	def test_create_message_with_keyboard(self, mock_update_copied_message, mock_copy_message, mock_merge_keyboard_markup,
-										  mock_get_ticket_settings_buttons, mock_get_subchannel_ids_from_hashtags,
-										  mock_generate_control_buttons, mock_get_main_message_from_copied, *args):
+	def test_create_message_with_keyboard(self, mock_update_copied_message, mock_merge_keyboard_markup,
+										  mock_get_ticket_settings_buttons, mock_filter_subchannels_by_members,
+										  mock_get_subchannel_ids_from_hashtags, mock_generate_control_buttons,
+										  mock_get_main_message_from_copied, *args):
 		main_chat_id = 12345678
 		main_message_id = 157
 		test = "test item"
@@ -177,11 +181,12 @@ class ForwardForSubchannelTest(TestCase):
 
 		mock_copied_message = test_helper.create_mock_message(test, [], sub_chat_id, sub_message_id)
 		mock_bot.send_message.return_value = mock_copied_message
-		mock_get_subchannel_ids_from_hashtags.return_value = [sub_chat_id]
+		mock_filter_subchannels_by_members.return_value = [sub_chat_id]
 
 		hashtag_data = HashtagData()
 		forwarding_utils.forward_to_subchannel(mock_bot, mock_message, hashtag_data)
-
+		mock_get_subchannel_ids_from_hashtags.assert_called_once_with(main_chat_id, main_message_id, hashtag_data)
+		mock_filter_subchannels_by_members.assert_called_once_with(main_chat_id, mock_get_subchannel_ids_from_hashtags.return_value)
 		mock_generate_control_buttons.assert_has_calls([call(hashtag_data, mock_message),
 														call(hashtag_data, mock_message)])
 		mock_get_ticket_settings_buttons.assert_called_once_with(sub_chat_id)
@@ -190,7 +195,6 @@ class ForwardForSubchannelTest(TestCase):
 			mock_get_ticket_settings_buttons.return_value
 		)
 
-		mock_copy_message.assert_not_called()
 		mock_bot.send_message.assert_called_once_with(chat_id=sub_chat_id, text=mock_message.text,
 												  entities=mock_message.entities, reply_markup=mock_merge_keyboard_markup.return_value)
 		mock_update_copied_message.assert_called_once_with(mock_bot, sub_chat_id, 166)
@@ -200,16 +204,17 @@ class ForwardForSubchannelTest(TestCase):
 	@patch("utils.add_channel_id_to_post_data")
 	@patch("forwarding_utils.get_keyboard")
 	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
+	@patch("forwarding_utils.filter_subchannels_by_members")
 	@patch("channel_manager.get_ticket_settings_buttons")
 	@patch("utils.merge_keyboard_markup")
-	@patch("utils.copy_message")
 	@patch("utils.edit_message_keyboard")
 	@patch("forwarding_utils.update_copied_message")
-	def test_create_message_for_unchanged(self, mock_update_copied_message, mock_edit_message_keyboard, mock_copy_message,
+	def test_create_message_for_unchanged(self, mock_update_copied_message, mock_edit_message_keyboard,
 										  mock_merge_keyboard_markup, mock_get_ticket_settings_buttons,
-										  mock_get_subchannel_ids_from_hashtags, mock_get_keyboard,
-										  mock_add_channel_id_to_post_data, mock_generate_control_buttons,
-										  mock_get_main_message_from_copied, mock_get_unchanged_posts, *args):
+										  mock_filter_subchannels_by_members, mock_get_subchannel_ids_from_hashtags,
+										  mock_get_keyboard, mock_add_channel_id_to_post_data,
+										  mock_generate_control_buttons, mock_get_main_message_from_copied,
+										  mock_get_unchanged_posts, *args):
 		main_chat_id = 12345678
 		main_message_id = 157
 		test = "test item"
@@ -224,18 +229,65 @@ class ForwardForSubchannelTest(TestCase):
 		mock_copied_message = test_helper.create_mock_message(test, [], sub_chat_id, sub_message_id)
 		mock_bot.send_message.return_value = mock_copied_message
 		mock_get_unchanged_posts.return_value = {sub_chat_id: sub_message_id}
-		mock_get_subchannel_ids_from_hashtags.return_value = [sub_chat_id]
+		mock_filter_subchannels_by_members.return_value = [sub_chat_id]
 
 		hashtag_data = HashtagData()
 		forwarding_utils.forward_to_subchannel(mock_bot, mock_message, hashtag_data)
 		mock_add_channel_id_to_post_data.assert_called_once_with(mock_message)
+		mock_get_subchannel_ids_from_hashtags.assert_called_once_with(main_chat_id, main_message_id, hashtag_data)
+		mock_filter_subchannels_by_members.assert_called_once_with(main_chat_id, mock_get_subchannel_ids_from_hashtags.return_value)
 		mock_generate_control_buttons.assert_not_called()
 		mock_get_keyboard.assert_called_once_with(ANY, sub_chat_id, sub_message_id)
 		mock_get_ticket_settings_buttons.assert_not_called()
 		mock_merge_keyboard_markup.assert_not_called()
 		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_message, mock_get_keyboard.return_value,
 														   chat_id = sub_chat_id, message_id=sub_message_id)
-		mock_copy_message.assert_not_called()
+		mock_update_copied_message.assert_not_called()
+
+	@patch("db_utils.get_main_message_from_copied")
+	@patch("forwarding_utils.generate_control_buttons")
+	@patch("utils.add_channel_id_to_post_data")
+	@patch("forwarding_utils.get_keyboard")
+	@patch("forwarding_utils.get_subchannel_ids_from_hashtags")
+	@patch("forwarding_utils.filter_subchannels_by_members")
+	@patch("channel_manager.get_ticket_settings_buttons")
+	@patch("utils.merge_keyboard_markup")
+	@patch("utils.edit_message_keyboard")
+	@patch("forwarding_utils.update_copied_message")
+	def test_closed_message(self, mock_update_copied_message, mock_edit_message_keyboard,
+										  mock_merge_keyboard_markup, mock_get_ticket_settings_buttons,
+										  mock_filter_subchannels_by_members, mock_get_subchannel_ids_from_hashtags,
+										  mock_get_keyboard, mock_add_channel_id_to_post_data,
+										  mock_generate_control_buttons, mock_get_main_message_from_copied,
+										  mock_get_unchanged_posts, mock_update_ticket_data, *args):
+		main_chat_id = 12345678
+		main_message_id = 157
+		test = "test item"
+		sub_chat_id = 87654321
+		sub_message_id = 167
+
+		mock_bot = Mock(spec=TeleBot)
+		mock_message = test_helper.create_mock_message(test, [], main_chat_id, main_message_id)
+		mock_get_main_message_from_copied.return_value = [main_message_id, main_chat_id]
+		mock_copied_message = test_helper.create_mock_message(test, [], sub_chat_id, sub_message_id)
+		mock_bot.send_message.return_value = mock_copied_message
+		mock_get_unchanged_posts.return_value = {sub_chat_id: sub_message_id}
+		mock_filter_subchannels_by_members.return_value = [sub_chat_id]
+
+		hashtag_data = HashtagData()
+		hashtag_data.is_closed.return_value = True
+
+		forwarding_utils.forward_to_subchannel(mock_bot, mock_message, hashtag_data)
+		mock_update_ticket_data.assert_called_once_with(main_message_id, main_chat_id, hashtag_data)
+		mock_add_channel_id_to_post_data.assert_not_called()
+		mock_get_subchannel_ids_from_hashtags.assert_not_called()
+		mock_filter_subchannels_by_members.assert_not_called()
+		mock_get_unchanged_posts.assert_called_once_with(mock_bot, mock_message, [])
+		mock_generate_control_buttons.assert_not_called()
+		mock_get_keyboard.assert_not_called()
+		mock_get_ticket_settings_buttons.assert_not_called()
+		mock_merge_keyboard_markup.assert_not_called()
+		mock_edit_message_keyboard.assert_not_called()
 		mock_update_copied_message.assert_not_called()
 
 	@patch("db_utils.get_main_message_sender")
@@ -285,6 +337,32 @@ class GetSubchannelIdsFromHashtags(TestCase):
 		mock_hashtag_data.get_priority_number_or_default.assert_called_once_with()
 		mock_get_individual_channel_by_priority.assert_called_once_with(priority)
 		self.assertEqual(result, {2, 4, 6})
+
+
+@patch("user_utils.MEMBER_CACHE", {-10012345678: {"user_ids": [12345, 23465, 13508], "time": 1745924296},
+								   -10087654321: {"user_ids": [12345], "time": 1745924296},
+								   -10012378456: {"user_ids": [24687, 28946], "time": 1745924296},
+								   -10087653214: {"user_ids": [12345, 23465, 21682], "time": 1745924296}})
+@patch("time.time", return_value=1745924296)
+class FilterSubchannelByMembersTest(TestCase):
+	@patch("user_utils.get_member_ids_channels")
+	def test_functions(self, mock_get_member_ids_channels, *args):
+		main_channel_id = -10012345678
+		subchannel_ids = {-10087654321, -10012378456, -10087653214}
+		all_channels = [-10012345678, -10012378456, -10087653214, -10087654321]
+
+		manager = Mock()
+		manager.attach_mock(mock_get_member_ids_channels, 'a')
+
+		forwarding_utils.filter_subchannels_by_members(main_channel_id, set(subchannel_ids))
+		mock_get_member_ids_channels.assert_called_once_with(all_channels)
+
+	def test_result(self, *args):
+		main_channel_id = -10012345678
+		subchannel_ids = [-10087654321, -10012378456, -10087653214]
+
+		result = forwarding_utils.filter_subchannels_by_members(main_channel_id, set(subchannel_ids))
+		self.assertEqual(result, [-10087654321])
 
 
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
