@@ -39,7 +39,7 @@ class LoadUsersTest(TestCase):
 		self.assertEqual(user_utils.USER_DATA, {user_tag: info})
 
 
-@patch("core_api.get_members", new_callable=AsyncMock)
+@patch("core_api.get_members")
 class MembersChannelTest(TestCase):
 	@patch("user_utils.MEMBER_CACHE", {})
 	@patch("time.time")
@@ -154,13 +154,11 @@ class MembersChannelTest(TestCase):
 		self.assertEqual(user_utils.MEMBER_CACHE[channel_ids[0]]["user_ids"], [])
 
 	@patch("user_utils.MEMBER_CACHE", {-10012345678: {"user_ids": [12345, 23465, 13508], "time": 1745923296}})
-	@patch("asyncio.run")
-	def test_set_members_channel_check_loop(self, mock_run, mock_get_members, *args):
+	def test_set_members_channel_check_loop(self, mock_get_members, *args):
 		channel_ids = [-10012345678]
-		mock_run.return_value = {channel_ids[0]: []}
+		mock_get_members.return_value = {channel_ids[0]: []}
 
 		user_utils.set_member_ids_channels(channel_ids)
-		mock_run.assert_called_once_with(ANY)
 		mock_get_members.assert_called_once_with(channel_ids)
 		self.assertEqual(user_utils.MEMBER_CACHE[channel_ids[0]]["user_ids"], [])
 

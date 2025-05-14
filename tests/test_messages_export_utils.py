@@ -90,5 +90,22 @@ class ExportChatCommentsTest(TestCase):
 		mock_info.assert_called_once_with(f"Can't find last message in {discussion_chat_id}, export skipped")
 
 
+class ExportMessagesTest(TestCase):
+	@patch("core_api.get_messages")
+	def test_default(self, mock_get_messages, *args):
+		channel_id = -10012345678
+		last_message_id = 12
+		messages_export_utils.export_messages(channel_id, last_message_id)
+		mock_get_messages.assert_called_once_with(channel_id, last_message_id, messages_export_utils._EXPORT_BATCH_SIZE, 8)
+
+
+@patch("messages_export_utils.export_comments_from_discussion_chats")
+@patch("messages_export_utils.export_main_channels")
+class StartExportingTest(TestCase):
+	def test_default(self, mock_export_comments_from_discussion_chats, mock_export_main_channels):
+		messages_export_utils.start_exporting()
+		mock_export_comments_from_discussion_chats.assert_called_once_with()
+		mock_export_main_channels.assert_called_once_with()
+
 if __name__ == "__main__":
 	main()

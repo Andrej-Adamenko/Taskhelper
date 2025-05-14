@@ -1,7 +1,12 @@
 import asyncio
 import logging
+import time
+from typing import Union, Any, Coroutine
 
+import pyrogram
 from pyrogram import Client, utils, enums
+from pyrogram.types import User
+
 from config_utils import BOT_TOKEN, APP_API_ID, APP_API_HASH
 
 '''
@@ -24,7 +29,7 @@ def get_peer_type_fixed(peer_id: int) -> str:
 # replace original function with fixed version
 utils.get_peer_type = get_peer_type_fixed
 
-def create_client():
+def create_client() -> pyrogram.Client:
 	return Client(
 		"pyrogram_bot",
 		api_id=APP_API_ID, api_hash=APP_API_HASH,
@@ -32,53 +37,53 @@ def create_client():
 	)
 
 
-app = create_client()
-
-def core_api_function(func):
+def async_to_sync(func):
 	def inner_function(*args, **kwargs):
-		if not app.is_initialized:
-			logging.info("Starting pyrogram client")
-			app.start()
-		return func(*args, **kwargs)
+		async def inner_function_ajax(*args, **kwargs):
+			if "client" not in kwargs:
+				async with create_client() as client:
+					kwargs["client"] = client
+					return await func(*args, **kwargs)
+			return await func(*args, **kwargs)
+
+		return asyncio.run(inner_function_ajax(*args, **kwargs))
 	return inner_function
 
 
-def core_api_function_async(func):
-	async def inner_function(*args, **kwargs):
-		if not app.is_initialized:
-			logging.info("Starting pyrogram client")
-			await app.start()
-		return await func(*args, **kwargs)
-	return inner_function
+@async_to_sync
+async def get_messages(chat_id: int, last_msg_id: int, limit: int, time_sleep: int, /, client: pyrogram.Client) -> list:
+	message_ids = list(range(1, last_msg_id + 1))
+	read_counter = 0
+	exported_messages= []
+
+	while read_counter < len(message_ids):
+		exported_messages += await client.get_messages(chat_id, message_ids[read_counter:read_counter + limit])
+		read_counter += limit
+		logging.info(f"Exporting progress: {min(read_counter, len(message_ids))}/{len(message_ids)}")
+
+		if read_counter < len(message_ids):
+			await asyncio.sleep(time_sleep)
+
+	return exported_messages
 
 
-def close_client():
-	if app.is_initialized:
-		logging.info("Closing pyrogram client")
-		app.stop(True)
-
-
-@core_api_function
-def get_messages(chat_id, message_ids):
-	return app.get_messages(chat_id, message_ids)
-
-
-async def get_members(chat_ids: list) -> dict:
-	app_item = create_client()
+@async_to_sync
+async def get_members(chat_ids: list, /, client: pyrogram.Client) -> dict:
 	users = {}
-	async with app_item:
-		for chat_id in chat_ids:
-			users[chat_id] = []
-			async for member in app_item.get_chat_members(chat_id):
-				users[chat_id].append(member.user)
+
+	for chat_id in chat_ids:
+		users[chat_id] = []
+		async for member in client.get_chat_members(chat_id):
+			users[chat_id].append(member.user)
 
 	return users
 
-
-@core_api_function
-def get_user(identifier):
+@async_to_sync
+async def get_user(identifier: Union[str, int], /, client: pyrogram.Client) -> User | None:
 	try:
-		return app.get_users(identifier)
+		return await client.get_users(identifier)
 	except Exception as E:
 		logging.info(f"Core api get_user({identifier}) exception: {E}")
+
+	return None
 
