@@ -77,14 +77,14 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	if discussion_chat_id != msg_data.chat.id:
 		return
 
-	main_channel_id = msg_data.forward_from_chat.id
+	main_channel = msg_data.forward_from_chat
 	main_message_id = msg_data.forward_from_message_id
 	discussion_message_id = msg_data.message_id
 
-	db_utils.insert_or_update_discussion_message(main_message_id, main_channel_id, discussion_message_id)
+	db_utils.insert_or_update_discussion_message(main_message_id, main_channel.id, discussion_message_id)
 
-	msg_data.chat.id = main_channel_id
-	msg_data.message_id = main_message_id
+	msg_data.chat = main_channel
+	msg_data.message_id = msg_data.id = main_message_id
 
 	edited_post = post_link_utils.add_link_to_new_post(msg_data)
 	forwarding_utils.forward_and_add_inline_keyboard(bot, edited_post, new_ticket=True)
