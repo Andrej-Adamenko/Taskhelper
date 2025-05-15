@@ -10,7 +10,7 @@ from tests import test_helper
 
 @patch("db_utils.is_main_channel_exists", return_value=True)
 @patch("config_utils.DISCUSSION_CHAT_DATA", {"-10012345678": -10087654321})
-@patch("user_utils.check_members_on_main_channels")
+@patch("user_utils.check_user_id_on_main_channels")
 class HandleUserChangeTest(TestCase):
     @patch("core_api.get_user")
     @patch("user_utils.get_user")

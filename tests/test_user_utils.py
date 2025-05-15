@@ -42,26 +42,24 @@ class LoadUsersTest(TestCase):
 @patch("core_api.get_members")
 class MembersChannelTest(TestCase):
 	@patch("user_utils.MEMBER_CACHE", {})
-	@patch("time.time")
+	@patch("time.time", return_value=1745924325)
 	@patch("user_utils.set_member_ids_channels")
 	def test_get_members_channel(self, mock_set_members_channel, mock_time, *args):
 		channel_ids = [-10012345678]
 		channel_users = {channel_ids[0]: [12345, 23465]}
 		mock_set_members_channel.return_value = channel_users
-		mock_time.return_value = 1745924325
 
 		user_utils.get_member_ids_channels(channel_ids)
 		mock_set_members_channel.assert_called_once_with(channel_ids)
 		mock_time.assert_called_once_with()
 
 	@patch("user_utils.MEMBER_CACHE", {})
-	@patch("time.time")
+	@patch("time.time", return_value=1745924325)
 	def test_get_members_channel_result(self, mock_time, mock_get_members, *args):
 		channel_ids = [-10012345678]
 		ids = [12345, 23465]
 		channel_users = {channel_ids[0]: ids}
 		mock_get_members.return_value = {channel_ids[0]: [Mock(id=i) for i in ids]}
-		mock_time.return_value = 1745924325
 
 		result = user_utils.get_member_ids_channels(channel_ids)
 		mock_get_members.assert_called_once_with(channel_ids)
@@ -69,12 +67,11 @@ class MembersChannelTest(TestCase):
 		self.assertEqual(result, channel_users)
 
 	@patch("user_utils.MEMBER_CACHE", {})
-	@patch("time.time")
+	@patch("time.time", return_value=1745924325)
 	def test_get_members_channel_empty_result(self, mock_time, mock_get_members, *args):
 		channel_ids = [-10012345678]
 		channel_users = {channel_ids[0]: []}
 		mock_get_members.return_value = []
-		mock_time.return_value = 1745924325
 
 		result = user_utils.get_member_ids_channels(channel_ids)
 		mock_get_members.assert_called_once_with(channel_ids)
@@ -82,11 +79,10 @@ class MembersChannelTest(TestCase):
 		self.assertEqual(result, channel_users)
 
 	@patch("user_utils.MEMBER_CACHE", {-10012345678: {"user_ids": [12345, 23465, 13508], "time": 1745924296}})
-	@patch("time.time")
+	@patch("time.time", return_value=1745924325)
 	@patch("user_utils.set_member_ids_channels")
 	def test_get_members_channel_cache(self, mock_set_members_channel, mock_time, *args):
 		channel_ids = [-10012345678]
-		mock_time.return_value = 1745924325
 
 		user_utils.get_member_ids_channels(channel_ids)
 		mock_set_members_channel.assert_not_called()
@@ -94,13 +90,12 @@ class MembersChannelTest(TestCase):
 
 	@patch("user_utils.MEMBER_CACHE", {-10012345678: {"user_ids": [12345, 23465], "time": 1745924296},
 									   -10087653421: {"user_ids": [12345, 23465, 13508], "time": 1745924296}, })
-	@patch("time.time")
+	@patch("time.time", return_value=1745924325)
 	@patch("user_utils.set_member_ids_channels")
 	def test_get_members_channel_with_other_channels_result(self, mock_set_members_channel, mock_time, *args):
 		channel_ids = [-10012345678]
 		ids = [12345, 23465]
 		channel_users = {channel_ids[0]: ids}
-		mock_time.return_value = 1745924325
 
 		result = user_utils.get_member_ids_channels(channel_ids)
 		mock_set_members_channel.assert_not_called()
@@ -108,13 +103,12 @@ class MembersChannelTest(TestCase):
 		self.assertEqual(result, channel_users)
 
 	@patch("user_utils.MEMBER_CACHE", {-10012345678: {"user_ids": [12345, 23465, 13508], "time": 1745923296}})
-	@patch("time.time")
+	@patch("time.time", return_value=1745924325)
 	def test_get_members_channel_cache_expired_time_result(self, mock_time, mock_get_members, *args):
 		channel_ids = [-10012345678]
 		ids = [12345, 23465]
 		channel_users = {channel_ids[0]: ids}
 		mock_get_members.return_value = {channel_ids[0]: [Mock(id=i) for i in ids]}
-		mock_time.return_value = 1745924325
 
 		result = user_utils.get_member_ids_channels(channel_ids)
 		mock_get_members.assert_called_once_with(channel_ids)
@@ -122,13 +116,12 @@ class MembersChannelTest(TestCase):
 		self.assertEqual(result, channel_users)
 
 	@patch("user_utils.MEMBER_CACHE", {-10012345678: {"user_ids": [12345, 23465, 13508], "time": 1745923296}})
-	@patch("time.time")
+	@patch("time.time", return_value=1745924325)
 	@patch("user_utils.set_member_ids_channels")
 	def test_get_members_channel_cache_expired_time(self, mock_set_members_channel, mock_time, *args):
 		channel_ids = [-10012345678]
 		channel_users = {channel_ids[0]: [12345, 23465]}
 		mock_set_members_channel.return_value = channel_users
-		mock_time.return_value = 1745924325
 
 		user_utils.get_member_ids_channels(channel_ids)
 		mock_set_members_channel.assert_called_once_with(channel_ids)
@@ -181,7 +174,7 @@ class MembersChannelTest(TestCase):
 
 @patch("config_utils.USER_TAGS", {"aa": 51456, "bb": 54684, "cc": 68462, "dd": 12345})
 @patch("db_utils.get_main_channel_ids")
-class CheckMembersOnMainChannelsTest(TestCase):
+class CheckUserIdOnMainChannelsTest(TestCase):
 	def test_unban_chat_member(self, mock_get_main_channel_ids, *args):
 		mock_bot = Mock(spec=TeleBot)
 		user_id = 12345
@@ -199,7 +192,7 @@ class CheckMembersOnMainChannelsTest(TestCase):
 			call.a(main_channel_ids[1], user_id)
 		]
 
-		user_utils.check_members_on_main_channels(mock_bot, user_id)
+		user_utils.check_user_id_on_main_channels(mock_bot, user_id)
 		mock_get_main_channel_ids.assert_called_once_with()
 		mock_bot.kick_chat_member.assert_not_called()
 		self.assertEqual(manager.mock_calls, expected_mocks)
@@ -211,7 +204,7 @@ class CheckMembersOnMainChannelsTest(TestCase):
 		mock_get_main_channel_ids.return_value = main_channel_ids
 		mock_bot.get_chat_member.side_effect = ApiTelegramException("content", "", {"error_code": 400, "description": "Bad Request: message to forward not found"})
 
-		user_utils.check_members_on_main_channels(mock_bot, user_id)
+		user_utils.check_user_id_on_main_channels(mock_bot, user_id)
 		mock_get_main_channel_ids.assert_called_once_with()
 		mock_bot.get_chat_member.assert_called_once_with(main_channel_ids[0], user_id)
 		mock_bot.kick_chat_member.assert_not_called()
@@ -236,7 +229,7 @@ class CheckMembersOnMainChannelsTest(TestCase):
 			call.a(main_channel_ids[2], user_id)
 		]
 
-		user_utils.check_members_on_main_channels(mock_bot, user_id)
+		user_utils.check_user_id_on_main_channels(mock_bot, user_id)
 		mock_get_main_channel_ids.assert_called_once_with()
 		mock_bot.unban_chat_member.assert_not_called()
 		self.assertEqual(manager.mock_calls, expected_mocks)
@@ -249,11 +242,29 @@ class CheckMembersOnMainChannelsTest(TestCase):
 		mock_get_main_channel_ids.return_value = main_channel_ids
 		mock_bot.get_chat_member.side_effect = ApiTelegramException("content", "", {"error_code": 400, "description": "Bad Request: message to forward not found"})
 
-		user_utils.check_members_on_main_channels(mock_bot, user_id)
+		user_utils.check_user_id_on_main_channels(mock_bot, user_id)
 		mock_get_main_channel_ids.assert_called_once_with()
 		mock_bot.get_chat_member.assert_called_once_with(main_channel_ids[0], user_id)
 		mock_bot.unban_chat_member.assert_not_called()
 		mock_bot.kick_chat_member.assert_not_called()
+
+
+@patch("user_utils.MEMBER_CACHE", {-10012345678: {"user_ids": [12345, 23465, 13508], "time": 1745924296}})
+@patch("time.time", return_value=1745924325)
+@patch("user_utils.check_user_id_on_main_channels")
+@patch("db_utils.get_main_channel_ids")
+class CheckMembersOnMainChannelsTest(TestCase):
+	def test_default(self, mock_get_main_channel_ids,
+					 mock_check_user_id_on_main_channels, *args):
+		mock_bot = Mock(spec=TeleBot)
+		mock_bot.user = Mock(id=23465)
+		main_channel_ids = [-10012345678]
+		mock_get_main_channel_ids.return_value = main_channel_ids
+
+		user_utils.check_members_on_main_channels(mock_bot)
+		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_user_id_on_main_channels.assert_has_calls([call(mock_bot, 12345), call(mock_bot, 13508)])
+
 
 
 

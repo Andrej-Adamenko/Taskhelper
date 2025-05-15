@@ -120,7 +120,7 @@ def update_all_channel_members():
 	set_member_ids_channels(channels)
 
 
-def check_members_on_main_channels(bot: telebot.TeleBot, user_id: int):
+def check_user_id_on_main_channels(bot: telebot.TeleBot, user_id: int):
 	in_user_tag = user_id in config_utils.USER_TAGS.values()
 	channel_ids = db_utils.get_main_channel_ids()
 	for channel_id in channel_ids:
@@ -134,6 +134,17 @@ def check_members_on_main_channels(bot: telebot.TeleBot, user_id: int):
 				bot.unban_chat_member(channel_id, user_id, True)
 			elif not in_user_tag and member.status != "kicked":
 				bot.kick_chat_member(channel_id, user_id)
+
+
+def check_members_on_main_channels(bot: telebot.TeleBot):
+	channel_members = get_member_ids_channels(db_utils.get_main_channel_ids())
+	user_ids = set()
+	for channel_id in channel_members:
+		user_ids.update(channel_members[channel_id])
+
+	for user_id in user_ids:
+		if user_id != bot.user.id:
+			check_user_id_on_main_channels(bot, user_id)
 
 
 def insert_user_reference(user_tag: str, text: str):
