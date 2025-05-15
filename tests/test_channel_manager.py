@@ -1633,13 +1633,14 @@ class TestHandleCallback(TestCase):
 		result = channel_manager._set_channel_ticket_settings_state(mock_call, state)
 
 
+@patch("db_utils.is_main_channel_exists", return_value=False)
 @patch("db_utils.is_individual_channel_exists", return_value=False)
 @patch("logging.warning")
 @patch("db_utils.insert_individual_channel")
 @patch("channel_manager.create_settings_message")
 class InitializeChannelTest(TestCase):
 	def test_default(self, mock_create_settings_message, mock_insert_individual_channel,
-					 mock_warning, mock_is_individual_channel_exists, *args):
+					 mock_warning, mock_is_individual_channel_exists, mock_is_main_channel_exists, *args):
 		mock_bot = Mock(spec=TeleBot)
 		channel_id = -10087654321
 		user_id = 852364
@@ -1647,19 +1648,37 @@ class InitializeChannelTest(TestCase):
 		mock_bot.get_chat_administrators.return_value = []
 
 		channel_manager.initialize_channel(mock_bot, channel_id, user_id)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
 		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
 		mock_bot.get_chat_administrators.assert_called_once_with(channel_id)
 		mock_warning.assert_called_once_with(f"Can't get owner_id from channel, use user #{user_id} in channel #{channel_id}")
 		mock_insert_individual_channel.assert_called_once_with(channel_id, settings_str, user_id)
 		mock_create_settings_message.assert_called_once_with(mock_bot, channel_id)
 
+	def test_main_channel(self, mock_create_settings_message, mock_insert_individual_channel,
+					 mock_warning, mock_is_individual_channel_exists, mock_is_main_channel_exists, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10087654321
+		user_id = 852364
+		mock_bot.get_chat_administrators.return_value = []
+		mock_is_main_channel_exists.return_value = True
+
+		channel_manager.initialize_channel(mock_bot, channel_id, user_id)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_bot.get_chat_administrators.assert_not_called()
+		mock_warning.assert_not_called()
+		mock_insert_individual_channel.assert_not_called()
+		mock_create_settings_message.assert_not_called()
+
 	def test_with_exists_settings(self, mock_create_settings_message, mock_insert_individual_channel,
-								  mock_warning, mock_is_individual_channel_exists, *args):
+								  mock_warning, mock_is_individual_channel_exists, mock_is_main_channel_exists, *args):
 		mock_bot = Mock(spec=TeleBot)
 		channel_id = -10087654321
 		mock_is_individual_channel_exists.return_value = True
 
 		channel_manager.initialize_channel(mock_bot, channel_id)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
 		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
 		mock_bot.get_chat_administrators.assert_not_called()
 		mock_warning.assert_not_called()
