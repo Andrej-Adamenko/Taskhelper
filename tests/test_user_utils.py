@@ -213,10 +213,11 @@ class CheckUserIdOnMainChannelsTest(TestCase):
 	def test_kicked_chat_member(self, mock_get_main_channel_ids, *args):
 		mock_bot = Mock(spec=TeleBot)
 		user_id = 21654
-		main_channel_ids = [-10012345678, -10087654321, -10045647213]
+		main_channel_ids = [-10012345678, -10087654321, -10045647213, -10025156486]
 		mock_get_main_channel_ids.return_value = main_channel_ids
 		mock_bot.get_chat_member.side_effect = lambda chat_id, user_id: Mock(status="kicked") if chat_id == main_channel_ids[0] else\
-						(Mock(status="member") if chat_id == main_channel_ids[1] else Mock(status="left"))
+			(Mock(status="member") if chat_id == main_channel_ids[1] else
+			(Mock(status="administrator") if chat_id == main_channel_ids[2] else Mock(status="left")))
 
 		manager = Mock()
 		manager.attach_mock(mock_bot.get_chat_member, "a")
@@ -226,7 +227,8 @@ class CheckUserIdOnMainChannelsTest(TestCase):
 			call.a(main_channel_ids[0], user_id),
 			call.a(main_channel_ids[1], user_id),
 			call.b(main_channel_ids[1], user_id),
-			call.a(main_channel_ids[2], user_id)
+			call.a(main_channel_ids[2], user_id),
+			call.a(main_channel_ids[3], user_id)
 		]
 
 		user_utils.check_user_id_on_main_channels(mock_bot, user_id)

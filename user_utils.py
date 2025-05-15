@@ -132,7 +132,7 @@ def check_user_id_on_main_channels(bot: telebot.TeleBot, user_id: int):
 		if member and member.status != "left":
 			if in_user_tag and member.status == "kicked":
 				bot.unban_chat_member(channel_id, user_id, True)
-			elif not in_user_tag and member.status != "kicked":
+			elif not in_user_tag and member.status in ["member", "restricted"]:
 				bot.kick_chat_member(channel_id, user_id)
 
 
