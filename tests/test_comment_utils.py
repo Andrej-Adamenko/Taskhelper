@@ -505,7 +505,7 @@ class UpdateUserLastInteraction(TestCase):
 		comment_dispatcher.update_user_last_interaction(main_message_id, main_channel_id, mock_message)
 		mock_get_user_highest_priority.assert_called_once_with(main_channel_id, user_tag)
 		mock_get_ticket_data.assert_called_once_with(main_message_id, main_channel_id)
-		mock_insert_or_update_last_user_interaction.assert_called_once_with(main_channel_id, user_tag, int(time))
+		mock_insert_or_update_last_user_interaction.assert_called_once_with(user_tag, int(time))
 		mock_info.assert_called_once_with(f"Updated {user_id, user_tag} user last interaction.")
 
 	def test_few_tags(self, mock_info, mock_time, mock_insert_or_update_last_user_interaction, mock_get_ticket_data,
@@ -535,7 +535,7 @@ class UpdateUserLastInteraction(TestCase):
 		for tag in user_tags:
 			expected_calls.append(call.a(main_channel_id, tag))
 			expected_calls.append(call.b(main_message_id, main_channel_id))
-			expected_calls.append(call.c(main_channel_id, tag, time))
+			expected_calls.append(call.c(tag, time))
 			expected_calls.append(call.d(f"Updated {user_id, tag} user last interaction."))
 
 		comment_dispatcher.update_user_last_interaction(main_message_id, main_channel_id, mock_message)
