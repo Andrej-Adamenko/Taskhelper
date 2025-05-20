@@ -1,7 +1,7 @@
-import datetime
 import logging
 import time
 
+import pyrogram
 import telebot
 from telebot.apihelper import ApiTelegramException
 
@@ -21,27 +21,30 @@ _INTERVAL_UPDATING_THREAD: threading.Thread = None
 _UPDATE_STATUS: bool = False
 
 
-def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int):
+def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int,
+						 forwarded_message: pyrogram.types.Message = None):
 	if not db_utils.is_main_message_exists(main_channel_id, main_message_id):
 		logging.info(f"Ticket update for {main_channel_id, main_message_id} was skipped because it's not in db")
 		return
 
-	try:
-		forwarded_message = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
-	except ApiTelegramException:
+	if not forwarded_message:
+		try:
+			forwarded_message = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
+		except ApiTelegramException:
+			forwarding_utils.delete_main_message(bot, main_channel_id, main_message_id)
+			return
+	elif forwarded_message.service or forwarded_message.empty:
 		forwarding_utils.delete_main_message(bot, main_channel_id, main_message_id)
 		return
+	else:
+		utils.update_forwarded_fields(forwarded_message)
 
 	if forwarded_message is None:
 		return
 
-	if utils.get_forwarded_from_id(forwarded_message) != main_channel_id:
+	if forwarded_message.chat.id != main_channel_id:
 		return
 
-	main_channel_message_id = forwarded_message.forward_from_message_id
-
-	forwarded_message.message_id = main_channel_message_id
-	forwarded_message.chat = forwarded_message.forward_from_chat
 	if not utils.check_content_type(bot, forwarded_message):
 		return
 
@@ -52,108 +55,64 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_messag
 
 	forwarding_utils.forward_and_add_inline_keyboard(bot, updated_message)
 
-	return main_channel_message_id
+	return forwarded_message.id
 
 
-def update_by_core(bot: telebot.TeleBot, main_channel_id: int, last_message_id: int):
-	message_ids = list(range(1, last_message_id + 1))
-	read_counter = 0
-	messages = []
+def get_messages_by_core(channel_id: int, message_ids: list) -> list:
+	time_sleep = 5 if len(message_ids) > 350 else 1
+	return core_api.get_messages(channel_id, 0, _EXPORT_BATCH_SIZE, time_sleep, message_ids=message_ids)
 
-	while read_counter < len(message_ids):
-		if read_counter > 0:
-			time.sleep(2)
 
-		messages += core_api.get_messages(main_channel_id, message_ids[read_counter:read_counter + _EXPORT_BATCH_SIZE])
-		read_counter += _EXPORT_BATCH_SIZE
-		logging.info(f"Exporting progress: {read_counter}/{len(message_ids)}")
-		break
-
+def update_by_core(bot: telebot.TeleBot, main_channel_id: int, message_ids: list):
+	messages = get_messages_by_core(main_channel_id, message_ids)
 	for message in messages:
-		time.sleep(DELAY_AFTER_ONE_SCAN)
-		try:
-			if not _UPDATE_STATUS:
-				raise Exception("Interval update stop requested")
-
-			current_msg_id = message.id
-			update_older_message(bot, main_channel_id, current_msg_id)
-			db_utils.insert_or_update_channel_update_progress(main_channel_id, current_msg_id)
-		except ApiTelegramException as E:
-			if E.error_code == 429:
-				logging.warning(f"Too many requests - {E}")
-				time.sleep(20)
-				continue
-			logging.error(f"Telegram error during main channel check ({main_channel_id, current_msg_id}) - {E}")
-		except Exception as E:
-			logging.error(f"Main channel check stopped ({main_channel_id, current_msg_id}) - {E}")
+		if not update_interval_message(bot, main_channel_id, message.id, message=message):
 			return
 
 
-def update_by_bot(bot: telebot.TeleBot, main_channel_id: int, last_message_id: int):
-	for current_msg_id in range(last_message_id, 0, -1):
-		time.sleep(DELAY_AFTER_ONE_SCAN)
-		try:
-			if not _UPDATE_STATUS:
-				raise Exception("Interval update stop requested")
-
-			update_older_message(bot, main_channel_id, current_msg_id)
-			db_utils.insert_or_update_channel_update_progress(main_channel_id, current_msg_id)
-		except ApiTelegramException as E:
-			if E.error_code == 429:
-				logging.warning(f"Too many requests - {E}")
-				time.sleep(20)
-				continue
-			logging.error(f"Telegram error during main channel check ({main_channel_id, current_msg_id}) - {E}")
-		except Exception as E:
-			logging.error(f"Main channel check stopped ({main_channel_id, current_msg_id}) - {E}")
+def update_by_bot(bot: telebot.TeleBot, main_channel_id: int, message_ids: list):
+	for current_msg_id in message_ids:
+		if not update_interval_message(bot, main_channel_id, current_msg_id):
 			return
 
-
-def update_export_message(bot: telebot.TeleBot, post_data: telebot.types.Message):
-	channel_id = post_data.chat.id
-	message_id = post_data.id
-
-	if not db_utils.is_main_message_exists(channel_id, message_id):
-		logging.info(f"Ticket update for {channel_id, message_id} was skipped because it's not in db")
-		return
-
-	if not utils.check_content_type(bot, post_data):
-		if post_data.reply_markup:
-			addSleep()
-		return
-
-	updated_message = post_link_utils.update_post_link(bot, post_data)
-
-	if not updated_message:
-		updated_message = post_data
-
-	forwarding_utils.forward_and_add_inline_keyboard(bot, updated_message)
-	addSleep()
-
-	return message_id
-
-
-def addSleep():
+def update_interval_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int, message: pyrogram.types.Message = None):
 	time.sleep(DELAY_AFTER_ONE_SCAN)
-
-
-def store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int, discussion_chat_id: int):
-	# retrieve message from discussion chat, get message_id of the message in main channel and save it to db
-
 	try:
-		forwarded_message = utils.get_main_message_content_by_id(bot, discussion_chat_id, current_msg_id)
-	except ApiTelegramException:
+		if not _UPDATE_STATUS:
+			raise Exception("Interval update stop requested")
+
+		update_older_message(bot, main_channel_id, current_msg_id, forwarded_message=message)
+		db_utils.insert_or_update_channel_update_progress(main_channel_id, current_msg_id)
+	except ApiTelegramException as E:
+		if E.error_code == 429:
+			logging.warning(f"Too many requests - {E}")
+			time.sleep(20)
+			return True
+		logging.error(f"Telegram error during main channel check ({main_channel_id, current_msg_id}) - {E}")
+	except Exception as E:
+		logging.error(f"Main channel check stopped ({main_channel_id, current_msg_id}) - {E}")
+		return False
+
+	return True
+
+
+def store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, message: pyrogram.types.Message, discussion_chat_id: int):
+	# retrieve message from discussion chat, get message_id of the message in main channel and save it to db
+	current_msg_id = message.id
+
+	if message.empty:
 		comment_utils.comment_dispatcher.delete_comment(bot, main_channel_id, discussion_chat_id, current_msg_id)
+		time.sleep(DELAY_AFTER_ONE_SCAN)
 		return
 
-	if forwarded_message is None:
+	if message is None:
 		return
 
-	forwarded_from_id = utils.get_forwarded_from_id(forwarded_message)
+	forwarded_from_id = utils.get_forwarded_from_id(message)
 	if forwarded_from_id != main_channel_id:
 		return
 
-	main_channel_message_id = forwarded_message.forward_from_message_id
+	main_channel_message_id = message.forward_from_message_id
 	if discussion_chat_id:
 		db_utils.insert_or_update_discussion_message(main_channel_message_id, main_channel_id, current_msg_id)
 
@@ -195,7 +154,7 @@ def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 			if main_channel_id in finished_channels:
 				continue
 			check_main_messages(bot, main_channel_id)
-			break
+
 			main_channel_id_str = str(main_channel_id)
 			discussion_chat_id = None
 			if main_channel_id_str in DISCUSSION_CHAT_DATA:
@@ -212,14 +171,18 @@ def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 
 
 def check_main_messages(bot: telebot.TeleBot, main_channel_id: int, start_from_message: int = None):
-	start_msg_id = start_from_message or utils.get_last_message(bot, main_channel_id)
-	if start_msg_id is None:
+	main_message_ids = db_utils.get_main_message_ids(main_channel_id)
+	if start_from_message:
+		main_message_ids = [message_id for message_id in main_message_ids if start_from_message >= message_id]
+
+	if not main_message_ids:
 		return
 
-	if start_msg_id > 30:
-		update_by_core(bot, main_channel_id, start_msg_id)
+	main_message_ids.sort(reverse=True)
+	if len(main_message_ids) > 5:
+		update_by_core(bot, main_channel_id, main_message_ids)
 	else:
-		update_by_bot(bot, main_channel_id, start_msg_id)
+		update_by_bot(bot, main_channel_id, main_message_ids)
 
 	db_utils.insert_or_update_channel_update_progress(main_channel_id, 0)
 	logging.info(f"Main channel check completed in {main_channel_id}")
@@ -232,25 +195,26 @@ def check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discus
 
 	logging.info(f"Starting to check discussion channel: {discussion_chat_id}")
 	deleted_messages = db_utils.get_comment_deleted_message_ids(discussion_chat_id, list(range(1, start_msg_id + 1)))
+	message_ids = [id for id in range(start_msg_id, 0, -1) if id not in deleted_messages]
+	messages = get_messages_by_core(discussion_chat_id, message_ids)
 
-	for current_msg_id in range(start_msg_id, 0, -1):
-		if current_msg_id in deleted_messages:
-			logging.info(f"Check comment {current_msg_id} in chat {discussion_chat_id} was skipped because it's in db as deleted")
+	for message in messages:
+		if message.id in deleted_messages:
+			logging.info(f"Check comment {message.id} in chat {discussion_chat_id} was skipped because it's in db as deleted")
 			continue
 
-		time.sleep(DELAY_AFTER_ONE_SCAN)
 		try:
 			if not _UPDATE_STATUS:
 				raise Exception("Interval update stop requested")
-			store_discussion_message(bot, main_channel_id, current_msg_id, discussion_chat_id)
+			store_discussion_message(bot, main_channel_id, message, discussion_chat_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				logging.warning(f"Too many requests - {E}")
 				time.sleep(20)
 				continue
-			logging.error(f"Telegram error during discussion channel check ({discussion_chat_id, current_msg_id}) - {E}")
+			logging.error(f"Telegram error during discussion channel check ({discussion_chat_id, message.id}) - {E}")
 		except Exception as E:
-			logging.error(f"Discussion channel check stopped ({discussion_chat_id, current_msg_id}) - {E}")
+			logging.error(f"Discussion channel check stopped ({discussion_chat_id, message.id}) - {E}")
 			return
 
 	logging.info(f"Discussion channel check completed in {discussion_chat_id}")

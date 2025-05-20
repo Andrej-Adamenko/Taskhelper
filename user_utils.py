@@ -83,7 +83,7 @@ def get_member_ids_channels(channel_ids: list) -> dict:
 	now = time.time()
 	set_channel_ids = []
 	for channel_id in channel_ids:
-		if channel_id not in MEMBER_CACHE or now - MEMBER_CACHE[channel_id][MEMBER_CACHE_KEYS.TIME] > 0.5 * 60:
+		if channel_id not in MEMBER_CACHE or now - MEMBER_CACHE[channel_id][MEMBER_CACHE_KEYS.TIME] > 5 * 60:
 			set_channel_ids.append(channel_id)
 
 	if len(set_channel_ids) > 0:

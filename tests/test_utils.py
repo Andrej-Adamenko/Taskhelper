@@ -190,6 +190,7 @@ class GetMessageContentByIdTest(TestCase):
 		mock_chat = create_mock_chat(chat_id, "Test_message")
 		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
 		mock_message.forward_from_chat = None
+		mock_message.forward_from_message_id = message_id
 		mock_bot.forward_message.return_value = mock_message
 
 		result = utils.get_message_content_by_id(mock_bot, chat_id, message_id)
@@ -209,6 +210,7 @@ class GetMessageContentByIdTest(TestCase):
 		mock_chat = create_mock_chat(chat_id, "Test_message")
 		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
 		mock_message.forward_from_chat = mock_chat
+		mock_message.forward_from_message_id = message_id
 		mock_bot.forward_message.return_value = mock_message
 
 		result = utils.get_message_content_by_id(mock_bot, chat_id, message_id)
@@ -228,6 +230,7 @@ class GetMessageContentByIdTest(TestCase):
 		mock_chat = create_mock_chat(chat_id, "Test_message")
 		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
 		mock_message.forward_from_chat = None
+		mock_message.forward_from_message_id = message_id
 		mock_bot.forward_message.return_value = mock_message
 
 		result = utils.get_main_message_content_by_id(mock_bot, chat_id, message_id)
@@ -247,6 +250,7 @@ class GetMessageContentByIdTest(TestCase):
 		mock_chat = create_mock_chat(chat_id, "Test_message")
 		mock_message = test_helper.create_mock_message("", [], dump_chat_id, dump_message_id)
 		mock_message.forward_from_chat = mock_chat
+		mock_message.forward_from_message_id = message_id
 		mock_bot.forward_message.return_value = mock_message
 
 		result = utils.get_main_message_content_by_id(mock_bot, chat_id, message_id)
