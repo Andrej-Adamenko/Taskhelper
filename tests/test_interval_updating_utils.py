@@ -39,7 +39,7 @@ class CheckDiscussionMessagesTest(TestCase):
 		interval_updating_utils.check_discussion_messages(mock_bot, main_channel_id, discussion_chat_id)
 		mock_get_last_message.assert_called_once_with(mock_bot, discussion_chat_id)
 		mock_get_comment_deleted_message_ids.assert_called_once_with(discussion_chat_id, list(range(1, 126)))
-		mock_get_messages.assert_called_once_with(discussion_chat_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE, 1,
+		mock_get_messages.assert_called_once_with(discussion_chat_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE,
 												  message_ids=message_ids)
 		mock_info.assert_has_calls([call(f"Starting to check discussion channel: {discussion_chat_id}"),
 									call(f"Discussion channel check completed in {discussion_chat_id}")])
@@ -71,7 +71,7 @@ class CheckDiscussionMessagesTest(TestCase):
 		interval_updating_utils.check_discussion_messages(mock_bot, main_channel_id, discussion_chat_id)
 		mock_get_last_message.assert_called_once_with(mock_bot, discussion_chat_id)
 		mock_get_comment_deleted_message_ids.assert_called_once_with(discussion_chat_id, list(range(1, 126)))
-		mock_get_messages.assert_called_once_with(discussion_chat_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE, 1,
+		mock_get_messages.assert_called_once_with(discussion_chat_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE,
 												  message_ids=message_ids)
 		mock_info.assert_has_calls([call(f"Starting to check discussion channel: {discussion_chat_id}"),
 									call(f"Discussion channel check completed in {discussion_chat_id}")])
@@ -95,7 +95,7 @@ class CheckDiscussionMessagesTest(TestCase):
 		mock_get_last_message.assert_called_once_with(mock_bot, discussion_chat_id)
 		mock_get_comment_deleted_message_ids.assert_called_once_with(discussion_chat_id, list(range(1, 126)))
 		mock_info.assert_called_once_with(f"Starting to check discussion channel: {discussion_chat_id}")
-		mock_get_messages.assert_called_once_with(discussion_chat_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE, 1,
+		mock_get_messages.assert_called_once_with(discussion_chat_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE,
 												  message_ids=message_ids)
 		mock_error.assert_called_once_with(f"Discussion channel check stopped ({discussion_chat_id, message_id}) - Interval update stop requested")
 		mock_store_discussion_message.assert_not_called()
@@ -114,6 +114,7 @@ class CheckDiscussionMessagesTest(TestCase):
 		mock_get_last_message.assert_called_once_with(mock_bot, discussion_chat_id)
 		mock_get_comment_deleted_message_ids.assert_not_called()
 		mock_info.assert_not_called()
+		mock_get_messages.assert_not_called()
 		mock_error.assert_not_called()
 		mock_store_discussion_message.assert_not_called()
 
@@ -271,7 +272,7 @@ class UpdateMessagesTest(TestCase):
 			expected_calls.append(call.a(mock_bot, main_channel_id, message.id, message=message))
 
 		interval_updating_utils.update_by_core(mock_bot, main_channel_id, message_ids)
-		mock_get_messages.assert_called_once_with(main_channel_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE, 1, message_ids=message_ids)
+		mock_get_messages.assert_called_once_with(main_channel_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE, message_ids=message_ids)
 		self.assertEqual(expected_calls, manager.mock_calls)
 
 	def test_update_by_core_with_false_message(self, mock_get_messages, mock_update_interval_message, *args):
@@ -283,7 +284,7 @@ class UpdateMessagesTest(TestCase):
 		mock_update_interval_message.return_value = False
 
 		interval_updating_utils.update_by_core(mock_bot, main_channel_id, message_ids)
-		mock_get_messages.assert_called_once_with(main_channel_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE, 1, message_ids=message_ids)
+		mock_get_messages.assert_called_once_with(main_channel_id, 0, interval_updating_utils._EXPORT_BATCH_SIZE, message_ids=message_ids)
 		mock_update_interval_message.assert_called_once_with(mock_bot, main_channel_id, 1, message=messages[0])
 
 	def test_update_by_bot(self, mock_get_messages, mock_update_interval_message, *args):
@@ -306,7 +307,6 @@ class UpdateMessagesTest(TestCase):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_ids = [1, 2, 3, 4, 5, 7, 9, 10]
-		mock_get_messages.return_value = [Mock(id=id) for id in main_message_ids]
 		mock_update_interval_message.return_value = False
 
 		interval_updating_utils.update_by_bot(mock_bot, main_channel_id, main_message_ids)

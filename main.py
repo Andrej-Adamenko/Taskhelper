@@ -40,6 +40,7 @@ daily_reminder.start_reminder_thread(bot)
 
 messages_export_utils.start_exporting()
 user_utils.update_all_channel_members()
+forwarding_utils.get_invalid_ticket_ids(bot)
 
 interval_updating_utils.start_interval_updating(bot, INTERVAL_UPDATE_START_DELAY)
 

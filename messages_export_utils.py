@@ -7,11 +7,11 @@ import user_utils
 import core_api
 from config_utils import DISCUSSION_CHAT_DATA, EXPORTED_CHATS
 
-_EXPORT_BATCH_SIZE = 75
+_EXPORT_BATCH_SIZE = 50
 
 
 def export_messages(chat_id: int, last_message_id: int) -> list:
-	return core_api.get_messages(chat_id, last_message_id, _EXPORT_BATCH_SIZE, 8)
+	return core_api.get_messages(chat_id, last_message_id, _EXPORT_BATCH_SIZE)
 
 
 def export_chat_comments(discussion_chat_id: int):

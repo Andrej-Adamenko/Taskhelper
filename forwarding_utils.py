@@ -10,6 +10,7 @@ from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, User
 
 import channel_manager
+import core_api
 from comment_utils import comment_dispatcher
 import config_utils
 import daily_reminder
@@ -198,9 +199,10 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 				                           message_id=message_id, entities=[])
 				return
 			main_message_id, main_channel_id = oldest_message_main_data
+			new_settings_message_id = message_id
 
 			if oldest_message_data:
-				if oldest_message_id != message_id:
+				if oldest_message_id < message_id:
 					oldest_message_data.message_id = main_message_id
 					oldest_message_data.chat.id = main_channel_id
 
@@ -210,6 +212,7 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 
 					utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=message_id,
 					                           reply_markup=keyboard, text=text, entities=entities)
+					new_settings_message_id = oldest_message_id
 					db_utils.delete_copied_message(message_id, chat_id)
 					db_utils.update_copied_message_id(oldest_message_id, chat_id, message_id)
 				else:
@@ -217,15 +220,19 @@ def delete_forwarded_message(bot: telebot.TeleBot, chat_id: int, message_id: int
 					db_utils.delete_copied_message(message_id, chat_id)
 
 				current_settings_message_id = channel_manager.get_settings_message_id(chat_id)
-				if current_settings_message_id:
-					utils.mark_message_for_deletion(bot, chat_id, current_settings_message_id)
-				channel_manager.update_settings_message(bot, chat_id, oldest_message_id)
-				is_update_needed = True
+				if not current_settings_message_id or current_settings_message_id < new_settings_message_id:
+					if current_settings_message_id:
+						utils.mark_message_for_deletion(bot, chat_id, current_settings_message_id)
+					channel_manager.update_settings_message(bot, chat_id, new_settings_message_id)
+					is_update_needed = True
 
-				channel_manager.set_settings_message_id(chat_id, oldest_message_id)
+					channel_manager.set_settings_message_id(chat_id, new_settings_message_id)
+				else:
+					utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=new_settings_message_id,
+											   text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 			else:
 				# if no oldest message was found then just replace current ticket text with delete message
-				db_utils.delete_copied_message(oldest_message_id, chat_id)
+				db_utils.delete_copied_message(message_id, chat_id)
 				utils.edit_message_content(bot, msg_to_delete_data, chat_id=chat_id, message_id=message_id,
 				                           text=config_utils.TO_DELETE_MSG_TEXT, entities=None)
 		elif E.description.endswith(utils.KICKED_FROM_CHANNEL_ERROR):
@@ -834,4 +841,26 @@ def update_main_message_content(bot: telebot.TeleBot, hashtag_data: HashtagData,
 		logging.info(f"Exception during rearranging hashtags - {E}")
 		return
 
+
+def get_invalid_ticket_ids(bot: telebot.TeleBot):
+	logging.info("Deleting invalid ticket ids")
+	channels_data = db_utils.get_all_individual_channels()
+	for channel_data in channels_data:
+		count_invalid = 0
+		channel_id, settings = channel_data
+		settings = json.loads(settings)
+		last_msg_id = utils.get_last_message(bot, channel_id)
+		copied_messages = db_utils.get_copied_message_ids_from_copied_channel(channel_id)
+		message_ids = [i for i in range(settings.get(channel_manager.SETTING_TYPES.SETTINGS_MESSAGE_ID), last_msg_id + 1) if i not in copied_messages and
+					   i != settings.get(channel_manager.SETTING_TYPES.SETTINGS_MESSAGE_ID)]
+		messages = core_api.get_messages(channel_id, 0, 50, message_ids=message_ids)
+		for message in messages:
+			if message.empty or message.service or not message.reply_markup or utils.get_forwarded_from_id(message):
+				continue
+
+			utils.update_forwarded_fields(message)
+			delete_forwarded_message(bot, channel_id, message.id)
+			count_invalid += 1
+
+		logging.info(f"Count deleted invalid tickets in channel {channel_id} is {count_invalid}")
 

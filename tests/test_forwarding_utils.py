@@ -2,6 +2,7 @@ from unittest import TestCase, main
 from unittest.mock import patch, Mock, ANY, call
 
 from telebot import TeleBot
+from telebot.apihelper import ApiTelegramException
 from telebot.types import CallbackQuery, User, InlineKeyboardMarkup
 
 import channel_manager
@@ -1036,6 +1037,329 @@ class TestSetGetChannelTicketKeyboard(TestCase):
 
 		settings = forwarding_utils._get_channel_ticket_keyboard_state(channel_id, message_id)
 		self.assertEqual(settings, None)
+
+
+@patch("logging.info")
+@patch("forwarding_utils.delete_forwarded_message")
+@patch("utils.update_forwarded_fields")
+@patch("utils.get_forwarded_from_id")
+@patch("core_api.get_messages")
+@patch("db_utils.get_copied_message_ids_from_copied_channel")
+@patch("utils.get_last_message")
+@patch("db_utils.get_all_individual_channels")
+class GetInvalidTicketIdsTest(TestCase):
+	def test_default(self, mock_get_all_individual_channels, mock_get_last_message,
+					 mock_get_copied_message_ids_from_copied_channel, mock_get_messages, mock_get_forwarded_from_id,
+					 mock_update_forwarded_fields, mock_delete_forwarded_message, mock_info, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channels_data = [(-10012345678, "{\"settings_message_id\": 12}"), (-10087654321, "{}")]
+		channel_messages = {-10012345678: {"last": 25, "settings": 12, "copied": [15, 17, 18, 20, 22, 24, 25], "empty": [2, 4, 6, 7], "service": [1, 10], "forwarded": [8, 9, 19, 21], "no_keyboard": [3, 5, 12]},
+							-10087654321: {"last": 18, "settings": 0, "copied": [10, 12, 15, 16, 17, 18], "empty": [5, 6], "service": [1, 8], "forwarded": [7, 13, 14], "no_keyboard": [2, 3]}}
+		mock_get_all_individual_channels.return_value = channels_data
+		mock_get_last_message.side_effect = lambda _, channel_id: channel_messages[channel_id]["last"]
+		mock_get_copied_message_ids_from_copied_channel.side_effect = lambda channel_id: channel_messages[channel_id]["copied"]
+		get_message_calls = []
+		delete_forwarded_message_calls = []
+		update_forwarded_fields_count_calls = 0
+		get_forwarded_from_id_calls = 0
+		mock_get_messages.side_effect = lambda channel_id, a, b, message_ids: [Mock(id=i, empty=(True if i in channel_messages[channel_id]["empty"] else None),
+																					   chat=Mock(id=channel_id),
+																					   service=(True if i in channel_messages[channel_id]["service"] else None),
+																					   reply_markup=(True if i not in channel_messages[channel_id]["no_keyboard"] else None)) for i in message_ids]
+		mock_get_forwarded_from_id.side_effect = lambda message: True if message.id in channel_messages[message.chat.id]["forwarded"] else None
+		for ch_id in channel_messages:
+			message_ids = [i for i in range(1, channel_messages[ch_id]["last"] + 1) if i not in channel_messages[ch_id]["copied"] and i != channel_messages[ch_id]["settings"]]
+			get_message_calls.append(call(ch_id, 0, 50, message_ids=message_ids))
+			for message_id in message_ids:
+				if (message_id not in channel_messages[ch_id]["empty"] and message_id not in channel_messages[ch_id]["service"]
+						and message_id not in channel_messages[ch_id]["no_keyboard"]):
+					get_forwarded_from_id_calls += 1
+					if message_id not in channel_messages[ch_id]["forwarded"]:
+						update_forwarded_fields_count_calls += 1
+						delete_forwarded_message_calls.append(call(mock_bot, ch_id, message_id))
+
+
+		forwarding_utils.get_invalid_ticket_ids(mock_bot)
+		mock_get_all_individual_channels.assert_called_once_with()
+		mock_get_last_message.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087654321)])
+		self.assertEqual(mock_get_last_message.call_count, len(channels_data))
+		mock_get_copied_message_ids_from_copied_channel.assert_has_calls([call(-10012345678), call(-10087654321)])
+		self.assertEqual(mock_get_copied_message_ids_from_copied_channel.call_count, len(channels_data))
+		mock_get_messages.assert_has_calls(get_message_calls)
+		self.assertEqual(mock_get_messages.call_count, len(get_message_calls))
+		self.assertEqual(mock_get_forwarded_from_id.call_count, get_forwarded_from_id_calls)
+		self.assertEqual(mock_update_forwarded_fields.call_count, update_forwarded_fields_count_calls)
+		mock_delete_forwarded_message.assert_has_calls(delete_forwarded_message_calls)
+		self.assertEqual(mock_delete_forwarded_message.call_count, len(delete_forwarded_message_calls))
+		mock_info.assert_has_calls([call("Deleting invalid ticket ids"),
+									call(f"Count deleted invalid tickets in channel -10012345678 is 5"),
+									call(f"Count deleted invalid tickets in channel -10087654321 is 3")])
+
+
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("channel_manager.set_settings_message_id")
+@patch("channel_manager.update_settings_message")
+@patch("utils.mark_message_for_deletion")
+@patch("channel_manager.get_settings_message_id", return_value=156)
+@patch("db_utils.update_copied_message_id")
+@patch("forwarding_utils.generate_control_buttons")
+@patch("utils.edit_message_content")
+@patch("db_utils.get_main_message_from_copied", return_value=(18, -10087654321))
+@patch("logging.info")
+@patch("utils.get_message_content_by_id", side_effect=lambda _, chat_id, message_id: test_helper.create_mock_message("", [], chat_id, message_id))
+@patch("db_utils.get_oldest_copied_message", return_value=160)
+@patch("forwarding_utils.update_copied_message")
+@patch("db_utils.delete_copied_message")
+@patch("utils.delete_message")
+@patch("db_utils.get_newest_copied_message", return_value=321)
+class DeleteForwardedMessageTest(TestCase):
+	def test_delete_newest_message(self, mock_get_newest_copied_message, mock_delete_message, mock_delete_copied_message,
+								   mock_update_copied_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 321
+
+		forwarding_utils.delete_forwarded_message(mock_bot, channel_id, message_id)
+		mock_get_newest_copied_message.assert_has_calls([call(channel_id), call(channel_id)])
+		mock_delete_message.assert_called_once_with(mock_bot, chat_id=channel_id, message_id=message_id)
+		mock_delete_copied_message.assert_called_once_with(message_id, channel_id)
+		mock_update_copied_message.assert_called_once_with(mock_bot, channel_id, 321)
+
+	def test_delete_message(self, mock_get_newest_copied_message, mock_delete_message, mock_delete_copied_message,
+								   mock_update_copied_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 123
+
+		forwarding_utils.delete_forwarded_message(mock_bot, channel_id, message_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_delete_message.assert_called_once_with(mock_bot, chat_id=channel_id, message_id=message_id)
+		mock_delete_copied_message.assert_called_once_with(message_id, channel_id)
+		mock_update_copied_message.assert_not_called()
+
+	def test_delete_message_with_error_cant_deleted(self, mock_get_newest_copied_message, mock_delete_message,
+													mock_delete_copied_message, mock_update_copied_message,
+													mock_get_oldest_copied_message, mock_get_message_content_by_id,
+													mock_info, mock_get_main_message_from_copied,
+													mock_edit_message_content, mock_generate_control_buttons,
+													mock_update_copied_message_id, mock_get_settings_message_id,
+													mock_mark_message_for_deletion, mock_update_settings_message,
+													mock_set_settings_message_id, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 185
+		mock_delete_message.side_effect = ApiTelegramException("content", "", {"error_code": 400,
+															"description": "Bad Request: message can't be deleted"})
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message_oldest = test_helper.create_mock_message("", [], channel_id, mock_get_oldest_copied_message.return_value)
+		mock_get_message_content_by_id.side_effect = lambda _, chat_id, m_id: mock_message_oldest if m_id != message_id else mock_message
+
+		forwarding_utils.delete_forwarded_message(mock_bot, channel_id, message_id)
+		mock_get_newest_copied_message.assert_has_calls([call(channel_id), call(channel_id)])
+		mock_delete_message.assert_called_once_with(mock_bot, chat_id=channel_id, message_id=message_id)
+		mock_get_oldest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id.assert_has_calls([call(mock_bot, channel_id, mock_get_oldest_copied_message.return_value),
+														 call(mock_bot, channel_id, message_id)])
+		mock_get_main_message_from_copied.assert_called_once_with(mock_get_oldest_copied_message.return_value, channel_id)
+		mock_generate_control_buttons.assert_called_once_with(ANY, mock_message_oldest)
+		mock_edit_message_content.assert_called_once_with(mock_bot, mock_message, text="", reply_markup=mock_generate_control_buttons.return_value,
+														  chat_id=channel_id, message_id=message_id, entities=[])
+		mock_delete_copied_message.assert_called_once_with(message_id, channel_id)
+		mock_update_copied_message_id.assert_called_once_with(mock_get_oldest_copied_message.return_value, channel_id, message_id)
+		mock_get_settings_message_id.assert_called_once_with(channel_id)
+		mock_mark_message_for_deletion.assert_called_once_with(mock_bot, channel_id, mock_get_settings_message_id.return_value)
+		mock_update_settings_message.assert_called_once_with(mock_bot, channel_id, mock_get_oldest_copied_message.return_value)
+		mock_set_settings_message_id.assert_called_once_with(channel_id, mock_get_oldest_copied_message.return_value)
+		mock_info.assert_not_called()
+		mock_update_copied_message.assert_called_once_with(mock_bot, channel_id, mock_get_newest_copied_message.return_value)
+
+
+	def test_delete_message_with_error_cant_deleted_oldest_message(self, mock_get_newest_copied_message, mock_delete_message,
+													mock_delete_copied_message, mock_update_copied_message,
+													mock_get_oldest_copied_message, mock_get_message_content_by_id,
+													mock_info, mock_get_main_message_from_copied,
+													mock_edit_message_content, mock_generate_control_buttons,
+													mock_update_copied_message_id, mock_get_settings_message_id,
+													mock_mark_message_for_deletion, mock_update_settings_message,
+													mock_set_settings_message_id, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 160
+		mock_delete_message.side_effect = ApiTelegramException("content", "", {"error_code": 400,
+															"description": "Bad Request: message can't be deleted"})
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message_oldest = test_helper.create_mock_message("", [], channel_id, mock_get_oldest_copied_message.return_value)
+		mock_get_message_content_by_id.side_effect = lambda _, chat_id, m_id: mock_message_oldest if m_id != message_id else mock_message
+
+		forwarding_utils.delete_forwarded_message(mock_bot, channel_id, message_id)
+		mock_get_newest_copied_message.assert_has_calls([call(channel_id), call(channel_id)])
+		mock_delete_message.assert_called_once_with(mock_bot, chat_id=channel_id, message_id=message_id)
+		mock_get_oldest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id.assert_has_calls([call(mock_bot, channel_id, mock_get_oldest_copied_message.return_value),
+														 call(mock_bot, channel_id, message_id)])
+		mock_get_main_message_from_copied.assert_called_once_with(mock_get_oldest_copied_message.return_value, channel_id)
+		mock_generate_control_buttons.assert_not_called()
+		mock_edit_message_content.assert_not_called()
+		mock_delete_copied_message.assert_called_once_with(message_id, channel_id)
+		mock_update_copied_message_id.assert_not_called()
+		mock_get_settings_message_id.assert_called_once_with(channel_id)
+		mock_mark_message_for_deletion.assert_called_once_with(mock_bot, channel_id, mock_get_settings_message_id.return_value)
+		mock_update_settings_message.assert_called_once_with(mock_bot, channel_id, mock_get_oldest_copied_message.return_value)
+		mock_set_settings_message_id.assert_called_once_with(channel_id, mock_get_oldest_copied_message.return_value)
+		mock_info.assert_not_called()
+		mock_update_copied_message.assert_called_once_with(mock_bot, channel_id, mock_get_newest_copied_message.return_value)
+
+
+	def test_delete_message_with_error_cant_deleted_without_oldest_message(self, mock_get_newest_copied_message, mock_delete_message,
+													mock_delete_copied_message, mock_update_copied_message,
+													mock_get_oldest_copied_message, mock_get_message_content_by_id,
+													mock_info, mock_get_main_message_from_copied,
+													mock_edit_message_content, mock_generate_control_buttons,
+													mock_update_copied_message_id, mock_get_settings_message_id,
+													mock_mark_message_for_deletion, mock_update_settings_message,
+													mock_set_settings_message_id, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 185
+		mock_delete_message.side_effect = ApiTelegramException("content", "", {"error_code": 400,
+															"description": "Bad Request: message can't be deleted"})
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_oldest_copied_message.return_value = None
+		mock_message_oldest = test_helper.create_mock_message("", [], channel_id, mock_get_oldest_copied_message.return_value)
+		mock_get_message_content_by_id.side_effect = lambda _, chat_id, m_id: mock_message_oldest if m_id != message_id else mock_message
+
+		forwarding_utils.delete_forwarded_message(mock_bot, channel_id, message_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_delete_message.assert_called_once_with(mock_bot, chat_id=channel_id, message_id=message_id)
+		mock_get_oldest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id.assert_called_once_with(mock_bot, channel_id, message_id)
+		mock_get_main_message_from_copied.assert_called_once_with(mock_get_oldest_copied_message.return_value, channel_id)
+		mock_generate_control_buttons.assert_not_called()
+		mock_delete_copied_message.assert_called_once_with(message_id, channel_id)
+		mock_edit_message_content.assert_called_once_with(mock_bot, mock_message, text=config_utils.TO_DELETE_MSG_TEXT,
+														  chat_id=channel_id, message_id=message_id, entities=None)
+		mock_update_copied_message_id.assert_not_called()
+		mock_get_settings_message_id.assert_not_called()
+		mock_mark_message_for_deletion.assert_not_called()
+		mock_update_settings_message.assert_not_called()
+		mock_set_settings_message_id.assert_not_called()
+		mock_info.assert_not_called()
+		mock_update_copied_message.assert_not_called()
+
+
+	def test_delete_message_with_error_cant_deleted_before_oldest(self, mock_get_newest_copied_message, mock_delete_message,
+													mock_delete_copied_message, mock_update_copied_message,
+													mock_get_oldest_copied_message, mock_get_message_content_by_id,
+													mock_info, mock_get_main_message_from_copied,
+													mock_edit_message_content, mock_generate_control_buttons,
+													mock_update_copied_message_id, mock_get_settings_message_id,
+													mock_mark_message_for_deletion, mock_update_settings_message,
+													mock_set_settings_message_id, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 158
+		mock_delete_message.side_effect = ApiTelegramException("content", "", {"error_code": 400,
+															"description": "Bad Request: message can't be deleted"})
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message_oldest = test_helper.create_mock_message("", [], channel_id, mock_get_oldest_copied_message.return_value)
+		mock_get_message_content_by_id.side_effect = lambda _, chat_id, m_id: mock_message_oldest if m_id != message_id else mock_message
+
+		forwarding_utils.delete_forwarded_message(mock_bot, channel_id, message_id)
+		mock_get_newest_copied_message.assert_has_calls([call(channel_id), call(channel_id)])
+		mock_delete_message.assert_called_once_with(mock_bot, chat_id=channel_id, message_id=message_id)
+		mock_get_oldest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id.assert_has_calls([call(mock_bot, channel_id, mock_get_oldest_copied_message.return_value),
+														 call(mock_bot, channel_id, message_id)])
+		mock_get_main_message_from_copied.assert_called_once_with(mock_get_oldest_copied_message.return_value, channel_id)
+		mock_generate_control_buttons.assert_not_called()
+		mock_delete_copied_message.assert_called_once_with(message_id, channel_id)
+		mock_edit_message_content.assert_not_called()
+		mock_update_copied_message_id.assert_not_called()
+		mock_get_settings_message_id.assert_called_once_with(channel_id)
+		mock_mark_message_for_deletion.assert_called_once_with(mock_bot, channel_id, mock_get_settings_message_id.return_value)
+		mock_update_settings_message.assert_called_once_with(mock_bot, channel_id, message_id)
+		mock_set_settings_message_id.assert_called_once_with(channel_id, message_id)
+		mock_info.assert_not_called()
+		mock_update_copied_message.assert_called_once_with(mock_bot, channel_id, mock_get_newest_copied_message.return_value)
+
+
+	def test_delete_message_with_error_cant_deleted_before_oldest_and_settings(self, mock_get_newest_copied_message, mock_delete_message,
+													mock_delete_copied_message, mock_update_copied_message,
+													mock_get_oldest_copied_message, mock_get_message_content_by_id,
+													mock_info, mock_get_main_message_from_copied,
+													mock_edit_message_content, mock_generate_control_buttons,
+													mock_update_copied_message_id, mock_get_settings_message_id,
+													mock_mark_message_for_deletion, mock_update_settings_message,
+													mock_set_settings_message_id, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 150
+		mock_delete_message.side_effect = ApiTelegramException("content", "", {"error_code": 400,
+															"description": "Bad Request: message can't be deleted"})
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message_oldest = test_helper.create_mock_message("", [], channel_id, mock_get_oldest_copied_message.return_value)
+		mock_get_message_content_by_id.side_effect = lambda _, chat_id, m_id: mock_message_oldest if m_id != message_id else mock_message
+
+		forwarding_utils.delete_forwarded_message(mock_bot, channel_id, message_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_delete_message.assert_called_once_with(mock_bot, chat_id=channel_id, message_id=message_id)
+		mock_get_oldest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id.assert_has_calls([call(mock_bot, channel_id, mock_get_oldest_copied_message.return_value),
+														 call(mock_bot, channel_id, message_id)])
+		mock_get_main_message_from_copied.assert_called_once_with(mock_get_oldest_copied_message.return_value, channel_id)
+		mock_generate_control_buttons.assert_not_called()
+		mock_delete_copied_message.assert_called_once_with(message_id, channel_id)
+		mock_update_copied_message_id.assert_not_called()
+		mock_get_settings_message_id.assert_called_once_with(channel_id)
+		mock_edit_message_content.assert_called_once_with(mock_bot, mock_message, text=config_utils.TO_DELETE_MSG_TEXT,
+														  chat_id=channel_id, message_id=message_id, entities=None)
+		mock_mark_message_for_deletion.assert_not_called()
+		mock_update_settings_message.assert_not_called()
+		mock_set_settings_message_id.assert_not_called()
+		mock_info.assert_not_called()
+		mock_update_copied_message.assert_not_called()
+
+
+	def test_delete_message_with_error_cant_deleted_before_settings(self, mock_get_newest_copied_message, mock_delete_message,
+													mock_delete_copied_message, mock_update_copied_message,
+													mock_get_oldest_copied_message, mock_get_message_content_by_id,
+													mock_info, mock_get_main_message_from_copied,
+													mock_edit_message_content, mock_generate_control_buttons,
+													mock_update_copied_message_id, mock_get_settings_message_id,
+													mock_mark_message_for_deletion, mock_update_settings_message,
+													mock_set_settings_message_id, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 154
+		mock_get_oldest_copied_message.return_value = 150
+		mock_delete_message.side_effect = ApiTelegramException("content", "", {"error_code": 400,
+															"description": "Bad Request: message can't be deleted"})
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message_oldest = test_helper.create_mock_message("", [], channel_id, mock_get_oldest_copied_message.return_value)
+		mock_get_message_content_by_id.side_effect = lambda _, chat_id, m_id: mock_message_oldest if m_id != message_id else mock_message
+
+		forwarding_utils.delete_forwarded_message(mock_bot, channel_id, message_id)
+		mock_get_newest_copied_message.assert_called_once_with(channel_id)
+		mock_delete_message.assert_called_once_with(mock_bot, chat_id=channel_id, message_id=message_id)
+		mock_get_oldest_copied_message.assert_called_once_with(channel_id)
+		mock_get_message_content_by_id.assert_has_calls([call(mock_bot, channel_id, mock_get_oldest_copied_message.return_value),
+														 call(mock_bot, channel_id, message_id)])
+		mock_get_main_message_from_copied.assert_called_once_with(mock_get_oldest_copied_message.return_value, channel_id)
+		mock_generate_control_buttons.assert_called_once_with(ANY, mock_message_oldest)
+		mock_edit_message_content.assert_has_calls([call(mock_bot, mock_message, text="", reply_markup=mock_generate_control_buttons.return_value,
+														  chat_id=channel_id, message_id=message_id, entities=[]),
+													call(mock_bot, mock_message, text=config_utils.TO_DELETE_MSG_TEXT,
+														  chat_id=channel_id, message_id=mock_get_oldest_copied_message.return_value, entities=None)])
+		mock_delete_copied_message.assert_called_once_with(message_id, channel_id)
+		mock_update_copied_message_id.assert_called_once_with(mock_get_oldest_copied_message.return_value, channel_id, message_id)
+		mock_get_settings_message_id.assert_called_once_with(channel_id)
+		mock_mark_message_for_deletion.assert_not_called()
+		mock_update_settings_message.assert_not_called()
+		mock_set_settings_message_id.assert_not_called()
+		mock_info.assert_not_called()
+		mock_update_copied_message.assert_not_called()
+
+
 
 
 if __name__ == "__main__":

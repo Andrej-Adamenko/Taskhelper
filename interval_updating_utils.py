@@ -59,8 +59,7 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_messag
 
 
 def get_messages_by_core(channel_id: int, message_ids: list) -> list:
-	time_sleep = 5 if len(message_ids) > 350 else 1
-	return core_api.get_messages(channel_id, 0, _EXPORT_BATCH_SIZE, time_sleep, message_ids=message_ids)
+	return core_api.get_messages(channel_id, 0, _EXPORT_BATCH_SIZE, message_ids=message_ids)
 
 
 def update_by_core(bot: telebot.TeleBot, main_channel_id: int, message_ids: list):

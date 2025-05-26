@@ -18,6 +18,7 @@ def create_hashtag_entity_list(text: str):
 
 def create_mock_message(text: str, entities: List[MessageEntity], chat_id: int = None, message_id: int = None):
 	message = Mock(spec=Message)
+	message.content_type = "text"
 	if message_id:
 		message.message_id = message_id
 		message.id = message_id

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import time
+from math import ceil, floor
 from typing import Union, Any, Coroutine
 
 import pyrogram
@@ -51,10 +51,12 @@ def async_to_sync(func):
 
 
 @async_to_sync
-async def get_messages(chat_id: int, last_msg_id: int, limit: int, time_sleep: int, /, client: pyrogram.Client, message_ids: list = None) -> list:
+async def get_messages(chat_id: int, last_msg_id: int, limit: int, /, client: pyrogram.Client, message_ids: list = None) -> list:
+	COUNT_FOR_SLEEP_MORE = 350
 	if not message_ids:
 		message_ids = list(range(1, last_msg_id + 1))
 	read_counter = 0
+	time_sleep: int = ceil(limit / 10) if len(message_ids) > (floor(COUNT_FOR_SLEEP_MORE / limit) * limit) else 1
 	exported_messages= []
 
 	while read_counter < len(message_ids):
