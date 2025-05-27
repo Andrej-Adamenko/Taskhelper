@@ -1,5 +1,7 @@
 import datetime
 import logging
+import time
+
 import telebot
 from telebot.types import ChatMemberOwner
 from telebot.apihelper import ApiTelegramException
@@ -131,6 +133,7 @@ def handle_edited_post(post_data: telebot.types.Message):
 def handle_bot_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
 	has_permissions = member_update.new_chat_member.can_edit_messages and member_update.new_chat_member.can_post_messages
 	if has_permissions:
+		time.sleep(1)
 		channel_manager.initialize_channel(bot, member_update.chat.id, user_id=member_update.from_user.id)
 		logging.info(f"Bot received permissions for channel {member_update.chat.id}")
 	else:
