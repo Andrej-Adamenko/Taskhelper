@@ -1,5 +1,6 @@
-from typing import List
+from typing import List, Union
 
+import pyrogram.types
 from telebot.types import MessageEntity, Message, Chat
 from unittest.mock import Mock
 import re
@@ -17,17 +18,44 @@ def create_hashtag_entity_list(text: str):
 
 def create_mock_message(text: str, entities: List[MessageEntity], chat_id: int = None, message_id: int = None):
 	message = Mock(spec=Message)
+	if message_id:
+		message.message_id = message_id
+		message.id = message_id
+
+	return __set_mock_message(message, text, entities, chat_id, message_id)
+
+
+def create_mock_pyrogram_message(text: str, entities: List[MessageEntity], chat_id: int = None, message_id: int = None):
+	message = Mock(spec=pyrogram.types.Message)
+	if message_id:
+		message.id = message_id
+
+	return __set_mock_message(message, text, entities, chat_id, message_id)
+
+
+def __set_mock_message(message: Mock, text: str, entities: List[MessageEntity],
+                       chat_id: int = None, message_id: int = None):
 	message.text = text
 	message.caption = None
 	message.empty = False
 	message.entities = entities
+	message.caption_entities = None
+	message.photo = None
+	message.video = None
+	message.audio = None
+	message.document = None
+	message.sticker = None
+	message.video_note = None
+	message.voice = None
+	message.location = None
+	message.contact = None
+	message.venue = None
+	message.dice = None
+	message.poll = None
 
 	if chat_id:
 		message.chat = create_mock_chat(chat_id, "")
 
-	if message_id:
-		message.message_id = message_id
-		message.id = message_id
 
 	return message
 

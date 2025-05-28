@@ -474,6 +474,7 @@ def get_comment_deleted_message_ids(discussion_chat_id: int, discussion_message_
 		return [row[0] for row in result]
 	return []
 
+
 @db_thread_lock
 def insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time):
 	sql = "INSERT INTO scheduled_messages (main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time) VALUES (?, ?, ?, ?, ?)"
@@ -611,15 +612,6 @@ def delete_users_table():
 
 
 @db_thread_lock
-def get_main_message_sender(main_channel_id, main_message_id):
-	sql = "SELECT sender_id FROM main_messages WHERE main_channel_id=(?) AND main_message_id=(?)"
-	CURSOR.execute(sql, (main_channel_id, main_message_id,))
-	result = CURSOR.fetchone()
-	if result:
-		return result[0]
-
-
-@db_thread_lock
 def insert_main_channel_message(main_channel_id, main_message_id, sender_id):
 	if not is_main_message_exists(main_channel_id, main_message_id):
 		sql = '''
@@ -638,6 +630,7 @@ def get_main_message_sender(main_channel_id, main_message_id):
 	result = CURSOR.fetchone()
 	if result:
 		return result[0]
+	return None
 
 
 @db_thread_lock
@@ -646,6 +639,17 @@ def is_main_message_exists(main_channel_id, main_message_id):
 	CURSOR.execute(sql, (main_channel_id, main_message_id,))
 	result = CURSOR.fetchone()
 	return bool(result)
+
+
+@db_thread_lock
+def get_main_message_ids(main_channel_id) -> list:
+	sql = "SELECT main_message_id FROM main_messages WHERE main_channel_id=(?)"
+	CURSOR.execute(sql, (main_channel_id,))
+	result = CURSOR.fetchall()
+	if result:
+		return [row[0] for row in result]
+	else:
+		return []
 
 
 @db_thread_lock

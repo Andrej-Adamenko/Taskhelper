@@ -3,8 +3,10 @@ from typing import List
 import time
 import datetime
 
+import pyrogram.types
 import telebot.types
 from telebot.apihelper import ApiTelegramException
+from telebot.types import MessageEntity
 
 import config_utils
 import db_utils
@@ -386,7 +388,7 @@ def _update_forwarded_message_chat(post_data: telebot.types.Message, chat_id: in
 	else:
 		post_data.chat.id = chat_id
 
-	post_data.message_id = post_data.id = message_id
+	post_data.message_id = post_data.id = post_data.forward_from_message_id
 
 @threading_utils.timeout_error_lock
 def copy_message(bot: telebot.TeleBot, **kwargs):
@@ -439,4 +441,29 @@ def merge_keyboard_markup(
 
 	return telebot.types.InlineKeyboardMarkup(result)
 
+def update_forwarded_fields(message: pyrogram.types.Message) -> None:
+	message.entities = __update_entities(message.entities) if message.entities else None
+	message.caption_entities = __update_entities(message.caption_entities) if message.caption_entities else None
+	message.content_type = __get_content_type_pyrogram_message(message)
+	message.message_id = message.id
 
+def __update_entities(entities: list) -> list:
+	result = []
+	for ent in entities:
+		result.append(MessageEntity(type=ent.type.name.lower(), offset=ent.offset, length=ent.length,
+									url=ent.url if hasattr(ent, "url") and ent.url is not None else None,
+									custom_emoji_id=ent.custom_emoji_id if hasattr(ent, "custom_emoji_id") and ent.custom_emoji_id is not None else None,
+									language=ent.language if hasattr(ent, "language") and ent.language is not None else None,
+									user=ent.user if hasattr(ent, "user") and ent.user is not None else None))
+	return result
+
+def __get_content_type_pyrogram_message(message: pyrogram.types.Message):
+	# order is important: for example, a photo may contain a caption, so we check photo before text
+	attrs = [
+		"photo", "video", "audio", "document", "sticker", "video_note",
+		"voice", "location", "contact", "venue", "dice", "poll", "text"
+	]
+	for attr in attrs:
+		if getattr(message, attr) is not None:
+			return attr
+	return "unknown"

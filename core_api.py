@@ -51,8 +51,9 @@ def async_to_sync(func):
 
 
 @async_to_sync
-async def get_messages(chat_id: int, last_msg_id: int, limit: int, time_sleep: int, /, client: pyrogram.Client) -> list:
-	message_ids = list(range(1, last_msg_id + 1))
+async def get_messages(chat_id: int, last_msg_id: int, limit: int, time_sleep: int, /, client: pyrogram.Client, message_ids: list = None) -> list:
+	if not message_ids:
+		message_ids = list(range(1, last_msg_id + 1))
 	read_counter = 0
 	exported_messages= []
 
