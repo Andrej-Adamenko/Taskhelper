@@ -96,7 +96,7 @@ class ExportMessagesTest(TestCase):
 		channel_id = -10012345678
 		last_message_id = 12
 		messages_export_utils.export_messages(channel_id, last_message_id)
-		mock_get_messages.assert_called_once_with(channel_id, last_message_id, messages_export_utils._EXPORT_BATCH_SIZE, 8)
+		mock_get_messages.assert_called_once_with(channel_id, last_message_id, messages_export_utils._EXPORT_BATCH_SIZE)
 
 
 @patch("messages_export_utils.export_comments_from_discussion_chats")

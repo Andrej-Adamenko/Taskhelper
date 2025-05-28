@@ -13,7 +13,6 @@ class GetMessagesTest(TestCase):
 		channel_id = -10012345678
 		last_msg_id = 9
 		limit = 2
-		time_sleep = 1
 		mock_client = Mock(spec=Client)
 		mock_client.get_messages = AsyncMock(side_effect=lambda chat_id, message_ids: message_ids)
 
@@ -30,7 +29,74 @@ class GetMessagesTest(TestCase):
 		expected_calls.append(call.a(channel_id, [9]))
 		expected_calls.append(call.b(f"Exporting progress: 9/9"))
 
-		core_api.get_messages(channel_id, last_msg_id, limit, time_sleep, client=mock_client)
+		core_api.get_messages(channel_id, last_msg_id, limit, client=mock_client)
+		self.assertEqual(expected_calls, manager.mock_calls)
+
+	def test_messages_50_limit_less(self, mock_sleep, mock_info, *args):
+		channel_id = -10012345678
+		last_msg_id = 350
+		limit = 50
+		mock_client = Mock(spec=Client)
+		mock_client.get_messages = AsyncMock(side_effect=lambda chat_id, message_ids: message_ids)
+
+		manager = Mock()
+		manager.attach_mock(mock_client.get_messages, "a")
+		manager.attach_mock(mock_info, "b")
+		manager.attach_mock(mock_sleep, "c")
+		expected_calls = []
+
+		for i in range(0, 7):
+			expected_calls.append(call.a(channel_id, [i * 50 + j for j in range(1, 51)]))
+			expected_calls.append(call.b(f"Exporting progress: {(i + 1) * 50}/350"))
+			if i < 6: expected_calls.append(call.c(1))
+
+		core_api.get_messages(channel_id, last_msg_id, limit, client=mock_client)
+		self.assertEqual(expected_calls, manager.mock_calls)
+
+	def test_messages_50_limit_more(self, mock_sleep, mock_info, *args):
+		channel_id = -10012345678
+		last_msg_id = 360
+		limit = 50
+		mock_client = Mock(spec=Client)
+		mock_client.get_messages = AsyncMock(side_effect=lambda chat_id, message_ids: message_ids)
+
+		manager = Mock()
+		manager.attach_mock(mock_client.get_messages, "a")
+		manager.attach_mock(mock_info, "b")
+		manager.attach_mock(mock_sleep, "c")
+		expected_calls = []
+
+		for i in range(0, 7):
+			expected_calls.append(call.a(channel_id, [i * 50 + j for j in range(1, 51)]))
+			expected_calls.append(call.b(f"Exporting progress: {(i + 1) * 50}/360"))
+			expected_calls.append(call.c(5))
+		expected_calls.append(call.a(channel_id, [351,352,353,354,355,356,357,358,359,360]))
+		expected_calls.append(call.b(f"Exporting progress: 360/360"))
+
+		core_api.get_messages(channel_id, last_msg_id, limit, client=mock_client)
+		self.assertEqual(expected_calls, manager.mock_calls)
+
+	def test_messages_65_limit(self, mock_sleep, mock_info, *args):
+		channel_id = -10012345678
+		last_msg_id = 330
+		limit = 65
+		mock_client = Mock(spec=Client)
+		mock_client.get_messages = AsyncMock(side_effect=lambda chat_id, message_ids: message_ids)
+
+		manager = Mock()
+		manager.attach_mock(mock_client.get_messages, "a")
+		manager.attach_mock(mock_info, "b")
+		manager.attach_mock(mock_sleep, "c")
+		expected_calls = []
+
+		for i in range(0, 5):
+			expected_calls.append(call.a(channel_id, [i * 65 + j for j in range(1, 66)]))
+			expected_calls.append(call.b(f"Exporting progress: {(i + 1) * 65}/330"))
+			expected_calls.append(call.c(7))
+		expected_calls.append(call.a(channel_id, [326,327,328,329,330]))
+		expected_calls.append(call.b(f"Exporting progress: 330/330"))
+
+		core_api.get_messages(channel_id, last_msg_id, limit, client=mock_client)
 		self.assertEqual(expected_calls, manager.mock_calls)
 
 	def test_messages_with_list(self, mock_sleep, mock_info, *args):
@@ -38,7 +104,6 @@ class GetMessagesTest(TestCase):
 		last_msg_id = 9
 		message_ids = [1, 2, 3, 5, 7, 9]
 		limit = 2
-		time_sleep = 1
 		mock_client = Mock(spec=Client)
 		mock_client.get_messages = AsyncMock(side_effect=lambda chat_id, message_ids: message_ids)
 
@@ -53,7 +118,7 @@ class GetMessagesTest(TestCase):
 			expected_calls.append(call.b(f"Exporting progress: {(i + 1) * 2}/6"))
 			if i < 2: expected_calls.append(call.c(1))
 
-		core_api.get_messages(channel_id, last_msg_id, limit, time_sleep, client=mock_client, message_ids=message_ids)
+		core_api.get_messages(channel_id, last_msg_id, limit, client=mock_client, message_ids=message_ids)
 		self.assertEqual(expected_calls, manager.mock_calls)
 
 

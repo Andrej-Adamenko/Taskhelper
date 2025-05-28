@@ -322,6 +322,14 @@ def get_copied_messages_from_main(main_message_id, main_channel_id):
 	return result
 
 
+def get_copied_message_ids_from_copied_channel(copied_channel_id):
+	sql = "SELECT copied_message_id FROM copied_messages WHERE copied_channel_id=(?)"
+	CURSOR.execute(sql, (copied_channel_id,))
+	result = CURSOR.fetchall()
+	if result:
+		return [row[0] for row in result]
+	return []
+
 @db_thread_lock
 def get_newest_copied_message(copied_channel_id):
 	sql = "SELECT max(copied_message_id) FROM copied_messages WHERE copied_channel_id=(?)"
