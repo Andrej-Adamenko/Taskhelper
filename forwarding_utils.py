@@ -851,7 +851,7 @@ def get_invalid_ticket_ids(bot: telebot.TeleBot):
 		settings = json.loads(settings)
 		last_msg_id = utils.get_last_message(bot, channel_id)
 		copied_messages = db_utils.get_copied_message_ids_from_copied_channel(channel_id)
-		message_ids = [i for i in range(settings.get(channel_manager.SETTING_TYPES.SETTINGS_MESSAGE_ID), last_msg_id + 1) if i not in copied_messages and
+		message_ids = [i for i in range(1, last_msg_id + 1) if i not in copied_messages and
 					   i != settings.get(channel_manager.SETTING_TYPES.SETTINGS_MESSAGE_ID)]
 		messages = core_api.get_messages(channel_id, 0, 50, message_ids=message_ids)
 		for message in messages:
