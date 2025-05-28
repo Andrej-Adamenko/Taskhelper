@@ -234,9 +234,9 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 
 	if prev_user != cur_user:
 		if prev_user:
-			user_utils.check_members_on_main_channels(bot, prev_user)
+			user_utils.check_user_id_on_main_channels(bot, prev_user)
 		if cur_user:
-			user_utils.check_members_on_main_channels(bot, cur_user)
+			user_utils.check_user_id_on_main_channels(bot, cur_user)
 
 
 def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):

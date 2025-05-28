@@ -472,7 +472,7 @@ def get_comment_deleted_message_ids(discussion_chat_id: int, discussion_message_
 	result = CURSOR.fetchall()
 	if result:
 		return [row[0] for row in result]
-
+	return []
 
 @db_thread_lock
 def insert_scheduled_message(main_message_id, main_channel_id, scheduled_message_id, scheduled_channel_id, send_time):

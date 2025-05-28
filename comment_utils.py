@@ -224,7 +224,7 @@ class CommentDispatcher:
 			highest_priority = db_utils.get_user_highest_priority(main_channel_id, user_tag)
 			_, priority, _ = db_utils.get_ticket_data(main_message_id, main_channel_id)
 			if priority == highest_priority:
-				db_utils.insert_or_update_last_user_interaction(main_channel_id, user_tag, int(time.time()))
+				db_utils.insert_or_update_last_user_interaction(user_tag, int(time.time()))
 				logging.info(f"Updated {msg_data.from_user.id, user_tag} user last interaction.")
 
 

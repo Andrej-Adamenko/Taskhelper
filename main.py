@@ -40,6 +40,7 @@ daily_reminder.start_reminder_thread(bot)
 
 messages_export_utils.start_exporting()
 user_utils.update_all_channel_members()
+user_utils.check_members_on_main_channels(bot)
 
 interval_updating_utils.start_interval_updating(bot, INTERVAL_UPDATE_START_DELAY)
 
@@ -232,7 +233,7 @@ def handler_check_new_member(member_update: telebot.types.ChatMemberUpdated):
 
 	if user_id not in config_utils.USER_TAGS.values():
 		try:
-			bot.kick_chat_member(channel.id, user_id, revoke_messages=True)
+			bot.kick_chat_member(channel.id, user_id)
 			logging.info(f"Kicking member {user_id} from '{channel.title}")
 		except Exception as e:
 			logging.error(f"Error in kicking member {user_id} from '{channel.title}': {e}")
