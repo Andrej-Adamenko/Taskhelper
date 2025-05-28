@@ -135,6 +135,7 @@ def handle_main_channel_change(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 			bot.send_message(chat_id=msg_data.chat.id, text="This channel already added.")
 			return
 		db_utils.insert_main_channel(channel_id)
+		channel_manager.delete_individual_settings_for_workspace(bot, channel_id)
 		bot.send_message(chat_id=msg_data.chat.id, text="Main channel was successfully added.")
 	elif msg_data.text.startswith("/remove_main_channel"):
 		if not db_utils.is_main_channel_exists(channel_id):

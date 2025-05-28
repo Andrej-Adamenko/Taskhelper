@@ -756,3 +756,14 @@ def _update_user_tags_in_settings_menu_ticket(bot, channel_id):
 		keyboard = forwarding_utils.get_keyboard_from_channel_message(bot, call, newest_message_id)
 		utils.edit_message_keyboard(bot, post_data, keyboard_markup=keyboard, chat_id=channel_id,
 									message_id=newest_message_id)
+
+
+def delete_individual_settings_for_workspace(bot, channel_id):
+	settings = db_utils.get_individual_channel_settings(channel_id)
+	if settings:
+		settings, _ = settings
+		settings = json.loads(settings)
+		settings_message_id = settings.get(SETTING_TYPES.SETTINGS_MESSAGE_ID)
+		if settings_message_id:
+			forwarding_utils.delete_forwarded_message(bot, channel_id, settings_message_id)
+		db_utils.delete_individual_channel(channel_id)

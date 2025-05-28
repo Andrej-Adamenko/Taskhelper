@@ -1732,6 +1732,46 @@ class InitializeChannelTest(TestCase):
 		mock_create_settings_message.assert_called_once_with(mock_bot, channel_id)
 
 
+@patch("forwarding_utils.delete_forwarded_message")
+@patch("db_utils.delete_individual_channel")
+@patch("db_utils.get_individual_channel_settings")
+class DeleteIndividualSettingsForWorkspace(TestCase):
+	def test_default(self, mock_get_individual_channel_settings, mock_delete_individual_channel,
+					 mock_delete_forwarded_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		main_channel_id = -10087654321
+		settings_id = 2
+		mock_get_individual_channel_settings.return_value = ("{\"settings_message_id\": " + f"{settings_id}" + "}", "1,2")
+
+		channel_manager.delete_individual_settings_for_workspace(mock_bot, main_channel_id)
+		mock_get_individual_channel_settings.assert_called_once_with(main_channel_id)
+		mock_delete_forwarded_message.assert_called_once_with(mock_bot, main_channel_id, settings_id)
+		mock_delete_individual_channel.assert_called_once_with(main_channel_id)
+
+	def test_not_exist_settings_message_id(self, mock_get_individual_channel_settings, mock_delete_individual_channel,
+										   mock_delete_forwarded_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		main_channel_id = -10087654321
+		mock_get_individual_channel_settings.return_value = ("{}", "1,2")
+
+		channel_manager.delete_individual_settings_for_workspace(mock_bot, main_channel_id)
+		mock_get_individual_channel_settings.assert_called_once_with(main_channel_id)
+		mock_delete_forwarded_message.assert_not_called()
+		mock_delete_individual_channel.assert_called_once_with(main_channel_id)
+
+	def test_not_exist_individual_settings(self, mock_get_individual_channel_settings, mock_delete_individual_channel,
+										   mock_delete_forwarded_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		main_channel_id = -10087654321
+		mock_get_individual_channel_settings.return_value = None
+
+		channel_manager.delete_individual_settings_for_workspace(mock_bot, main_channel_id)
+		mock_get_individual_channel_settings.assert_called_once_with(main_channel_id)
+		mock_delete_forwarded_message.assert_not_called()
+		mock_delete_individual_channel.assert_not_called()
 
 
 if __name__ == "__main__":
