@@ -390,9 +390,55 @@ class TestChannelSettingsMessage(TestCase):
 		mock_generate_control_buttons.assert_called_once()
 		mock_edit_message_keyboard.assert_called_once_with(mock_bot, mock_message, mock_generate_control_buttons.return_value,
 														   channel_id, last_message_id)
-
-
 		self.assertTrue(result)
+
+	@patch("utils.get_last_message")
+	@patch("channel_manager.is_settings_message")
+	@patch("utils.get_main_message_content_by_id")
+	@patch("channel_manager.update_settings_message")
+	@patch("db_utils.get_newest_copied_message")
+	@patch("channel_manager.set_settings_message_id")
+	@patch("forwarding_utils.generate_control_buttons")
+	@patch("utils.edit_message_keyboard")
+	def test_get_exist_settings_message_without_last_message(self, mock_edit_message_keyboard, mock_generate_control_buttons,
+										mock_set_settings_message_id, mock_get_newest_copied_message,
+										mock_update_settings_message, mock_get_main_message_content_by_id,
+										mock_is_settings_message, mock_get_last_message,
+										mock_get_oldest_copied_message, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		last_message_id = 5
+		message_id = 1
+		expected_calls = [
+			call.a(mock_bot, channel_id, 1),
+			call.a(mock_bot, channel_id, 5)
+		]
+
+		mock_is_settings_message.return_value = True
+
+		mock_message = test_helper.create_mock_message(f"{message_id} 12345", [], channel_id, last_message_id)
+		mock_get_main_message_content_by_id.return_value = mock_message
+
+		manager = Mock()
+		manager.attach_mock(mock_get_main_message_content_by_id, 'a')
+
+		mock_get_last_message.return_value = None
+		mock_get_newest_copied_message.return_value = last_message_id
+
+		result = channel_manager.get_exist_settings_message(mock_bot, channel_id)
+		# Test get last message
+		mock_get_oldest_copied_message.assert_called_once_with(channel_id)
+		mock_get_last_message.assert_called_once_with(mock_bot, channel_id)
+		mock_get_main_message_content_by_id.assert_not_called()
+		# Test update settings message
+		mock_is_settings_message.assert_not_called()
+		mock_update_settings_message.assert_not_called()
+		mock_set_settings_message_id.assert_not_called()
+
+		# Test update settings button
+		mock_generate_control_buttons.assert_not_called()
+		mock_edit_message_keyboard.assert_not_called()
+		self.assertFalse(result)
 
 	@patch("utils.get_last_message")
 	@patch("channel_manager.is_settings_message")
@@ -1651,7 +1697,7 @@ class InitializeChannelTest(TestCase):
 		mock_is_main_channel_exists.assert_called_once_with(channel_id)
 		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
 		mock_bot.get_chat_administrators.assert_called_once_with(channel_id)
-		mock_warning.assert_called_once_with(f"Can't get owner_id from channel, use user #{user_id} in channel #{channel_id}")
+		mock_warning.assert_called_once_with(f"Can't get owner_id from channel, use user #{user_id} in channel #{channel_id}. Error - 'NoneType' object has no attribute 'user'")
 		mock_insert_individual_channel.assert_called_once_with(channel_id, settings_str, user_id)
 		mock_create_settings_message.assert_called_once_with(mock_bot, channel_id)
 

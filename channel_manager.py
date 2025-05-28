@@ -237,7 +237,7 @@ def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
 	if not last_message:
 		last_message = utils.get_last_message(bot, channel_id)
 
-	if last_message > 0:
+	if last_message and last_message > 0:
 		for current_msg_id in range(1, last_message + 1):
 			try:
 				forwarded_message = utils.get_main_message_content_by_id(bot, channel_id, current_msg_id)
@@ -270,7 +270,7 @@ def initialize_channel(bot: telebot.TeleBot, channel_id: int, user_id: int = Non
 			channel_owner = next((user for user in channel_admins if type(user) == ChatMemberOwner), None)
 			user_id = channel_owner.user.id
 		except Exception as E:
-			logging.warning(f"Can't get owner_id from channel, use user #{user_id} in channel #{channel_id}")
+			logging.warning(f"Can't get owner_id from channel, use user #{user_id} in channel #{channel_id}. Error - {E}")
 			if user_id is None:
 				raise E
 
