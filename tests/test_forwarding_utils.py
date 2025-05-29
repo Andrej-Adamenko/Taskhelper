@@ -1040,25 +1040,30 @@ class TestSetGetChannelTicketKeyboard(TestCase):
 
 
 @patch("logging.info")
+@patch("time.sleep")
 @patch("forwarding_utils.delete_forwarded_message")
 @patch("utils.update_forwarded_fields")
 @patch("utils.get_forwarded_from_id")
 @patch("core_api.get_messages")
 @patch("db_utils.get_copied_message_ids_from_copied_channel")
+@patch("db_utils.get_main_message_ids")
 @patch("utils.get_last_message")
 @patch("db_utils.get_all_individual_channels")
 class GetInvalidTicketIdsTest(TestCase):
-	def test_default(self, mock_get_all_individual_channels, mock_get_last_message,
+	def test_default(self, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
 					 mock_get_copied_message_ids_from_copied_channel, mock_get_messages, mock_get_forwarded_from_id,
-					 mock_update_forwarded_fields, mock_delete_forwarded_message, mock_info, *args):
+					 mock_update_forwarded_fields, mock_delete_forwarded_message, mock_sleep, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
 		channels_data = [(-10012345678, "{\"settings_message_id\": 12}"), (-10087654321, "{}")]
-		channel_messages = {-10012345678: {"last": 25, "settings": 12, "copied": [15, 17, 18, 20, 22, 24, 25], "empty": [2, 4, 6, 7], "service": [1, 10], "forwarded": [8, 9, 19, 21], "no_keyboard": [3, 5, 12]},
-							-10087654321: {"last": 18, "settings": 0, "copied": [10, 12, 15, 16, 17, 18], "empty": [5, 6], "service": [1, 8], "forwarded": [7, 13, 14], "no_keyboard": [2, 3]}}
+		channel_messages = {-10012345678: {"last": 25, "settings": 12, "main": [], "copied": [15, 17, 18, 20, 22, 24, 25], "empty": [2, 4, 6, 7], "service": [1, 10], "forwarded": [8, 9, 19, 21], "no_keyboard": [3, 5, 12]},
+							-10087654321: {"last": 18, "settings": 0, "main": [10, 11, 12], "copied": [15, 16, 17, 18], "empty": [5, 6], "service": [1, 8], "forwarded": [7, 13, 14], "no_keyboard": [2, 3]}}
 		mock_get_all_individual_channels.return_value = channels_data
 		mock_get_last_message.side_effect = lambda _, channel_id: channel_messages[channel_id]["last"]
 		mock_get_copied_message_ids_from_copied_channel.side_effect = lambda channel_id: channel_messages[channel_id]["copied"]
+		mock_get_main_message_ids.side_effect = lambda channel_id: channel_messages[channel_id]['main']
 		get_message_calls = []
+		sleep_calls = []
+		info_calls = [call("Deleting invalid ticket ids"),]
 		delete_forwarded_message_calls = []
 		update_forwarded_fields_count_calls = 0
 		get_forwarded_from_id_calls = 0
@@ -1068,15 +1073,21 @@ class GetInvalidTicketIdsTest(TestCase):
 																					   reply_markup=(True if i not in channel_messages[channel_id]["no_keyboard"] else None)) for i in message_ids]
 		mock_get_forwarded_from_id.side_effect = lambda message: True if message.id in channel_messages[message.chat.id]["forwarded"] else None
 		for ch_id in channel_messages:
-			message_ids = [i for i in range(1, channel_messages[ch_id]["last"] + 1) if i not in channel_messages[ch_id]["copied"] and i != channel_messages[ch_id]["settings"]]
+			count_calls = 0
+			message_ids = [i for i in range(1, channel_messages[ch_id]["last"] + 1) if i not in channel_messages[ch_id]["copied"] and i not in channel_messages[ch_id]["main"] and i != channel_messages[ch_id]["settings"]]
 			get_message_calls.append(call(ch_id, 0, 50, message_ids=message_ids))
 			for message_id in message_ids:
 				if (message_id not in channel_messages[ch_id]["empty"] and message_id not in channel_messages[ch_id]["service"]
 						and message_id not in channel_messages[ch_id]["no_keyboard"]):
 					get_forwarded_from_id_calls += 1
 					if message_id not in channel_messages[ch_id]["forwarded"]:
+						sleep_calls.append(call(1))
 						update_forwarded_fields_count_calls += 1
+						count_calls += 1
 						delete_forwarded_message_calls.append(call(mock_bot, ch_id, message_id))
+						info_calls.append(call(f"Deleted invalid ticket {message_id} in channel {ch_id}"))
+
+			info_calls.append(call(f"Count deleted invalid tickets in channel {ch_id} is {count_calls}"))
 
 
 		forwarding_utils.get_invalid_ticket_ids(mock_bot)
@@ -1085,15 +1096,18 @@ class GetInvalidTicketIdsTest(TestCase):
 		self.assertEqual(mock_get_last_message.call_count, len(channels_data))
 		mock_get_copied_message_ids_from_copied_channel.assert_has_calls([call(-10012345678), call(-10087654321)])
 		self.assertEqual(mock_get_copied_message_ids_from_copied_channel.call_count, len(channels_data))
+		mock_get_main_message_ids.assert_has_calls([call(-10012345678), call(-10087654321)])
+		self.assertEqual(mock_get_main_message_ids.call_count, len(channels_data))
 		mock_get_messages.assert_has_calls(get_message_calls)
 		self.assertEqual(mock_get_messages.call_count, len(get_message_calls))
 		self.assertEqual(mock_get_forwarded_from_id.call_count, get_forwarded_from_id_calls)
 		self.assertEqual(mock_update_forwarded_fields.call_count, update_forwarded_fields_count_calls)
 		mock_delete_forwarded_message.assert_has_calls(delete_forwarded_message_calls)
 		self.assertEqual(mock_delete_forwarded_message.call_count, len(delete_forwarded_message_calls))
-		mock_info.assert_has_calls([call("Deleting invalid ticket ids"),
-									call(f"Count deleted invalid tickets in channel -10012345678 is 5"),
-									call(f"Count deleted invalid tickets in channel -10087654321 is 3")])
+		mock_sleep.assert_has_calls(sleep_calls)
+		self.assertEqual(mock_sleep.call_count, len(sleep_calls))
+		mock_info.assert_has_calls(info_calls)
+		self.assertEqual(mock_info.call_count, len(info_calls))
 
 
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
