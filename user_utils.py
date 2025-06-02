@@ -101,7 +101,7 @@ def set_member_ids_channels(channel_ids: list) -> None:
 	channel_users = core_api.get_members(channel_ids)
 	for channel_id in channel_ids:
 		users = []
-		if channel_id in channel_users:
+		if channel_users and channel_id in channel_users:
 			users = list(map(lambda user: user.id, channel_users[channel_id]))
 
 		MEMBER_CACHE[channel_id] = {

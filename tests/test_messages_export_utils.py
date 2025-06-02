@@ -71,10 +71,11 @@ class ExportChatCommentsTest(TestCase):
 			call.a(123, discussion_chat_id)
 		]
 
-		messages_export_utils.export_chat_comments(discussion_chat_id)
+		result = messages_export_utils.export_chat_comments(discussion_chat_id)
 		mock_get_last_message_id.assert_called_once_with(discussion_chat_id)
 		mock_export_messages.assert_called_once_with(discussion_chat_id, last_message_id)
 		self.assertEqual(manager.mock_calls, expected_calls)
+		self.assertTrue(result)
 
 	def test_export_comment_not_last_message(self, mock_info, mock_insert_comment_message,
 											 mock_insert_comment_deleted_message, mock_export_messages,
@@ -82,22 +83,138 @@ class ExportChatCommentsTest(TestCase):
 		discussion_chat_id = -10012345678
 		mock_get_last_message_id.return_value = None
 
-		messages_export_utils.export_chat_comments(discussion_chat_id)
+		result = messages_export_utils.export_chat_comments(discussion_chat_id)
 		mock_get_last_message_id.assert_called_once_with(discussion_chat_id)
 		mock_export_messages.assert_not_called()
 		mock_insert_comment_deleted_message.assert_not_called()
 		mock_insert_comment_message.assert_not_called()
 		mock_info.assert_called_once_with(f"Can't find last message in {discussion_chat_id}, export skipped")
+		self.assertFalse(result)
+
+	def test_export_comment_export_none_messages(self, mock_info, mock_insert_comment_message,
+											 mock_insert_comment_deleted_message, mock_export_messages,
+											 mock_get_last_message_id, *args):
+		discussion_chat_id = -10012345678
+		last_message_id = 124
+		mock_get_last_message_id.return_value = last_message_id
+		mock_export_messages.return_value = None
+
+		result = messages_export_utils.export_chat_comments(discussion_chat_id)
+		mock_get_last_message_id.assert_called_once_with(discussion_chat_id)
+		mock_export_messages.assert_called_once_with(discussion_chat_id, last_message_id)
+		mock_insert_comment_deleted_message.assert_not_called()
+		mock_insert_comment_message.assert_not_called()
+		mock_info.assert_called_once_with(f"Can't export messages in {discussion_chat_id}, export skipped")
+		self.assertFalse(result)
 
 
+@patch("db_utils.insert_main_channel_message")
+@patch("user_utils.find_user_by_signature", side_effect=lambda auth: auth)
+@patch("messages_export_utils.export_messages")
+@patch("logging.info")
+@patch("db_utils.get_last_message_id")
+class ExportMainChannelMessages(TestCase):
+	def test_default(self, mock_get_last_message_id, mock_info, mock_export_messages, mock_find_user_by_signature,
+					 mock_insert_main_channel_message, *args):
+		channel_id = -10012345678
+		last_message_id = 124
+		mock_get_last_message_id.return_value = last_message_id
+		message_ids = [12, 25, 35, 122, 124]
+		messages = []
+
+		for message_id in message_ids:
+			messages.append(Mock(id=message_id, author_signature=message_id * 2 if not message_id % 2 else None, empty=None if message_id != 35 else True))
+		mock_export_messages.return_value = messages
+
+		result = messages_export_utils.export_main_channel_messages(channel_id)
+		mock_get_last_message_id.assert_called_once_with(channel_id)
+		mock_export_messages.assert_called_once_with(channel_id, last_message_id)
+		mock_find_user_by_signature.assert_has_calls([call(24), call(244), call(248)])
+		self.assertEqual(mock_find_user_by_signature.call_count, 3)
+		mock_insert_main_channel_message.assert_has_calls([call(channel_id, 12, 24), call(channel_id, 25, None),
+														   call(channel_id, 122, 244), call(channel_id, 124, 248)])
+		self.assertEqual(mock_insert_main_channel_message.call_count, 4)
+		mock_info.assert_has_calls([call(f"Exported main message [{channel_id}, 12, 24]"),
+									call(f"Exported main message [{channel_id}, 25, None]"),
+									call(f"Exported main message [{channel_id}, 122, 244]"),
+									call(f"Exported main message [{channel_id}, 124, 248]")])
+		self.assertTrue(result)
+
+	def test_no_last_message(self, mock_get_last_message_id, mock_info, mock_export_messages, mock_find_user_by_signature,
+					 mock_insert_main_channel_message, *args):
+		channel_id = -10012345678
+		mock_get_last_message_id.return_value = None
+
+		result = messages_export_utils.export_main_channel_messages(channel_id)
+		mock_get_last_message_id.assert_called_once_with(channel_id)
+		mock_info.assert_called_once_with(f"Can't find last message in {channel_id}, export skipped")
+		mock_export_messages.assert_not_called()
+		mock_find_user_by_signature.assert_not_called()
+		mock_insert_main_channel_message.assert_not_called()
+		self.assertFalse(result)
+
+	def test_no_get_messages(self, mock_get_last_message_id, mock_info, mock_export_messages, mock_find_user_by_signature,
+					 mock_insert_main_channel_message, *args):
+		channel_id = -10012345678
+		last_message_id = 124
+		mock_get_last_message_id.return_value = last_message_id
+		mock_export_messages.return_value = None
+
+		result = messages_export_utils.export_main_channel_messages(channel_id)
+		mock_get_last_message_id.assert_called_once_with(channel_id)
+		mock_export_messages.assert_called_once_with(channel_id, last_message_id)
+		mock_find_user_by_signature.assert_not_called()
+		mock_insert_main_channel_message.assert_not_called()
+		self.assertFalse(result)
+
+
+@patch("config_utils.update_config")
+@patch("messages_export_utils.export_main_channel_messages")
+@patch("logging.info")
+@patch("db_utils.get_main_channel_ids", return_value=[-10012345678, -10087654321, -10012378456])
+class ExportMainChannels(TestCase):
+	@patch("messages_export_utils.EXPORTED_CHATS", [-10087654321])
+	def test_default(self, mock_get_main_channel_ids, mock_info, mock_export_main_channel_messages, mock_update_config, *args):
+		mock_export_main_channel_messages.return_value = True
+
+		messages_export_utils.export_main_channels()
+		mock_get_main_channel_ids.assert_called_once()
+		mock_info.assert_has_calls([call("Exporting messages from -10012345678"),
+									call("Successfully exported messages from -10012345678"),
+									call("Exporting messages from -10012378456"),
+									call("Successfully exported messages from -10012378456")])
+		self.assertEqual(mock_info.call_count, 4)
+		mock_export_main_channel_messages.assert_has_calls([call(-10012345678), call(-10012378456)])
+		self.assertEqual(mock_export_main_channel_messages.call_count, 2)
+		mock_update_config.assert_has_calls([call({"EXPORTED_CHATS": [-10087654321, -10012345678, -10012378456]}),
+											 call({"EXPORTED_CHATS": [-10087654321, -10012345678, -10012378456]})])
+		self.assertEqual(mock_update_config.call_count, 2)
+		self.assertEqual(messages_export_utils.EXPORTED_CHATS, [-10087654321, -10012345678, -10012378456])
+
+	@patch("messages_export_utils.EXPORTED_CHATS", [-10087654321])
+	def test_no_export_messages(self, mock_get_main_channel_ids, mock_info, mock_export_main_channel_messages, mock_update_config, *args):
+		mock_export_main_channel_messages.return_value = False
+
+		messages_export_utils.export_main_channels()
+		mock_get_main_channel_ids.assert_called_once()
+		mock_info.assert_has_calls([call("Exporting messages from -10012345678"),
+									call("Exporting messages from -10012378456")])
+		self.assertEqual(mock_info.call_count, 2)
+		mock_export_main_channel_messages.assert_has_calls([call(-10012345678), call(-10012378456)])
+		self.assertEqual(mock_export_main_channel_messages.call_count, 2)
+		mock_update_config.assert_not_called()
+		self.assertEqual(messages_export_utils.EXPORTED_CHATS, [-10087654321])
+
+
+@patch("core_api.get_messages")
 class ExportMessagesTest(TestCase):
-	@patch("core_api.get_messages")
 	def test_default(self, mock_get_messages, *args):
 		channel_id = -10012345678
 		last_message_id = 12
-		messages_export_utils.export_messages(channel_id, last_message_id)
-		mock_get_messages.assert_called_once_with(channel_id, last_message_id, messages_export_utils._EXPORT_BATCH_SIZE, 8)
 
+		result = messages_export_utils.export_messages(channel_id, last_message_id)
+		mock_get_messages.assert_called_once_with(channel_id, last_message_id, messages_export_utils._EXPORT_BATCH_SIZE, 8)
+		self.assertEqual(result, mock_get_messages.return_value)
 
 @patch("messages_export_utils.export_comments_from_discussion_chats")
 @patch("messages_export_utils.export_main_channels")

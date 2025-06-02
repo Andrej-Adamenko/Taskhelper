@@ -162,6 +162,15 @@ class MembersChannelTest(TestCase):
 		mock_get_members.assert_called_once_with(channel_ids)
 		self.assertEqual(user_utils.MEMBER_CACHE[channel_ids[0]]["user_ids"], [])
 
+	@patch("user_utils.MEMBER_CACHE", {-10012345678: {"user_ids": [12345, 23465, 13508], "time": 1745923296}})
+	def test_set_members_channel_none_members(self, mock_get_members, *args):
+		channel_ids = [-10012345678]
+		mock_get_members.return_value = None
+
+		user_utils.set_member_ids_channels(channel_ids)
+		mock_get_members.assert_called_once_with(channel_ids)
+		self.assertEqual(user_utils.MEMBER_CACHE[channel_ids[0]]["user_ids"], [])
+
 	@patch("user_utils.set_member_ids_channels")
 	@patch("db_utils.get_all_individual_channels")
 	@patch("db_utils.get_main_channel_ids")
