@@ -53,7 +53,7 @@ def async_to_sync(func):
 				await asyncio.sleep(E.value)
 				return await inner_function_ajax(*args, **kwargs)
 			except Exception as E:
-				logging.error(f"ERROR Core api {func}({args}) exception - {E}")
+				logging.error(f"ERROR Core api {func.__name__}{args} exception - {E}")
 			return None
 
 		return asyncio.run(inner_function_ajax(*args, **kwargs))
