@@ -58,23 +58,23 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_messag
 	return forwarded_message.id
 
 
-def get_messages_by_core(channel_id: int, message_ids: list) -> list:
-	return core_api.get_messages(channel_id, 0, _EXPORT_BATCH_SIZE, message_ids=message_ids)
-
+def _get_messages_by_core(channel_id: int, message_ids: list) -> list:
+	messages = core_api.get_messages(channel_id, 0, _EXPORT_BATCH_SIZE, message_ids=message_ids)
+	return messages if messages else []
 
 def update_by_core(bot: telebot.TeleBot, main_channel_id: int, message_ids: list):
-	messages = get_messages_by_core(main_channel_id, message_ids)
+	messages = _get_messages_by_core(main_channel_id, message_ids)
 	for message in messages:
-		if not update_interval_message(bot, main_channel_id, message.id, message=message):
+		if not _update_interval_message(bot, main_channel_id, message.id, message=message):
 			return
 
 
 def update_by_bot(bot: telebot.TeleBot, main_channel_id: int, message_ids: list):
 	for current_msg_id in message_ids:
-		if not update_interval_message(bot, main_channel_id, current_msg_id):
+		if not _update_interval_message(bot, main_channel_id, current_msg_id):
 			return
 
-def update_interval_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int, message: pyrogram.types.Message = None):
+def _update_interval_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int, message: pyrogram.types.Message = None):
 	time.sleep(DELAY_AFTER_ONE_SCAN)
 	try:
 		if not _UPDATE_STATUS:
@@ -95,7 +95,7 @@ def update_interval_message(bot: telebot.TeleBot, main_channel_id: int, current_
 	return True
 
 
-def store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, message: pyrogram.types.Message, discussion_chat_id: int):
+def _store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, message: pyrogram.types.Message, discussion_chat_id: int):
 	# retrieve message from discussion chat, get message_id of the message in main channel and save it to db
 	current_msg_id = message.id
 
@@ -140,36 +140,34 @@ def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 		if (time.time() - last_update_time) < (config_utils.UPDATE_INTERVAL * 60):
 			continue
 
-		update_in_progress_channel = db_utils.get_unfinished_update_channel()
-		if update_in_progress_channel:
-			main_channel_id, current_message_id = update_in_progress_channel
-			check_main_messages(bot, main_channel_id, current_message_id)
-			break
-
-		finished_channels = db_utils.get_finished_update_channels()
-
-		main_channel_ids = db_utils.get_main_channel_ids()
-		for main_channel_id in main_channel_ids:
-			if main_channel_id in finished_channels:
-				continue
-			check_main_messages(bot, main_channel_id)
-
-			main_channel_id_str = str(main_channel_id)
-			discussion_chat_id = None
-			if main_channel_id_str in DISCUSSION_CHAT_DATA:
-				discussion_chat_id = DISCUSSION_CHAT_DATA[main_channel_id_str]
-
-			check_discussion_messages(bot, main_channel_id, discussion_chat_id)
-
-		logging.info(f"Interval check is finished")
-		db_utils.clear_updates_in_progress()
-		if _UPDATE_STATUS and config_utils.HASHTAGS_BEFORE_UPDATE:
-			config_utils.HASHTAGS_BEFORE_UPDATE = None
-			config_utils.update_config({"HASHTAGS_BEFORE_UPDATE": None})
+		_check_all_messages(bot)
 		last_update_time = time.time()
 
 
-def check_main_messages(bot: telebot.TeleBot, main_channel_id: int, start_from_message: int = None):
+def _check_all_messages(bot: telebot.TeleBot):
+	unfinished_channels = db_utils.get_unfinished_update_channels()
+	finished_channels = db_utils.get_finished_update_channels()
+
+	channel_ids = db_utils.get_main_channel_ids()
+	for channel_id in channel_ids:
+		if channel_id in finished_channels:
+			continue
+
+		start_message = unfinished_channels.get(channel_id)
+		_check_main_messages(bot, channel_id, start_message)
+
+		channel_id_str = str(channel_id)
+		if channel_id_str in DISCUSSION_CHAT_DATA:
+			discussion_chat_id = DISCUSSION_CHAT_DATA[channel_id_str]
+			_check_discussion_messages(bot, channel_id, discussion_chat_id)
+
+	logging.info(f"Interval check is finished")
+	db_utils.clear_updates_in_progress()
+	if _UPDATE_STATUS and config_utils.HASHTAGS_BEFORE_UPDATE:
+		config_utils.HASHTAGS_BEFORE_UPDATE = None
+		config_utils.update_config({"HASHTAGS_BEFORE_UPDATE": None})
+
+def _check_main_messages(bot: telebot.TeleBot, main_channel_id: int, start_from_message: int = None):
 	main_message_ids = db_utils.get_main_message_ids(main_channel_id)
 	if start_from_message:
 		main_message_ids = [message_id for message_id in main_message_ids if start_from_message >= message_id]
@@ -187,7 +185,7 @@ def check_main_messages(bot: telebot.TeleBot, main_channel_id: int, start_from_m
 	logging.info(f"Main channel check completed in {main_channel_id}")
 
 
-def check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None):
+def _check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None):
 	start_msg_id = utils.get_last_message(bot, discussion_chat_id)
 	if start_msg_id is None:
 		return
@@ -195,7 +193,7 @@ def check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discus
 	logging.info(f"Starting to check discussion channel: {discussion_chat_id}")
 	deleted_messages = db_utils.get_comment_deleted_message_ids(discussion_chat_id, list(range(1, start_msg_id + 1)))
 	message_ids = [id for id in range(start_msg_id, 0, -1) if id not in deleted_messages]
-	messages = get_messages_by_core(discussion_chat_id, message_ids)
+	messages = _get_messages_by_core(discussion_chat_id, message_ids)
 
 	for message in messages:
 		if message.id in deleted_messages:
@@ -205,7 +203,7 @@ def check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discus
 		try:
 			if not _UPDATE_STATUS:
 				raise Exception("Interval update stop requested")
-			store_discussion_message(bot, main_channel_id, message, discussion_chat_id)
+			_store_discussion_message(bot, main_channel_id, message, discussion_chat_id)
 		except ApiTelegramException as E:
 			if E.error_code == 429:
 				logging.warning(f"Too many requests - {E}")

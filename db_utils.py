@@ -530,7 +530,7 @@ def get_all_scheduled_messages():
 
 
 @db_thread_lock
-def get_finished_update_channels():
+def get_finished_update_channels() -> list:
 	sql = "SELECT main_channel_id FROM interval_updates_status WHERE current_message_id <= 0"
 	CURSOR.execute(sql, ())
 	result = CURSOR.fetchall()
@@ -541,12 +541,14 @@ def get_finished_update_channels():
 
 
 @db_thread_lock
-def get_unfinished_update_channel():
+def get_unfinished_update_channels() -> dict:
 	sql = "SELECT main_channel_id, current_message_id FROM interval_updates_status WHERE current_message_id > 0"
 	CURSOR.execute(sql, ())
-	result = CURSOR.fetchone()
+	result = CURSOR.fetchall()
 	if result:
-		return result
+		return {row[0]: row[1] for row in result}
+	else:
+		return {}
 
 
 @db_thread_lock

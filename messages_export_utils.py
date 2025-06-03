@@ -14,13 +14,17 @@ def export_messages(chat_id: int, last_message_id: int) -> list:
 	return core_api.get_messages(chat_id, last_message_id, _EXPORT_BATCH_SIZE)
 
 
-def export_chat_comments(discussion_chat_id: int):
+def export_chat_comments(discussion_chat_id: int) -> bool:
 	last_msg_id = db_utils.get_last_message_id(discussion_chat_id)
-	if last_msg_id is None:
+	if not last_msg_id:
 		logging.info(f"Can't find last message in {discussion_chat_id}, export skipped")
-		return
+		return False
 
 	messages = export_messages(discussion_chat_id, last_msg_id)
+	if not messages:
+		logging.info(f"Can't export messages in {discussion_chat_id}, export skipped")
+		return False
+
 	for message in messages:
 		if message.empty and message.id <= last_msg_id:
 			db_utils.delete_comment_message(message.id, discussion_chat_id)
@@ -38,6 +42,7 @@ def export_chat_comments(discussion_chat_id: int):
 
 		db_utils.insert_comment_message(reply_to_message_id, discussion_message_id, discussion_chat_id, sender_id)
 		logging.info(f"Exported comment [{reply_to_message_id}, {discussion_message_id}, {discussion_chat_id}]")
+	return True
 
 
 def export_comments_from_discussion_chats():
@@ -54,13 +59,17 @@ def export_comments_from_discussion_chats():
 		logging.info(f"Successfully exported comments from {chat_id}")
 
 
-def export_main_channel_messages(main_channel_id: int):
+def export_main_channel_messages(main_channel_id: int) -> bool:
 	last_msg_id = db_utils.get_last_message_id(main_channel_id)
 	if last_msg_id is None:
 		logging.info(f"Can't find last message in {main_channel_id}, export skipped")
-		return
+		return False
 
 	messages = export_messages(main_channel_id, last_msg_id)
+	if not messages:
+		logging.info(f"Can't export messages in {main_channel_id}, export skipped")
+		return False
+
 	for message in messages:
 		if message.empty:
 			continue
@@ -70,6 +79,7 @@ def export_main_channel_messages(main_channel_id: int):
 
 		db_utils.insert_main_channel_message(main_channel_id, message.id, user_id)
 		logging.info(f"Exported main message [{main_channel_id}, {message.id}, {user_id}]")
+	return True
 
 
 def export_main_channels():
@@ -78,10 +88,10 @@ def export_main_channels():
 		if channel_id in EXPORTED_CHATS:
 			continue
 		logging.info(f"Exporting messages from {channel_id}")
-		export_main_channel_messages(channel_id)
-		EXPORTED_CHATS.append(channel_id)
-		config_utils.update_config({"EXPORTED_CHATS": EXPORTED_CHATS})
-		logging.info(f"Successfully exported messages from {channel_id}")
+		if export_main_channel_messages(channel_id):
+			EXPORTED_CHATS.append(channel_id)
+			config_utils.update_config({"EXPORTED_CHATS": EXPORTED_CHATS})
+			logging.info(f"Successfully exported messages from {channel_id}")
 
 
 def start_exporting():

@@ -122,5 +122,36 @@ class GetMessagesTest(TestCase):
 		self.assertEqual(expected_calls, manager.mock_calls)
 
 
+@patch("core_api.__get_members_for_chat")
+class GetMembersTest(TestCase):
+	def test_default(self, mock__get_members_for_chat, *args):
+		chat_ids = [-10012345678, -10087654321]
+		mock_client = Mock(spec=Client)
+		mock__get_members_for_chat.side_effect = lambda chat_id, client: [1, 2, 3] if chat_id == -10087654321 else [4, 5, 6]
+
+		result = core_api.get_members(chat_ids, client=mock_client)
+		mock__get_members_for_chat.assert_has_calls([call(-10012345678, client=mock_client), call(-10087654321, client=mock_client)])
+		self.assertEqual(result, {-10012345678: [4, 5, 6], -10087654321: [1, 2, 3]})
+
+	def test_with_none_users(self, mock__get_members_for_chat, *args):
+		chat_ids = [-10012345678, -10087654321]
+		mock_client = Mock(spec=Client)
+		mock__get_members_for_chat.side_effect = lambda chat_id, client: [1, 2, 3] if chat_id == -10087654321 else None
+
+		result = core_api.get_members(chat_ids, client=mock_client)
+		mock__get_members_for_chat.assert_has_calls([call(-10012345678, client=mock_client), call(-10087654321, client=mock_client)])
+		self.assertEqual(result, {-10012345678: [], -10087654321: [1, 2, 3]})
+
+	def test_with_empty_users(self, mock__get_members_for_chat, *args):
+		chat_ids = [-10012345678, -10087654321]
+		mock_client = Mock(spec=Client)
+		mock__get_members_for_chat.side_effect = lambda chat_id, client: [1, 2, 3] if chat_id == -10087654321 else []
+
+		result = core_api.get_members(chat_ids, client=mock_client)
+		mock__get_members_for_chat.assert_has_calls([call(-10012345678, client=mock_client), call(-10087654321, client=mock_client)])
+		self.assertEqual(result, {-10012345678: [], -10087654321: [1, 2, 3]})
+
+
+
 if __name__ == "__main__":
 	main()
