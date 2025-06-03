@@ -851,7 +851,8 @@ def get_invalid_ticket_ids(bot: telebot.TeleBot):
 		settings = json.loads(settings)
 		last_msg_id = utils.get_last_message(bot, channel_id)
 		copied_messages = db_utils.get_copied_message_ids_from_copied_channel(channel_id)
-		message_ids = [i for i in range(1, last_msg_id + 1) if i not in copied_messages and
+		main_messages = db_utils.get_main_message_ids(channel_id)
+		message_ids = [i for i in range(1, last_msg_id + 1) if i not in copied_messages and i not in main_messages and
 					   i != settings.get(channel_manager.SETTING_TYPES.SETTINGS_MESSAGE_ID)]
 		messages = core_api.get_messages(channel_id, 0, 50, message_ids=message_ids)
 		for message in messages:
@@ -861,6 +862,8 @@ def get_invalid_ticket_ids(bot: telebot.TeleBot):
 			utils.update_forwarded_fields(message)
 			delete_forwarded_message(bot, channel_id, message.id)
 			count_invalid += 1
+			logging.info(f"Deleted invalid ticket {message.id} in channel {channel_id}")
+			time.sleep(1)
 
 		logging.info(f"Count deleted invalid tickets in channel {channel_id} is {count_invalid}")
 
