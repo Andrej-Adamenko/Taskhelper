@@ -1109,6 +1109,69 @@ class GetInvalidTicketIdsTest(TestCase):
 		mock_info.assert_has_calls(info_calls)
 		self.assertEqual(mock_info.call_count, len(info_calls))
 
+	def test_none_messages(self, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
+					 mock_get_copied_message_ids_from_copied_channel, mock_get_messages, mock_get_forwarded_from_id,
+					 mock_update_forwarded_fields, mock_delete_forwarded_message, mock_sleep, mock_info, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channels_data = [(-10012345678, "{\"settings_message_id\": 12}"), (-10087654321, "{}")]
+		channel_messages = {-10012345678: {"last": 25, "settings": 12, "main": [], "copied": [15, 17, 18, 20, 22, 24, 25], "empty": [2, 4, 6, 7], "service": [1, 10], "forwarded": [8, 9, 19, 21], "no_keyboard": [3, 5, 12]},
+							-10087654321: {"last": 18, "settings": 0, "main": [10, 11, 12], "copied": [15, 16, 17, 18], "empty": [5, 6], "service": [1, 8], "forwarded": [7, 13, 14], "no_keyboard": [2, 3]}}
+		mock_get_all_individual_channels.return_value = channels_data
+		mock_get_last_message.side_effect = lambda _, channel_id: channel_messages[channel_id]["last"]
+		mock_get_copied_message_ids_from_copied_channel.side_effect = lambda channel_id: channel_messages[channel_id]["copied"]
+		mock_get_main_message_ids.side_effect = lambda channel_id: channel_messages[channel_id]['main']
+		get_message_calls = []
+		info_calls = [call("Deleting invalid ticket ids"),]
+		mock_get_messages.return_value = None
+		mock_get_forwarded_from_id.side_effect = lambda message: True if message.id in channel_messages[message.chat.id]["forwarded"] else None
+		for ch_id in channel_messages:
+			message_ids = [i for i in range(1, channel_messages[ch_id]["last"] + 1) if i not in channel_messages[ch_id]["copied"] and i not in channel_messages[ch_id]["main"] and i != channel_messages[ch_id]["settings"]]
+			get_message_calls.append(call(ch_id, 0, 50, message_ids=message_ids))
+			info_calls.append(call(f"Can't get messages in channel {ch_id}, scanning of invalid tickets is skipped"))
+
+		forwarding_utils.get_invalid_ticket_ids(mock_bot)
+		mock_get_all_individual_channels.assert_called_once_with()
+		mock_get_last_message.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087654321)])
+		self.assertEqual(mock_get_last_message.call_count, len(channels_data))
+		mock_get_copied_message_ids_from_copied_channel.assert_has_calls([call(-10012345678), call(-10087654321)])
+		self.assertEqual(mock_get_copied_message_ids_from_copied_channel.call_count, len(channels_data))
+		mock_get_main_message_ids.assert_has_calls([call(-10012345678), call(-10087654321)])
+		self.assertEqual(mock_get_main_message_ids.call_count, len(channels_data))
+		mock_get_messages.assert_has_calls(get_message_calls)
+		self.assertEqual(mock_get_messages.call_count, len(get_message_calls))
+		mock_get_forwarded_from_id.assert_not_called()
+		mock_update_forwarded_fields.assert_not_called()
+		mock_delete_forwarded_message.assert_not_called()
+		mock_sleep.assert_not_called()
+		mock_info.assert_has_calls(info_calls)
+		self.assertEqual(mock_info.call_count, len(info_calls))
+
+	def test_none_last_msg(self, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
+					 mock_get_copied_message_ids_from_copied_channel, mock_get_messages, mock_get_forwarded_from_id,
+					 mock_update_forwarded_fields, mock_delete_forwarded_message, mock_sleep, mock_info, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channels_data = [(-10012345678, "{\"settings_message_id\": 12}"), (-10087654321, "{}")]
+		mock_get_all_individual_channels.return_value = channels_data
+		mock_get_last_message.return_value = None
+		info_calls = [call("Deleting invalid ticket ids"),]
+
+		for ch_id in [-10012345678, -10087654321]:
+			info_calls.append(call(f"Can't get last message in channel {ch_id}, scanning of invalid tickets is skipped"))
+
+		forwarding_utils.get_invalid_ticket_ids(mock_bot)
+		mock_get_all_individual_channels.assert_called_once_with()
+		mock_get_last_message.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087654321)])
+		self.assertEqual(mock_get_last_message.call_count, len(channels_data))
+		mock_get_copied_message_ids_from_copied_channel.assert_not_called()
+		mock_get_main_message_ids.assert_not_called()
+		mock_get_messages.assert_not_called()
+		mock_get_forwarded_from_id.assert_not_called()
+		mock_update_forwarded_fields.assert_not_called()
+		mock_delete_forwarded_message.assert_not_called()
+		mock_sleep.assert_not_called()
+		mock_info.assert_has_calls(info_calls)
+		self.assertEqual(mock_info.call_count, len(info_calls))
+
 
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
 @patch("channel_manager.set_settings_message_id")
