@@ -871,7 +871,7 @@ def get_invalid_ticket_ids(bot: telebot.TeleBot):
 			delete_forwarded_message(bot, channel_id, message.id)
 			count_invalid += 1
 			logging.info(f"Deleted invalid ticket {message.id} in channel {channel_id}")
-			time.sleep(1)
+			time.sleep(config_utils.DELAY_AFTER_ONE_SCAN)
 
 		logging.info(f"Count deleted invalid tickets in channel {channel_id} is {count_invalid}")
 

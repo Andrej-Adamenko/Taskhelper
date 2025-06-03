@@ -1081,7 +1081,7 @@ class GetInvalidTicketIdsTest(TestCase):
 						and message_id not in channel_messages[ch_id]["no_keyboard"]):
 					get_forwarded_from_id_calls += 1
 					if message_id not in channel_messages[ch_id]["forwarded"]:
-						sleep_calls.append(call(1))
+						sleep_calls.append(call(config_utils.DELAY_AFTER_ONE_SCAN))
 						update_forwarded_fields_count_calls += 1
 						count_calls += 1
 						delete_forwarded_message_calls.append(call(mock_bot, ch_id, message_id))
