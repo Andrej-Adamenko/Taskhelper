@@ -16,9 +16,13 @@ import threading
 
 from config_utils import DISCUSSION_CHAT_DATA, DELAY_AFTER_ONE_SCAN
 
+__STOP_STATUS_KEY = "stop"
+
 _EXPORT_BATCH_SIZE = 50
 _INTERVAL_UPDATING_THREAD: threading.Thread = None
-_UPDATE_STATUS: bool = False
+_STATUS: dict = {
+	__STOP_STATUS_KEY: True
+}
 
 
 def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int,
@@ -58,26 +62,37 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_messag
 	return forwarded_message.id
 
 
-def _get_messages_by_core(channel_id: int, message_ids: list) -> list:
-	messages = core_api.get_messages(channel_id, 0, _EXPORT_BATCH_SIZE, message_ids=message_ids)
-	return messages if messages else []
+def _get_messages_by_core(channel_id: int, message_ids: list) -> list | None:
+	messages = core_api.get_messages(channel_id, 0, _EXPORT_BATCH_SIZE, message_ids=message_ids,
+									 stop_flag=_STATUS)
+	if messages is None and not _STATUS[__STOP_STATUS_KEY]:
+		logging.info(f"Check chat {channel_id} was skipped because can't get messages")
 
-def update_by_core(bot: telebot.TeleBot, main_channel_id: int, message_ids: list):
+	return messages
+
+
+def update_by_core(bot: telebot.TeleBot, main_channel_id: int, message_ids: list) -> bool:
 	messages = _get_messages_by_core(main_channel_id, message_ids)
+	if messages is None:
+		return False
+
 	for message in messages:
 		if not _update_interval_message(bot, main_channel_id, message.id, message=message):
-			return
+			return False
+	return True
 
 
 def update_by_bot(bot: telebot.TeleBot, main_channel_id: int, message_ids: list):
 	for current_msg_id in message_ids:
 		if not _update_interval_message(bot, main_channel_id, current_msg_id):
-			return
+			return False
+	return True
+
 
 def _update_interval_message(bot: telebot.TeleBot, main_channel_id: int, current_msg_id: int, message: pyrogram.types.Message = None):
 	time.sleep(DELAY_AFTER_ONE_SCAN)
 	try:
-		if not _UPDATE_STATUS:
+		if _STATUS[__STOP_STATUS_KEY]:
 			raise Exception("Interval update stop requested")
 
 		update_older_message(bot, main_channel_id, current_msg_id, forwarded_message=message)
@@ -119,13 +134,13 @@ def _store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, messag
 
 
 def start_interval_updating(bot: telebot.TeleBot, start_delay: int = 0):
-	global _UPDATE_STATUS, _INTERVAL_UPDATING_THREAD
+	global _STATUS, _INTERVAL_UPDATING_THREAD
 
-	if _UPDATE_STATUS:
-		_UPDATE_STATUS = False
+	if not _STATUS[__STOP_STATUS_KEY]:
+		_STATUS[__STOP_STATUS_KEY] = True
 		_INTERVAL_UPDATING_THREAD.join()
 
-	_UPDATE_STATUS = True
+	_STATUS[__STOP_STATUS_KEY] = False
 	_INTERVAL_UPDATING_THREAD = threading.Thread(target=interval_update_thread, args=(bot, start_delay,))
 	_INTERVAL_UPDATING_THREAD.start()
 
@@ -133,7 +148,7 @@ def start_interval_updating(bot: telebot.TeleBot, start_delay: int = 0):
 def interval_update_thread(bot: telebot.TeleBot, start_delay: int = 0):
 	start_time = time.time()
 	last_update_time = 0
-	while _UPDATE_STATUS:
+	while not _STATUS[__STOP_STATUS_KEY]:
 		time.sleep(1)
 		if (time.time() - start_time) < start_delay:
 			continue
@@ -153,6 +168,9 @@ def _check_all_messages(bot: telebot.TeleBot):
 		if channel_id in finished_channels:
 			continue
 
+		if _STATUS[__STOP_STATUS_KEY]:
+			break
+
 		start_message = unfinished_channels.get(channel_id)
 		_check_main_messages(bot, channel_id, start_message)
 
@@ -161,9 +179,13 @@ def _check_all_messages(bot: telebot.TeleBot):
 			discussion_chat_id = DISCUSSION_CHAT_DATA[channel_id_str]
 			_check_discussion_messages(bot, channel_id, discussion_chat_id)
 
-	logging.info(f"Interval check is finished")
+	if _STATUS[__STOP_STATUS_KEY]:
+		logging.info(f"Interval check stopped prematurely")
+	else:
+		logging.info(f"Interval check completed")
+
 	db_utils.clear_updates_in_progress()
-	if _UPDATE_STATUS and config_utils.HASHTAGS_BEFORE_UPDATE:
+	if not _STATUS[__STOP_STATUS_KEY] and config_utils.HASHTAGS_BEFORE_UPDATE:
 		config_utils.HASHTAGS_BEFORE_UPDATE = None
 		config_utils.update_config({"HASHTAGS_BEFORE_UPDATE": None})
 
@@ -177,12 +199,13 @@ def _check_main_messages(bot: telebot.TeleBot, main_channel_id: int, start_from_
 
 	main_message_ids.sort(reverse=True)
 	if len(main_message_ids) > 5:
-		update_by_core(bot, main_channel_id, main_message_ids)
+		result = update_by_core(bot, main_channel_id, main_message_ids)
 	else:
-		update_by_bot(bot, main_channel_id, main_message_ids)
+		result = update_by_bot(bot, main_channel_id, main_message_ids)
 
-	db_utils.insert_or_update_channel_update_progress(main_channel_id, 0)
-	logging.info(f"Main channel check completed in {main_channel_id}")
+	if result:
+		db_utils.insert_or_update_channel_update_progress(main_channel_id, 0)
+		logging.info(f"Main channel check completed in {main_channel_id}")
 
 
 def _check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discussion_chat_id: int = None):
@@ -194,6 +217,8 @@ def _check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discu
 	deleted_messages = db_utils.get_comment_deleted_message_ids(discussion_chat_id, list(range(1, start_msg_id + 1)))
 	message_ids = [id for id in range(start_msg_id, 0, -1) if id not in deleted_messages]
 	messages = _get_messages_by_core(discussion_chat_id, message_ids)
+	if messages is None:
+		return
 
 	for message in messages:
 		if message.id in deleted_messages:
@@ -201,7 +226,7 @@ def _check_discussion_messages(bot: telebot.TeleBot, main_channel_id: int, discu
 			continue
 
 		try:
-			if not _UPDATE_STATUS:
+			if _STATUS[__STOP_STATUS_KEY]:
 				raise Exception("Interval update stop requested")
 			_store_discussion_message(bot, main_channel_id, message, discussion_chat_id)
 		except ApiTelegramException as E:
