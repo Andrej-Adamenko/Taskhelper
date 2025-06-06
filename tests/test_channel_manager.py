@@ -570,7 +570,7 @@ class TestChannelSettingsMessage(TestCase):
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.id = 12234
 		mock_button = Mock(spec=InlineKeyboardButton)
-		mock_button.text = f"Due{config_utils.BUTTON_TEXTS["CHECK"]}"
+		mock_button.text = f"Due{config_utils.BUTTON_TEXTS['CHECK']}"
 		mock_button.callback_data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.DUE_SELECTED},"
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		mock_keyboard.keyboard = [[mock_button]]
@@ -581,7 +581,7 @@ class TestChannelSettingsMessage(TestCase):
 		mock_bot.answer_callback_query.assert_called_once_with(callback_query_id=mock_call.id, text="At least one of the Due and Deferred buttons should be selected")
 		mock_save_toggle_button.assert_not_called()
 		mock_bot.edit_message_reply_markup.assert_not_called()
-		self.assertEqual(f"Due{config_utils.BUTTON_TEXTS["CHECK"]}", mock_keyboard.keyboard[0][0].text)
+		self.assertEqual(f"Due{config_utils.BUTTON_TEXTS['CHECK']}", mock_keyboard.keyboard[0][0].text)
 
 	@patch("channel_manager.is_button_checked", return_value=True)
 	@patch("utils.parse_callback_str", return_value=[channel_manager.CB_TYPES.DUE_SELECTED, [""]])
@@ -593,7 +593,7 @@ class TestChannelSettingsMessage(TestCase):
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.id = 12234
 		mock_button = Mock(spec=InlineKeyboardButton)
-		mock_button.text = f"Due{config_utils.BUTTON_TEXTS["CHECK"]}"
+		mock_button.text = f"Due{config_utils.BUTTON_TEXTS['CHECK']}"
 		mock_button.callback_data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.DUE_SELECTED},"
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		mock_keyboard.keyboard = [[mock_button]]
@@ -615,7 +615,7 @@ class TestChannelSettingsMessage(TestCase):
 		mock_call = Mock(spec=CallbackQuery)
 		mock_call.id = 12234
 		mock_button = Mock(spec=InlineKeyboardButton)
-		mock_button.text = f"Due{config_utils.BUTTON_TEXTS["CHECK"]}"
+		mock_button.text = f"Due{config_utils.BUTTON_TEXTS['CHECK']}"
 		mock_button.callback_data = f"{channel_manager.CALLBACK_PREFIX},{channel_manager.CB_TYPES.TOGGLE_USER},{channel_manager.SETTING_TYPES.ASSIGNED},cc"
 		mock_keyboard = Mock(spec=InlineKeyboardMarkup)
 		mock_keyboard.keyboard = [[mock_button]]
