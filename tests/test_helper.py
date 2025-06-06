@@ -1,7 +1,7 @@
 from typing import List, Union
 
 import pyrogram.types
-from telebot.types import MessageEntity, Message, Chat
+from telebot.types import MessageEntity, Message, Chat, InlineKeyboardMarkup
 from unittest.mock import Mock
 import re
 
@@ -16,12 +16,20 @@ def create_hashtag_entity_list(text: str):
 	return entities
 
 
-def create_mock_message(text: str, entities: List[MessageEntity], chat_id: int = None, message_id: int = None):
+def create_mock_message(text: str, entities: List[MessageEntity], chat_id: int = None, message_id: int = None, keyboard: bool = None):
 	message = Mock(spec=Message)
 	message.content_type = "text"
 	if message_id:
 		message.message_id = message_id
 		message.id = message_id
+
+	if keyboard:
+		message.reply_markup = [Mock(spec=InlineKeyboardMarkup)]
+	elif keyboard is not None:
+		message.reply_markup = []
+	else:
+		message.reply_markup = None
+
 
 	return __set_mock_message(message, text, entities, chat_id, message_id)
 

@@ -8,6 +8,7 @@ from telebot.apihelper import ApiTelegramException
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberOwner, Message
 
 import config_utils
+import core_api
 import db_utils
 import forwarding_utils
 import hashtag_data
@@ -19,6 +20,7 @@ NEW_USER_TYPE = "+"
 
 DEFERRED_INTERVAL_CHECK_TIMER = None
 
+SETTINGS_TITLE = "CURRENT SETTINGS"
 CHANNEL_TICKET_SETTINGS_BUTTONS = {}
 TICKET_MENU_TYPE = "ticket"
 INFO_MENU_TYPE = "info"
@@ -226,9 +228,11 @@ def set_settings_message_id(channel_id, message_id):
 
 
 def is_settings_message(message: telebot.types.Message):
-	is_ticket = db_utils.is_copied_message_exists(message.id, message.chat.id)
-	is_ticket = is_ticket or db_utils.is_main_message_exists(message.id, message.chat.id)
-	return not is_ticket
+	not_settings = message.reply_markup is None
+	not_settings = not_settings or f"\n{SETTINGS_TITLE}\n" not in message.text
+	not_settings = not_settings or db_utils.is_copied_message_exists(message.id, message.chat.id)
+	not_settings = not_settings or db_utils.is_main_message_exists(message.chat.id, message.id)
+	return not not_settings
 
 
 def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
@@ -238,13 +242,15 @@ def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
 		last_message = utils.get_last_message(bot, channel_id)
 
 	if last_message and last_message > 0:
-		for current_msg_id in range(1, last_message + 1):
-			try:
-				forwarded_message = utils.get_main_message_content_by_id(bot, channel_id, current_msg_id)
-			except ApiTelegramException:
-				continue
+		messages = core_api.get_messages(channel_id, last_message, 50)
+		if not messages:
+			return False
 
-			if forwarded_message is not None and is_settings_message(forwarded_message):
+		for forwarded_message in messages:
+			if forwarded_message.empty or forwarded_message.service:
+				continue
+			current_msg_id = forwarded_message.id
+			if is_settings_message(forwarded_message):
 				update_settings_message(bot, channel_id, current_msg_id)
 				set_settings_message_id(channel_id, current_msg_id)
 
@@ -321,7 +327,7 @@ Please select this channel's settings, click on buttons to select/deselect filte
 def generate_current_settings_text(channel_id: int):
 	text = get_text_information_text()
 
-	text += "\nCURRENT SETTINGS"
+	text += f"\n{SETTINGS_TITLE}"
 
 	settings, priorities = get_individual_channel_settings(channel_id)
 

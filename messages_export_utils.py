@@ -71,7 +71,7 @@ def export_main_channel_messages(main_channel_id: int) -> bool:
 		return False
 
 	for message in messages:
-		if message.empty:
+		if message.empty or message.service:
 			continue
 		user_id = None
 		if message.author_signature:

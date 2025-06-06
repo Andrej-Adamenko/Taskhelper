@@ -123,7 +123,8 @@ class ExportMainChannelMessages(TestCase):
 		messages = []
 
 		for message_id in message_ids:
-			messages.append(Mock(id=message_id, author_signature=message_id * 2 if not message_id % 2 else None, empty=None if message_id != 35 else True))
+			messages.append(Mock(id=message_id, author_signature=message_id * 2 if not message_id % 2 else None,
+								 empty=None if message_id != 35 else True, service=None if message_id != 24 else True))
 		mock_export_messages.return_value = messages
 
 		result = messages_export_utils.export_main_channel_messages(channel_id)
