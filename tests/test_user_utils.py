@@ -277,6 +277,31 @@ class CheckMembersOnMainChannelsTest(TestCase):
 		mock_check_user_id_on_main_channels.assert_has_calls([call(mock_bot, 12345), call(mock_bot, 13508)])
 
 
+@patch("config_utils.USER_TAGS", {"AA": 1234, "BB": 38485, "CC": 354658, "EE": 1564, "FF": 1654, "NN": 6546})
+@patch("user_utils.get_member_ids_channel", return_value=[1234, 1564, 6546, 21564, 38485])
+class GetUserTagsTest(TestCase):
+	def test_get_all_tags(self, mock_get_member_ids_channel, *args):
+		result = user_utils.get_user_tags()
+		mock_get_member_ids_channel.assert_not_called()
+		self.assertEqual(result, config_utils.USER_TAGS)
+
+	def test_get_none_channel(self, mock_get_member_ids_channel, *args):
+		result = user_utils.get_user_tags(None)
+		mock_get_member_ids_channel.assert_not_called()
+		self.assertEqual(result, config_utils.USER_TAGS)
+
+	def test_get_with_channel(self, mock_get_member_ids_channel, *args):
+		channel_id = -10012345678
+		result = user_utils.get_user_tags(channel_id)
+		mock_get_member_ids_channel.assert_called_once_with(channel_id)
+		self.assertEqual(result, {"AA": 1234, "BB": 38485, "EE": 1564, "NN": 6546})
+
+	def test_get_with_channel_and_empty_tags(self, mock_get_member_ids_channel, *args):
+		config_utils.USER_TAGS = {}
+		channel_id = -10012345678
+		result = user_utils.get_user_tags(channel_id)
+		mock_get_member_ids_channel.assert_not_called()
+		self.assertEqual(result, {})
 
 
 if __name__ == "__main__":

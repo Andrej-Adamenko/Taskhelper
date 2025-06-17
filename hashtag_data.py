@@ -12,6 +12,7 @@ import config_utils
 import db_utils
 import hashtag_utils
 import post_link_utils
+import user_utils
 import utils
 from config_utils import DEFAULT_USER_DATA, HASHTAGS
 
@@ -190,7 +191,7 @@ class HashtagData:
 			return True
 		if tag == OPENED_TAG or tag == CLOSED_TAG:
 			return True
-		if HashtagData.check_user_tag(tag):
+		if HashtagData.check_user_tag(tag, self.main_channel_id):
 			return True
 		return False
 
@@ -278,7 +279,7 @@ class HashtagData:
 					status_tag_index = entity_index
 					continue
 
-				if self.check_user_tag(tag):
+				if self.check_user_tag(tag, main_channel_id):
 					user_tag_indexes.insert(0, entity_index)
 					continue
 
@@ -412,7 +413,7 @@ class HashtagData:
 				continue
 
 			tag = self.get_tag_from_entity(entities[entity_index], text)
-			if HashtagData.check_user_tag(tag):
+			if HashtagData.check_user_tag(tag, self.main_channel_id):
 				mentioned_users.append(tag)
 				self.add_user(tag)
 		return mentioned_users
@@ -863,8 +864,8 @@ class HashtagData:
 		return text[entity.offset + 1:entity.offset + entity.length]
 
 	@staticmethod
-	def check_user_tag(tag):
-		return tag in config_utils.USER_TAGS
+	def check_user_tag(tag, channel_id: int = None):
+		return tag in user_utils.get_user_tags(channel_id)
 
 	@staticmethod
 	def check_priority_tag(tag, priority_tag):

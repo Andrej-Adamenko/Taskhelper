@@ -634,6 +634,13 @@ def insert_main_channel_message(main_channel_id, main_message_id, sender_id):
 
 
 @db_thread_lock
+def delete_main_channel_message(main_channel_id, main_message_id):
+	sql = "DELETE FROM main_messages WHERE main_channel_id=(?) AND main_message_id=(?)"
+	CURSOR.execute(sql, (main_channel_id, main_message_id, ))
+	DB_CONNECTION.commit()
+
+
+@db_thread_lock
 def get_main_message_sender(main_channel_id, main_message_id):
 	sql = "SELECT sender_id FROM main_messages WHERE main_channel_id=(?) AND main_message_id=(?)"
 	CURSOR.execute(sql, (main_channel_id, main_message_id,))

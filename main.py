@@ -235,7 +235,7 @@ def handler_check_new_member(member_update: telebot.types.ChatMemberUpdated):
 	user_id = new_user.id
 	channel = member_update.chat
 
-	if user_id not in config_utils.USER_TAGS.values():
+	if user_id not in user_utils.get_user_tags().values():
 		try:
 			bot.kick_chat_member(channel.id, user_id)
 			logging.info(f"Kicking member {user_id} from '{channel.title}")

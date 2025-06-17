@@ -8,6 +8,7 @@ import config_utils
 import forwarding_utils
 import db_utils
 import interval_updating_utils
+import user_utils
 import utils
 
 from config_utils import DISCUSSION_CHAT_DATA, HASHTAGS
@@ -84,7 +85,7 @@ class CommentDispatcher:
 		opened_hashtag = HASHTAGS["OPENED"]
 		closed_hashtag = HASHTAGS["CLOSED"]
 		scheduled_hashtag = HASHTAGS["SCHEDULED"]
-		user_tags = list(config_utils.USER_TAGS.keys())
+		user_tags = list(user_utils.get_user_tags(main_channel_id).keys())
 		service_hashtags = [opened_hashtag, closed_hashtag, scheduled_hashtag] + user_tags
 
 		is_service_hashtag_exists = False
@@ -213,9 +214,9 @@ class CommentDispatcher:
 
 	@staticmethod
 	def update_user_last_interaction(main_message_id: int, main_channel_id: int, msg_data: telebot.types.Message):
-		user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, msg_data.from_user.id)
+		user_tags = utils.get_keys_by_value(user_utils.get_user_tags(main_channel_id), msg_data.from_user.id)
 		if not user_tags and msg_data.from_user.username:
-			user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, msg_data.from_user.username)
+			user_tags = utils.get_keys_by_value(user_utils.get_user_tags(main_channel_id), msg_data.from_user.username)
 
 		if not user_tags:
 			return

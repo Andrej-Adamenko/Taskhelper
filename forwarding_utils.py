@@ -352,7 +352,7 @@ def filter_followed_user_channels(channel_data: List, hashtag_data: HashtagData)
 
 def filter_creator_channels(channel_data: List, main_channel_id: int, main_message_id: int):
 	sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
-	user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, sender_id) or []
+	user_tags = utils.get_keys_by_value(user_utils.get_user_tags(main_channel_id), sender_id) or []
 
 	result_channels = []
 	for channel in channel_data:
@@ -435,12 +435,12 @@ def generate_control_buttons(hashtag_data: HashtagData, post_data: telebot.types
 def generate_subchannel_buttons(post_data: telebot.types.Message):
 	main_channel_id = post_data.chat.id
 
-	forwarding_data = get_subchannels_forwarding_data()
+	forwarding_data = get_subchannels_forwarding_data(main_channel_id)
 
 	hashtag_data = HashtagData(post_data, main_channel_id)
 	current_subchannel = hashtag_data.get_assigned_user() or ""
 	current_priority = hashtag_data.get_priority_number() or ""
-	current_subchannel_name = current_subchannel + " " + current_priority
+	current_subchannel_name = f"{current_subchannel} {current_priority}"
 
 	subchannel_buttons = []
 	for subchannel_name in forwarding_data:
@@ -486,7 +486,7 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 	current_subchannel_user = hashtag_data.get_assigned_user()
 	followed_users = hashtag_data.get_followed_users()
 
-	main_channel_user_tags = config_utils.USER_TAGS.keys()
+	main_channel_user_tags = user_utils.get_user_tags(main_channel_id).keys()
 
 	if not main_channel_user_tags:
 		return
@@ -508,8 +508,8 @@ def generate_cc_buttons(post_data: telebot.types.Message):
 	return keyboard_markup
 
 
-def get_subchannels_forwarding_data():
-	user_tags = config_utils.USER_TAGS.keys()
+def get_subchannels_forwarding_data(channel_id: int) -> list:
+	user_tags = user_utils.get_user_tags(channel_id).keys()
 	if not user_tags:
 		return []
 
@@ -806,7 +806,7 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 	if new_ticket:
 		sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
 		if sender_id:
-			user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, sender_id)
+			user_tags = utils.get_keys_by_value(user_utils.get_user_tags(main_channel_id), sender_id)
 			for user_tag in user_tags:
 				hashtag_data.add_user(user_tag)
 

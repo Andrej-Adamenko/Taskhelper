@@ -12,6 +12,7 @@ import db_utils
 import forwarding_utils
 import hashtag_data
 import interval_updating_utils
+import user_utils
 import utils
 
 CALLBACK_PREFIX = "CHNN"
@@ -361,7 +362,7 @@ def generate_user_keyboard(channel_id: int, setting_type: str):
 	nop_callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.NOP)
 	text_button = InlineKeyboardButton(MENU_TITLES[setting_type], callback_data=nop_callback)
 	buttons = [text_button]
-	for user_tag in config_utils.USER_TAGS:
+	for user_tag in user_utils.get_user_tags():
 		callback = utils.create_callback_str(CALLBACK_PREFIX, CB_TYPES.TOGGLE_USER, setting_type, user_tag)
 		button_text = f"#{user_tag}" if user_tag != NEW_USER_TYPE else "New users"
 		user_button = InlineKeyboardButton(button_text, callback_data=callback)
@@ -672,7 +673,7 @@ def _sort_array_settings(array: list, setting_type: str):
 
 	if setting_type in [SETTING_TYPES.ASSIGNED, SETTING_TYPES.REPORTED, SETTING_TYPES.FOLLOWED]:
 		update_sort_array = True
-		for user_tag in config_utils.USER_TAGS:
+		for user_tag in user_utils.get_user_tags():
 			if user_tag in array:
 				sorted_array.append(user_tag)
 		if NEW_USER_TYPE in array:

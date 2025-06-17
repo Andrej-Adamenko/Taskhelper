@@ -39,7 +39,7 @@ def find_user_by_signature(signature: str):
 def load_users(bot: telebot.TeleBot):
 	global USER_DATA
 
-	USER_DATA = config_utils.USER_TAGS.copy()
+	USER_DATA = get_user_tags().copy()
 
 	for user_tag in USER_DATA:
 		user_id = USER_DATA.get(user_tag)
@@ -77,6 +77,24 @@ def get_user(bot: telebot.TeleBot, user: Union[str, int]):
 		)
 
 	logging.error(f"Error during loading info about user {user} using core api")
+
+
+def get_user_tags(channel_id: int = None) -> dict:
+	tags = config_utils.USER_TAGS
+	if tags and channel_id:
+		all_tags, tags = tags, {}
+		member_ids = get_member_ids_channel(channel_id)
+		for tag in all_tags:
+			if all_tags[tag] in member_ids:
+				tags[tag] = all_tags[tag]
+	return tags
+
+
+def get_member_ids_channel(channel_id: int) -> list:
+	users = get_member_ids_channels([channel_id])
+	if channel_id in users:
+		return users[channel_id]
+	return []
 
 
 def get_member_ids_channels(channel_ids: list) -> dict:
@@ -121,7 +139,7 @@ def update_all_channel_members():
 
 
 def check_user_id_on_main_channels(bot: telebot.TeleBot, user_id: int):
-	in_user_tag = user_id in config_utils.USER_TAGS.values()
+	in_user_tag = user_id in get_user_tags().values()
 	channel_ids = db_utils.get_main_channel_ids()
 	for channel_id in channel_ids:
 		try:
