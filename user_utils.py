@@ -79,7 +79,7 @@ def get_user(bot: telebot.TeleBot, user: Union[str, int]):
 	logging.error(f"Error during loading info about user {user} using core api")
 
 
-def get_member_ids_channels(channel_ids: list) -> dict:
+def get_member_ids_channels(channel_ids: list[int]) -> dict:
 	now = time.time()
 	set_channel_ids = []
 	for channel_id in channel_ids:

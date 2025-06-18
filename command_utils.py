@@ -184,21 +184,34 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 		prev_user = config_utils.USER_TAGS[tag] if tag in config_utils.USER_TAGS else None
 		config_utils.USER_TAGS[tag] = user
 		config_utils.update_config({"USER_TAGS": config_utils.USER_TAGS})
+		comment_detach = "", None
+
+		if config_utils.DISCUSSION_CHAT_DATA:
+			comment_detach = user_utils.insert_user_reference(tag, f"User tag #{tag} was detached from {{USER}}.")
+
 		user_utils.load_users(bot)
 
 		if not is_tag_already_exists:
 			channel_manager.add_new_user_tag_to_channels(bot, tag)
 
-		for main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
-			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA.get(main_channel_id)
-			if is_tag_already_exists:
-				comment_text = f"User tag #{tag} was reassigned to {{USER}}."
-				text, entities = user_utils.insert_user_reference(tag, comment_text)
-				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
-			else:
-				comment_text = f"User tag #{tag} was added, assigned user is {{USER}}."
-				text, entities = user_utils.insert_user_reference(tag, comment_text)
-				bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+		if config_utils.DISCUSSION_CHAT_DATA:
+			channel_member_ids = user_utils.get_member_ids_channels([int(i) for i in config_utils.DISCUSSION_CHAT_DATA])
+			for main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
+				if int(main_channel_id) in channel_member_ids:
+					if cur_user in channel_member_ids[int(main_channel_id)]:
+						discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA.get(main_channel_id)
+						if is_tag_already_exists:
+							comment_text = f"User tag #{tag} was reassigned to {{USER}}."
+							text, entities = user_utils.insert_user_reference(tag, comment_text)
+							bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+						else:
+							comment_text = f"User tag #{tag} was added, assigned user is {{USER}}."
+							text, entities = user_utils.insert_user_reference(tag, comment_text)
+							bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
+					elif prev_user and prev_user in channel_member_ids[int(main_channel_id)]:
+						discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA.get(main_channel_id)
+						text, entities = comment_detach
+						bot.send_message(chat_id=discussion_channel_id, text=text, entities=entities)
 
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was successfully updated.")
 	elif msg_data.text.startswith("/remove_user_tag"):
@@ -225,11 +238,14 @@ def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, ar
 		channel_manager.remove_user_tag_from_channels(bot, tag)
 		user_utils.load_users(bot)
 
-		for main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
-			discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA.get(main_channel_id)
-			if discussion_channel_id:
-				comment_text = f"User tag #{tag} was deleted."
-				bot.send_message(chat_id=discussion_channel_id, text=comment_text)
+		if config_utils.DISCUSSION_CHAT_DATA:
+			channel_member_ids = user_utils.get_member_ids_channels([int(i) for i in config_utils.DISCUSSION_CHAT_DATA])
+			for main_channel_id in config_utils.DISCUSSION_CHAT_DATA:
+				if int(main_channel_id) in channel_member_ids and prev_user in channel_member_ids[int(main_channel_id)]:
+					discussion_channel_id = config_utils.DISCUSSION_CHAT_DATA.get(main_channel_id)
+					if discussion_channel_id:
+						comment_text = f"User tag #{tag} was deleted."
+						bot.send_message(chat_id=discussion_channel_id, text=comment_text)
 
 		bot.send_message(chat_id=msg_data.chat.id, text="User tag was removed.")
 
