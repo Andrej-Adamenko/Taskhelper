@@ -5,7 +5,7 @@ from unittest.mock import patch, Mock, AsyncMock, ANY, call
 
 from telebot import TeleBot
 from telebot.apihelper import ApiTelegramException
-from telebot.types import ChatMemberBanned, ChatMember
+from telebot.types import ChatMemberBanned, ChatMember, ChatMemberUpdated
 
 import config_utils
 import user_utils
@@ -277,6 +277,138 @@ class CheckMembersOnMainChannelsTest(TestCase):
 		mock_check_user_id_on_main_channels.assert_has_calls([call(mock_bot, 12345), call(mock_bot, 13508)])
 
 
+@patch("config_utils.DISCUSSION_CHAT_DATA", {"-10012345678": -10087654321})
+@patch("config_utils.USER_TAGS", {"AA": 12345, "BB": 48615, "CC": 189735, "DD": 48615})
+@patch("user_utils.insert_user_reference")
+@patch("logging.error")
+@patch("logging.info")
+class AddNewMemberTest(TestCase):
+	def test_no_tag(self, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12456
+		channel_id = -10012345678
+		channel_title = "Test channel"
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+
+		user_utils.add_new_member(mock_member_update, mock_bot)
+		mock_bot.kick_chat_member.assert_called_once_with(channel_id, user_id)
+		mock_info.assert_called_once_with(f"Kicking member {user_id} from '{channel_title}")
+		mock_error.assert_not_called()
+		mock_insert_user_reference.assert_not_called()
+
+	def test_no_tag_error_kick(self, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12456
+		channel_id = -10012345678
+		channel_title = "Test channel"
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+		mock_bot.kick_chat_member.side_effect = Exception("Error test")
+
+		user_utils.add_new_member(mock_member_update, mock_bot)
+		mock_bot.kick_chat_member.assert_called_once_with(channel_id, user_id)
+		mock_info.assert_not_called()
+		mock_error.assert_called_once_with(f"Error in kicking member {user_id} from '{channel_title}': Error test")
+		mock_insert_user_reference.assert_not_called()
+
+	def test_no_tag_from_ban(self, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12456
+		channel_id = -10012345678
+		channel_title = "Test channel"
+		old_status = "kicked"
+		new_status = "member"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+
+		user_utils.add_new_member(mock_member_update, mock_bot)
+		mock_bot.kick_chat_member.assert_called_once_with(channel_id, user_id)
+		mock_info.assert_called_once_with(f"Kicking member {user_id} from '{channel_title}")
+		mock_error.assert_not_called()
+		mock_insert_user_reference.assert_not_called()
+
+	def test_with_tag(self, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12345
+		user_tag = ["AA"]
+		channel_id = -10012345678
+		discussion_id = -10087654321
+		channel_title = "Test channel"
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+		comment_text = f"User {{USER}} becomes a member. His tag is #{user_tag[0]}."
+		text = f"User {user_id} becomes a member. His tag is #{user_tag[0]}."
+		mock_insert_user_reference.return_value = text, None
+
+		user_utils.add_new_member(mock_member_update, mock_bot)
+		mock_insert_user_reference.assert_called_once_with(user_tag[0], comment_text)
+		mock_bot.send_message.assert_called_once_with(chat_id=discussion_id, text=text, entities=None)
+		mock_info.assert_not_called()
+		mock_error.assert_not_called()
+
+	def test_with_tag_no_discussion_chat(self, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12345
+		channel_id = -10012345654
+		channel_title = "Test channel"
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+		mock_insert_user_reference.return_value = "", None
+
+		user_utils.add_new_member(mock_member_update, mock_bot)
+		mock_insert_user_reference.assert_not_called()
+		mock_bot.send_message.assert_not_called()
+		mock_info.assert_not_called()
+		mock_error.assert_not_called()
+
+	def test_with_few_tags(self, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 48615
+		user_tags = ["BB", "DD"]
+		channel_id = -10012345678
+		discussion_id = -10087654321
+		channel_title = "Test channel"
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+		user_tag_text = ", ".join([f"#{user_tag}" for user_tag in user_tags])
+		comment_text = f"User {{USER}} becomes a member. His tags is {user_tag_text}."
+		text = f"User {user_id} becomes a member. His tags is {user_tag_text}."
+		mock_insert_user_reference.return_value = text, None
+
+		user_utils.add_new_member(mock_member_update, mock_bot)
+		mock_insert_user_reference.assert_called_once_with(user_tags[0], comment_text)
+		mock_bot.send_message.assert_called_once_with(chat_id=discussion_id, text=text, entities=None)
+		mock_info.assert_not_called()
+		mock_error.assert_not_called()
 
 
 if __name__ == "__main__":
