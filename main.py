@@ -132,10 +132,17 @@ def handle_edited_post(post_data: telebot.types.Message):
 
 @bot.my_chat_member_handler()
 def handle_bot_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
-	has_permissions = member_update.new_chat_member.can_edit_messages and member_update.new_chat_member.can_post_messages
+	added_to_channel = (member_update.old_chat_member.status in ['left', 'kicked'] and
+					  member_update.new_chat_member.status in ['member', 'restricted', 'administrator'])
+	has_permissions = utils.check_bot_permission_for_messages(member_update.new_chat_member, member_update.chat)
 	if has_permissions:
 		time.sleep(1)
 		channel_manager.initialize_channel(bot, member_update.chat.id, user_id=member_update.from_user.id)
+		if added_to_channel:
+			user_utils.send_member_tags(member_update.chat.id, bot)
+			channel_id = utils.get_key_by_value(config_utils.DISCUSSION_CHAT_DATA, member_update.chat.id)
+			if channel_id:
+				user_utils.send_member_tags(int(channel_id), bot)
 		logging.info(f"Bot received permissions for channel {member_update.chat.id}")
 	else:
 		logging.info(f"Bot permissions for channel {member_update.chat.id} was removed")
@@ -228,7 +235,7 @@ def handle_changed_permissions_subchannel(member_update: telebot.types.ChatMembe
 
 @bot.chat_member_handler(func=main_channel_filter)
 def handler_check_new_member(member_update: telebot.types.ChatMemberUpdated):
-	user_utils.add_new_member(member_update, bot)
+	user_utils.check_new_member(member_update, bot)
 
 
 

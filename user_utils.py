@@ -79,6 +79,13 @@ def get_user(bot: telebot.TeleBot, user: Union[str, int]):
 	logging.error(f"Error during loading info about user {user} using core api")
 
 
+def get_member_ids_channel(channel_id: int) -> list:
+	users = get_member_ids_channels([channel_id])
+	if channel_id in users:
+		return users[channel_id]
+	return []
+
+
 def get_member_ids_channels(channel_ids: list[int]) -> dict:
 	now = time.time()
 	set_channel_ids = []
@@ -177,7 +184,7 @@ def insert_user_reference(user_tag: str, text: str):
 		return text, None
 
 
-def add_new_member(member_update: telebot.types.ChatMemberUpdated, bot: telebot.TeleBot):
+def check_new_member(member_update: telebot.types.ChatMemberUpdated, bot: telebot.TeleBot):
 	old_status = member_update.old_chat_member.status
 	new_status = member_update.new_chat_member.status
 
@@ -198,6 +205,40 @@ def add_new_member(member_update: telebot.types.ChatMemberUpdated, bot: telebot.
 	elif str(channel.id) in config_utils.DISCUSSION_CHAT_DATA:
 		user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, user_id)
 		user_tag_text = ", ".join([f"#{user_tag}" for user_tag in user_tags])
-		text = f"{{USER}} becomes a member. His {'tags' if len(user_tags) > 1 else 'tag'} is {user_tag_text}."
+		text = f"{{USER}} becomes a member. User {'tags' if len(user_tags) > 1 else 'tag'} is {user_tag_text}."
 		text, entities = insert_user_reference(user_tags[0], text)
 		bot.send_message(chat_id=config_utils.DISCUSSION_CHAT_DATA[str(channel.id)], text=text, entities=entities)
+
+
+def send_member_tags(channel_id: int, bot: telebot.TeleBot): # send info about the workspace member tags to discussion chat
+	if str(channel_id) not in config_utils.DISCUSSION_CHAT_DATA or not db_utils.is_main_channel_exists(channel_id):
+		return
+
+	user_ids = get_member_ids_channel(channel_id)
+	text = ""
+	entities = []
+
+	for user_id in user_ids:
+		tags = utils.get_keys_by_value(config_utils.USER_TAGS, user_id)
+		if not tags:
+			continue
+
+		user_tag_text = ", ".join([f"#{tag}" for tag in tags])
+		comment_text = f"{{USER}} is a member. User {'tags' if len(tags) > 1 else 'tag'} is {user_tag_text}."
+		item_text, item_entities = insert_user_reference(tags[0], comment_text)
+		text += "\n" if len(text) > 0 else ""
+
+		if item_entities:
+			if text:
+				item_entities = map(lambda entity: entity.offset + len(text), item_entities)
+			entities.extend(item_entities)
+		text += item_text
+
+	if text:
+		try:
+			bot.send_message(chat_id=config_utils.DISCUSSION_CHAT_DATA[str(channel_id)], text=text, entities=entities)
+		except ApiTelegramException as E:
+			if E.error_code == 429:
+				raise E
+			logging.error(f"Error during send message to discussion {config_utils.DISCUSSION_CHAT_DATA[str(channel_id)]} - {E}")
+			return

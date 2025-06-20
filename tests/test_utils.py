@@ -379,5 +379,100 @@ class AddChanelIdToPostDataTest(TestCase):
 		self.assertEqual(mock_message.entities[0].length, len(f"{message_id}"))
 
 
+class CheckBotPermissionForMessagesTest(TestCase):
+	def test_member_channel(self):
+		mock_member = Mock(status="member", can_post_messages=True, can_edit_messages=True)
+		mock_chat = Mock(type="channel", permissions=Mock(can_send_message=None))
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="member", can_post_messages=None, can_edit_messages=None)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="creator", can_post_messages=True, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_post_messages=True, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_post_messages=False, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_post_messages=True, can_edit_messages=False,)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_post_messages=None, can_edit_messages=None)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+	def test_member_group(self):
+		mock_member = Mock(status="member", can_send_messages=True, can_edit_messages=True)
+		mock_chat = Mock(type="group", permissions=Mock(can_send_message=None))
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="member", can_send_messages=None, can_edit_messages=None)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="creator", can_send_messages=True, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=True, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=False, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=True, can_edit_messages=False)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=None, can_edit_messages=None)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+	def test_member_group_no_send_message(self):
+		mock_member = Mock(status="member", can_send_messages=True, can_edit_messages=True)
+		mock_chat = Mock(type="group", permissions=Mock(can_send_messages=False))
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="member", can_send_messages=None, can_edit_messages=None)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="creator", can_send_messages=True, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=True, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=False, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=True, can_edit_messages=False)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=None, can_edit_messages=None)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+	def test_another_type(self):
+		mock_member = Mock(status="member", can_send_messages=True, can_edit_messages=True)
+		mock_chat = Mock(type="private", permissions=Mock(can_send_messages=False))
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="member", can_send_messages=None, can_edit_messages=None)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="creator", can_send_messages=True, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=True, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=False, can_edit_messages=True)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=True, can_edit_messages=False)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="administrator", can_send_messages=None, can_edit_messages=None)
+		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+
+
 if __name__ == "__main__":
 	main()

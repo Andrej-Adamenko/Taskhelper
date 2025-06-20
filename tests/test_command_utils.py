@@ -682,6 +682,7 @@ class HandleHelpCommandTest(TestCase):
 
 @patch("config_utils.load_discussion_chat_ids")
 @patch("db_utils.delete_main_channel")
+@patch("user_utils.send_member_tags")
 @patch("forwarding_utils.delete_forwarded_message")
 @patch("db_utils.delete_individual_channel")
 @patch("db_utils.get_individual_channel_settings")
@@ -689,8 +690,8 @@ class HandleHelpCommandTest(TestCase):
 @patch("db_utils.is_main_channel_exists")
 class HandleMainChannelChangeTest(TestCase):
     def test_error_main_id(self, mock_is_main_channel_exists, mock_insert_main_channel, mock_get_individual_channel_settings,
-                           mock_delete_individual_channel, mock_delete_forwarded_message, mock_delete_main_channel,
-                           mock_load_discussion_chat_ids, *args):
+                           mock_delete_individual_channel, mock_delete_forwarded_message, mock_send_member_tags,
+                           mock_delete_main_channel, mock_load_discussion_chat_ids, *args):
         mock_bot = Mock(spec=TeleBot)
         channel_id = -10012345678
         arguments = "test_-10087654321"
@@ -703,13 +704,14 @@ class HandleMainChannelChangeTest(TestCase):
         mock_get_individual_channel_settings.assert_not_called()
         mock_delete_individual_channel.assert_not_called()
         mock_delete_forwarded_message.assert_not_called()
+        mock_send_member_tags.assert_not_called()
         mock_delete_main_channel.assert_not_called()
         mock_load_discussion_chat_ids.assert_not_called()
 
     def test_add_main_channel(self, mock_is_main_channel_exists, mock_insert_main_channel,
                               mock_get_individual_channel_settings, mock_delete_individual_channel,
-                              mock_delete_forwarded_message, mock_delete_main_channel, mock_load_discussion_chat_ids,
-                              *args):
+                              mock_delete_forwarded_message, mock_send_member_tags, mock_delete_main_channel,
+                              mock_load_discussion_chat_ids, *args):
         mock_bot = Mock(spec=TeleBot)
         channel_id = -10012345678
         main_channel_id = -10087654321
@@ -725,14 +727,15 @@ class HandleMainChannelChangeTest(TestCase):
         mock_get_individual_channel_settings.assert_called_once_with(main_channel_id)
         mock_delete_forwarded_message.assert_called_once_with(mock_bot, main_channel_id, settings_id)
         mock_delete_individual_channel.assert_called_once_with(main_channel_id)
+        mock_send_member_tags.assert_called_once_with(main_channel_id, mock_bot)
         mock_bot.send_message.assert_called_once_with(chat_id=channel_id, text="Main channel was successfully added.")
         mock_delete_main_channel.assert_not_called()
         mock_load_discussion_chat_ids.assert_called_once_with(mock_bot)
 
     def test_add_main_channel_not_exist_settings_message_id(self, mock_is_main_channel_exists, mock_insert_main_channel,
                               mock_get_individual_channel_settings, mock_delete_individual_channel,
-                              mock_delete_forwarded_message, mock_delete_main_channel, mock_load_discussion_chat_ids,
-                              *args):
+                              mock_delete_forwarded_message, mock_send_member_tags,
+                              mock_delete_main_channel, mock_load_discussion_chat_ids, *args):
         mock_bot = Mock(spec=TeleBot)
         channel_id = -10012345678
         main_channel_id = -10087654321
@@ -747,14 +750,15 @@ class HandleMainChannelChangeTest(TestCase):
         mock_get_individual_channel_settings.assert_called_once_with(main_channel_id)
         mock_delete_forwarded_message.assert_not_called()
         mock_delete_individual_channel.assert_called_once_with(main_channel_id)
+        mock_send_member_tags.assert_called_once_with(main_channel_id, mock_bot)
         mock_bot.send_message.assert_called_once_with(chat_id=channel_id, text="Main channel was successfully added.")
         mock_delete_main_channel.assert_not_called()
         mock_load_discussion_chat_ids.assert_called_once_with(mock_bot)
 
     def test_add_main_channel_not_exist_individual_settings(self, mock_is_main_channel_exists, mock_insert_main_channel,
                               mock_get_individual_channel_settings, mock_delete_individual_channel,
-                              mock_delete_forwarded_message, mock_delete_main_channel, mock_load_discussion_chat_ids,
-                              *args):
+                              mock_delete_forwarded_message, mock_send_member_tags, mock_delete_main_channel,
+                              mock_load_discussion_chat_ids, *args):
         mock_bot = Mock(spec=TeleBot)
         channel_id = -10012345678
         main_channel_id = -10087654321
@@ -769,13 +773,14 @@ class HandleMainChannelChangeTest(TestCase):
         mock_get_individual_channel_settings.assert_called_once_with(main_channel_id)
         mock_delete_forwarded_message.assert_not_called()
         mock_delete_individual_channel.assert_not_called()
+        mock_send_member_tags.assert_called_once_with(main_channel_id, mock_bot)
         mock_bot.send_message.assert_called_once_with(chat_id=channel_id, text="Main channel was successfully added.")
         mock_delete_main_channel.assert_not_called()
         mock_load_discussion_chat_ids.assert_called_once_with(mock_bot)
 
     def test_add_main_channel_exiss(self, mock_is_main_channel_exists, mock_insert_main_channel,
                                     mock_get_individual_channel_settings, mock_delete_individual_channel,
-                                    mock_delete_forwarded_message, mock_delete_main_channel,
+                                    mock_delete_forwarded_message, mock_send_member_tags, mock_delete_main_channel,
                                     mock_load_discussion_chat_ids, *args):
         mock_bot = Mock(spec=TeleBot)
         channel_id = -10012345678
@@ -790,13 +795,14 @@ class HandleMainChannelChangeTest(TestCase):
         mock_get_individual_channel_settings.assert_not_called()
         mock_delete_individual_channel.assert_not_called()
         mock_delete_forwarded_message.assert_not_called()
+        mock_send_member_tags.assert_not_called()
         mock_bot.send_message.assert_called_once_with(chat_id=channel_id, text="This channel already added.")
         mock_delete_main_channel.assert_not_called()
         mock_load_discussion_chat_ids.assert_not_called()
 
     def test_delete_main_channel(self, mock_is_main_channel_exists, mock_insert_main_channel,
                                  mock_get_individual_channel_settings, mock_delete_individual_channel,
-                                 mock_delete_forwarded_message, mock_delete_main_channel,
+                                 mock_delete_forwarded_message, mock_send_member_tags, mock_delete_main_channel,
                                  mock_load_discussion_chat_ids, *args):
         mock_bot = Mock(spec=TeleBot)
         channel_id = -10012345678
@@ -813,11 +819,12 @@ class HandleMainChannelChangeTest(TestCase):
         mock_get_individual_channel_settings.assert_not_called()
         mock_delete_individual_channel.assert_not_called()
         mock_delete_forwarded_message.assert_not_called()
+        mock_send_member_tags.assert_not_called()
         mock_load_discussion_chat_ids.assert_called_once_with(mock_bot)
 
     def test_delete_main_channel_not_exist(self, mock_is_main_channel_exists, mock_insert_main_channel,
                                            mock_get_individual_channel_settings, mock_delete_individual_channel,
-                                           mock_delete_forwarded_message, mock_delete_main_channel,
+                                           mock_delete_forwarded_message, mock_send_member_tags, mock_delete_main_channel,
                                            mock_load_discussion_chat_ids, *args):
         mock_bot = Mock(spec=TeleBot)
         channel_id = -10012345678
@@ -834,6 +841,7 @@ class HandleMainChannelChangeTest(TestCase):
         mock_get_individual_channel_settings.assert_not_called()
         mock_delete_individual_channel.assert_not_called()
         mock_delete_forwarded_message.assert_not_called()
+        mock_send_member_tags.assert_not_called()
         mock_load_discussion_chat_ids.assert_not_called()
 
 
