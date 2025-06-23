@@ -854,7 +854,8 @@ def get_invalid_ticket_ids(bot: telebot.TeleBot):
 			logging.info(f"Can't get last message in channel {channel_id}, scanning of invalid tickets is skipped")
 			continue
 
-		copied_messages = db_utils.get_copied_message_ids_from_copied_channel(channel_id)
+		logging.info(f"Checking channel {channel_id}")
+		copied_messages = db_utils.get_copied_messages_existing_main_from_copied_channel(channel_id)
 		main_messages = db_utils.get_main_message_ids(channel_id)
 		message_ids = [i for i in range(1, last_msg_id + 1) if i not in copied_messages and i not in main_messages and
 					   i != settings.get(channel_manager.SETTING_TYPES.SETTINGS_MESSAGE_ID)]

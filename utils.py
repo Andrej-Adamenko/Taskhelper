@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Union
 import time
 import datetime
 
@@ -92,13 +92,13 @@ def offset_entities(entities, offset, expect_offsets: list=None):
 	return entities
 
 
-def get_forwarded_from_id(message_data):
+def get_forwarded_from_id(message_data: Union[pyrogram.types.Message, telebot.types.Message], default: int = None):
 	if message_data.forward_from_chat:
 		return message_data.forward_from_chat.id
 	if message_data.forward_from:
 		return message_data.forward_from.id
 
-	return None
+	return default
 
 
 def replace_whitespaces(text):

@@ -379,5 +379,33 @@ class AddChanelIdToPostDataTest(TestCase):
 		self.assertEqual(mock_message.entities[0].length, len(f"{message_id}"))
 
 
+class GetForwardedFromIdTest(TestCase):
+	def test_forward_from_chat(self, *args):
+		channel_id = -10012345678
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.forward_from_chat = Mock(id=channel_id)
+		self.assertEqual(utils.get_forwarded_from_id(mock_message), channel_id)
+
+	def test_forward_from(self, *args):
+		user_id = 15645
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.forward_from_chat = None
+		mock_message.forward_from = Mock(id=user_id)
+		self.assertEqual(utils.get_forwarded_from_id(mock_message), user_id)
+
+	def test_no_forward(self, *args):
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.forward_from_chat = None
+		mock_message.forward_from = None
+		self.assertEqual(utils.get_forwarded_from_id(mock_message), None)
+
+	def test_default(self, *args):
+		default = 56486
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.forward_from_chat = None
+		mock_message.forward_from = None
+		self.assertEqual(utils.get_forwarded_from_id(mock_message, default), default)
+
+
 if __name__ == "__main__":
 	main()

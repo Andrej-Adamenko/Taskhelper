@@ -46,7 +46,7 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_messag
 	if forwarded_message is None:
 		return
 
-	if forwarded_message.chat.id != main_channel_id:
+	if utils.get_forwarded_from_id(forwarded_message, forwarded_message.chat.id) != main_channel_id:
 		return
 
 	if not utils.check_content_type(bot, forwarded_message):
@@ -122,8 +122,7 @@ def _store_discussion_message(bot: telebot.TeleBot, main_channel_id: int, messag
 	if message is None:
 		return
 
-	forwarded_from_id = utils.get_forwarded_from_id(message)
-	if forwarded_from_id != main_channel_id:
+	if utils.get_forwarded_from_id(message) != main_channel_id:
 		return
 
 	main_channel_message_id = message.forward_from_message_id
