@@ -301,6 +301,7 @@ class AddNextActionCommentTest(TestCase):
 
 	@patch("hashtag_data.HashtagData.is_last_line_contains_only_hashtags", return_value=True)
 	@patch("db_utils.get_next_action_text", return_value="next action")
+	@patch("hashtag_data.HashtagData.check_user_tag", return_value=True)
 	@patch("db_utils.insert_or_update_current_next_action")
 	@patch("utils.get_post_content")
 	@patch("utils.add_comment_to_ticket")
@@ -323,11 +324,15 @@ class AddNextActionCommentTest(TestCase):
 @patch("comment_utils.HASHTAGS", {"OPENED": "o", "CLOSED": "x", "SCHEDULED": "s"})
 @patch("hashtag_data.SCHEDULED_TAG", "s")
 @patch("config_utils.USER_TAGS", {"aa": 1, "bb": 2, "cc": 3})
+@patch("user_utils.get_member_ids_channel", return_value=[1, 2])
+@patch("forwarding_utils.update_message_and_forward_to_subchannels")
+@patch("hashtag_data.HashtagData.set_status_tag")
+@patch("hashtag_data.HashtagData.add_user")
+@patch("hashtag_data.HashtagData.set_scheduled_tag")
+@patch("utils.get_post_content")
 class ApplyHashtagsTest(TestCase):
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("hashtag_data.HashtagData.set_status_tag")
-	@patch("utils.get_post_content")
-	def test_apply_close_tag(self, mock_get_post_content, mock_set_status_tag, mock_update_message_and_forward_to_subchannels, *args):
+	def test_apply_close_tag(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user, mock_set_status_tag,
+							 mock_update_message_and_forward_to_subchannels, *args):
 		text = "close the ticket #x"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -339,12 +344,12 @@ class ApplyHashtagsTest(TestCase):
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
 		mock_set_status_tag.assert_called_once_with(False)
+		mock_add_user.assert_not_called()
+		mock_set_scheduled_tag.assert_not_called()
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("hashtag_data.HashtagData.set_status_tag")
-	@patch("utils.get_post_content")
-	def test_apply_open_tag(self, mock_get_post_content, mock_set_status_tag, mock_update_message_and_forward_to_subchannels, *args):
+	def test_apply_open_tag(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user, mock_set_status_tag,
+							mock_update_message_and_forward_to_subchannels, *args):
 		text = "close the ticket #o"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -356,12 +361,12 @@ class ApplyHashtagsTest(TestCase):
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
 		mock_set_status_tag.assert_called_once_with(True)
+		mock_add_user.assert_not_called()
+		mock_set_scheduled_tag.assert_not_called()
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("hashtag_data.HashtagData.add_user")
-	@patch("utils.get_post_content")
-	def test_add_user_tags_to_followers(self, mock_get_post_content, mock_add_user, mock_update_message_and_forward_to_subchannels, *args):
+	def test_add_user_tags_to_followers(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user,
+										mock_set_status_tag, mock_update_message_and_forward_to_subchannels, *args):
 		text = "add to followers #aa #bb"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -372,14 +377,33 @@ class ApplyHashtagsTest(TestCase):
 		main_channel_id = 987654321
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
+		mock_set_status_tag.assert_not_called()
 		mock_add_user.assert_has_calls([call("aa"), call("bb")])
+		mock_set_scheduled_tag.assert_not_called()
 		self.assertEqual(mock_add_user.call_count, 2)
 
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("utils.get_post_content")
-	def test_no_service_tags(self, mock_get_post_content, mock_update_message_and_forward_to_subchannels, *args):
+	def test_add_user_tags_with_no_workspace_member(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user,
+										mock_set_status_tag, mock_update_message_and_forward_to_subchannels, *args):
+		text = "add to followers #bb #cc"
+		entities = test_helper.create_hashtag_entity_list(text)
+		mock_get_post_content.return_value = (text, entities)
+
+		mock_bot = Mock(spec=TeleBot)
+		msg_data = test_helper.create_mock_message(text, [])
+		main_message_id = 123
+		main_channel_id = 987654321
+
+		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
+		mock_set_status_tag.assert_not_called()
+		mock_add_user.assert_called_once_with("bb")
+		mock_set_scheduled_tag.assert_not_called()
+
+		mock_update_message_and_forward_to_subchannels.assert_called_once()
+
+	def test_no_service_tags(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user, mock_set_status_tag,
+							 mock_update_message_and_forward_to_subchannels, *args):
 		text = "add to followers #test_tag"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -390,12 +414,13 @@ class ApplyHashtagsTest(TestCase):
 		main_channel_id = 987654321
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
-
+		mock_set_status_tag.assert_not_called()
+		mock_add_user.assert_not_called()
+		mock_set_scheduled_tag.assert_not_called()
 		mock_update_message_and_forward_to_subchannels.assert_not_called()
 
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("utils.get_post_content")
-	def test_no_service_tags_with_post_data(self, mock_get_post_content, mock_update_message_and_forward_to_subchannels, *args):
+	def test_no_service_tags_with_post_data(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user, mock_set_status_tag,
+											mock_update_message_and_forward_to_subchannels, *args):
 		text = "add to followers #test_tag"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -406,13 +431,13 @@ class ApplyHashtagsTest(TestCase):
 		main_channel_id = 987654321
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id, msg_data)
-
+		mock_set_status_tag.assert_not_called()
+		mock_add_user.assert_not_called()
+		mock_set_scheduled_tag.assert_not_called()
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("hashtag_data.HashtagData.set_scheduled_tag")
-	@patch("utils.get_post_content")
-	def test_reschedule(self, mock_get_post_content, mock_set_scheduled_tag, mock_update_message_and_forward_to_subchannels, *args):
+	def test_reschedule(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user, mock_set_status_tag,
+						mock_update_message_and_forward_to_subchannels, *args):
 		text = "reschedule to #s 2024-01-02 12:00"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -426,10 +451,8 @@ class ApplyHashtagsTest(TestCase):
 		mock_set_scheduled_tag.assert_called_once_with("2024-01-02 12:00")
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("hashtag_data.HashtagData.set_scheduled_tag")
-	@patch("utils.get_post_content")
-	def test_reschedule_without_time(self, mock_get_post_content, mock_set_scheduled_tag, mock_update_message_and_forward_to_subchannels, *args):
+	def test_reschedule_without_time(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user, mock_set_status_tag,
+									 mock_update_message_and_forward_to_subchannels, *args):
 		text = "reschedule to #s 2024-01-02 asdf qwe"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -440,13 +463,13 @@ class ApplyHashtagsTest(TestCase):
 		main_channel_id = 987654321
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
+		mock_set_status_tag.assert_not_called()
+		mock_add_user.assert_not_called()
 		mock_set_scheduled_tag.assert_called_once_with("2024-01-02 00:00")
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("hashtag_data.HashtagData.set_scheduled_tag")
-	@patch("utils.get_post_content")
-	def test_reschedule_incorrect_minutes(self, mock_get_post_content, mock_set_scheduled_tag, mock_update_message_and_forward_to_subchannels, *args):
+	def test_reschedule_incorrect_minutes(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user, mock_set_status_tag,
+										  mock_update_message_and_forward_to_subchannels, *args):
 		text = "reschedule to #s 2024-01-02 12:235 asdf qwe"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -457,13 +480,13 @@ class ApplyHashtagsTest(TestCase):
 		main_channel_id = 987654321
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
+		mock_set_status_tag.assert_not_called()
+		mock_add_user.assert_not_called()
 		mock_set_scheduled_tag.assert_called_once_with("2024-01-02 12:00")
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
-	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
-	@patch("hashtag_data.HashtagData.set_scheduled_tag")
-	@patch("utils.get_post_content")
-	def test_scheduled_date_without_datetime(self, mock_get_post_content, mock_set_scheduled_tag, mock_update_message_and_forward_to_subchannels, *args):
+	def test_scheduled_date_without_datetime(self, mock_get_post_content, mock_set_scheduled_tag, mock_add_user, mock_set_status_tag,
+											 mock_update_message_and_forward_to_subchannels, *args):
 		text = "reschedule to #s asdf qwe"
 		entities = test_helper.create_hashtag_entity_list(text)
 		mock_get_post_content.return_value = (text, entities)
@@ -474,10 +497,14 @@ class ApplyHashtagsTest(TestCase):
 		main_channel_id = 987654321
 
 		comment_dispatcher.apply_hashtags(mock_bot, msg_data, main_message_id, main_channel_id)
+		mock_set_status_tag.assert_not_called()
+		mock_add_user.assert_not_called()
 		mock_set_scheduled_tag.assert_not_called()
 		mock_update_message_and_forward_to_subchannels.assert_called_once()
 
 
+@patch("config_utils.USER_TAGS", {})
+@patch("user_utils.get_member_ids_channel", return_value=[2163156, 85168453])
 @patch("db_utils.get_user_highest_priority")
 @patch("db_utils.get_ticket_data")
 @patch("db_utils.insert_or_update_last_user_interaction")
@@ -507,6 +534,30 @@ class UpdateUserLastInteraction(TestCase):
 		mock_get_ticket_data.assert_called_once_with(main_message_id, main_channel_id)
 		mock_insert_or_update_last_user_interaction.assert_called_once_with(user_tag, int(time))
 		mock_info.assert_called_once_with(f"Updated {user_id, user_tag} user last interaction.")
+
+	def test_user_no_channel_member(self, mock_info, mock_time, mock_insert_or_update_last_user_interaction,
+									mock_get_ticket_data, mock_get_user_highest_priority, *args):
+		main_message_id = -10012345678
+		main_channel_id = 452
+		user_id = 85168474
+		username = "test"
+		user_tag = "CC"
+		priority = 2
+		time = "1235498126"
+		config_utils.USER_TAGS = {"AA": 2163156, "CC": user_id, "DD": 618468}
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message.from_user = Mock(spec=User)
+		mock_message.from_user.id = user_id
+		mock_message.from_user.username = username
+		mock_get_user_highest_priority.return_value = priority
+		mock_get_ticket_data.return_value = "", priority, ""
+		mock_time.return_value = time
+
+		comment_dispatcher.update_user_last_interaction(main_message_id, main_channel_id, mock_message)
+		mock_get_user_highest_priority.assert_not_called()
+		mock_get_ticket_data.assert_not_called()
+		mock_insert_or_update_last_user_interaction.assert_not_called()
+		mock_info.assert_not_called()
 
 	def test_few_tags(self, mock_info, mock_time, mock_insert_or_update_last_user_interaction, mock_get_ticket_data,
 					mock_get_user_highest_priority, *args):

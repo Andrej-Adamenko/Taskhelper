@@ -468,14 +468,15 @@ class UpdateIntervalMessageTest(TestCase):
 @patch("forwarding_utils.forward_and_add_inline_keyboard")
 @patch("post_link_utils.update_post_link")
 @patch("utils.check_content_type", return_value=True)
+@patch("db_utils.delete_main_channel_message")
 @patch("forwarding_utils.delete_main_message")
 @patch("utils.get_main_message_content_by_id")
 @patch("logging.info")
 @patch("db_utils.is_main_message_exists")
 class UpdateOlderMessageTest(TestCase):
 	def test_default(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-					 mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-					 mock_forward_and_add_inline_keyboard, *args):
+					 mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+					 mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -489,6 +490,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_delete_main_message.assert_not_called()
+		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_called_once_with(mock_bot, mock_message)
 		mock_update_post_link.assert_called_once_with(mock_bot, mock_message)
 		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_update_post_link.return_value)
@@ -496,8 +498,8 @@ class UpdateOlderMessageTest(TestCase):
 		self.assertEqual(mock_message.chat.id, main_channel_id)
 
 	def test_with_message(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-						  mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-						  mock_forward_and_add_inline_keyboard, *args):
+						  mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+						  mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -512,6 +514,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_not_called()
 		mock_delete_main_message.assert_not_called()
+		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_called_once_with(mock_bot, mock_message)
 		mock_update_post_link.assert_called_once_with(mock_bot, mock_message)
 		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_update_post_link.return_value)
@@ -519,8 +522,8 @@ class UpdateOlderMessageTest(TestCase):
 		self.assertEqual(mock_message.chat.id, main_channel_id)
 
 	def test_with_empty_message(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-								mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-								mock_forward_and_add_inline_keyboard, *args):
+								mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+								mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -535,14 +538,15 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_not_called()
 		mock_delete_main_message.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
+		mock_delete_main_channel_message.assert_called_once_with(main_channel_id, main_message_id)
 		mock_check_content_type.assert_not_called()
 		mock_update_post_link.assert_not_called()
 		mock_forward_and_add_inline_keyboard.assert_not_called()
 		self.assertEqual(result, None)
 
 	def test_with_service_message(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-								  mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-								  mock_forward_and_add_inline_keyboard, *args):
+								  mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+								  mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -557,14 +561,15 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_not_called()
 		mock_delete_main_message.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
+		mock_delete_main_channel_message.assert_called_once_with(main_channel_id, main_message_id)
 		mock_check_content_type.assert_not_called()
 		mock_update_post_link.assert_not_called()
 		mock_forward_and_add_inline_keyboard.assert_not_called()
 		self.assertEqual(result, None)
 
 	def test_not_updated_post_link(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-								   mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-								   mock_forward_and_add_inline_keyboard, *args):
+								   mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+								   mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -579,6 +584,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_delete_main_message.assert_not_called()
+		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_called_once_with(mock_bot, mock_message)
 		mock_update_post_link.assert_called_once_with(mock_bot, mock_message)
 		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_message)
@@ -586,8 +592,8 @@ class UpdateOlderMessageTest(TestCase):
 		self.assertEqual(mock_message.chat.id, main_channel_id)
 
 	def test_no_check_content_type(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-								   mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-								   mock_forward_and_add_inline_keyboard, *args):
+								   mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+								   mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -600,6 +606,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_delete_main_message.assert_not_called()
+		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_called_once_with(mock_bot, mock_message)
 		mock_update_post_link.assert_not_called()
 		mock_forward_and_add_inline_keyboard.assert_not_called()
@@ -607,8 +614,8 @@ class UpdateOlderMessageTest(TestCase):
 		self.assertEqual(mock_message.chat.id, main_channel_id)
 
 	def test_no_forwarded_from_main_channel(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-											mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-											mock_forward_and_add_inline_keyboard, *args):
+											mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+											mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -620,6 +627,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_delete_main_message.assert_not_called()
+		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_not_called()
 		mock_update_post_link.assert_not_called()
 		mock_forward_and_add_inline_keyboard.assert_not_called()
@@ -627,8 +635,8 @@ class UpdateOlderMessageTest(TestCase):
 		self.assertNotEqual(mock_message.chat.id, main_channel_id)
 
 	def test_no_forwarded_message(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-								  mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-								  mock_forward_and_add_inline_keyboard, *args):
+								  mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+								  mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -639,14 +647,15 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_delete_main_message.assert_not_called()
+		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_not_called()
 		mock_update_post_link.assert_not_called()
 		mock_forward_and_add_inline_keyboard.assert_not_called()
 		self.assertEqual(result, None)
 
 	def test_error_forwarded_message(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-									 mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-									 mock_forward_and_add_inline_keyboard, *args):
+									 mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+									 mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -658,14 +667,15 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_not_called()
 		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
 		mock_delete_main_message.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
+		mock_delete_main_channel_message.assert_called_once_with(main_channel_id, main_message_id)
 		mock_check_content_type.assert_not_called()
 		mock_update_post_link.assert_not_called()
 		mock_forward_and_add_inline_keyboard.assert_not_called()
 		self.assertEqual(result, None)
 
 	def test_no_main_message(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
-							 mock_delete_main_message, mock_check_content_type, mock_update_post_link,
-							 mock_forward_and_add_inline_keyboard, *args):
+							 mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+							 mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
 		main_message_id = 123
@@ -676,6 +686,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_info.assert_called_once_with(f"Ticket update for {main_channel_id, main_message_id} was skipped because it's not in db")
 		mock_get_main_message_content_by_id.assert_not_called()
 		mock_delete_main_message.assert_not_called()
+		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_not_called()
 		mock_update_post_link.assert_not_called()
 		mock_forward_and_add_inline_keyboard.assert_not_called()

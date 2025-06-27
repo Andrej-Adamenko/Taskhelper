@@ -291,6 +291,7 @@ class ForwardForSubchannelTest(TestCase):
 		mock_edit_message_keyboard.assert_not_called()
 		mock_update_copied_message.assert_not_called()
 
+	@patch("user_utils.get_member_ids_channel", return_value=[5486154])
 	@patch("db_utils.get_main_message_sender")
 	def test_filter_creator_channels(self, mock_get_main_message_sender, *args):
 		main_channel_id = -1006532516165
@@ -308,10 +309,29 @@ class ForwardForSubchannelTest(TestCase):
 		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
 		self.assertEqual(result_channels, [-10012345678, -10087654321])
 
+	@patch("user_utils.get_member_ids_channel", return_value=[5486126])
+	@patch("db_utils.get_main_message_sender")
+	def test_filter_creator_channels_no_member(self, mock_get_main_message_sender, *args):
+		main_channel_id = -1006532516165
+		main_message_id = 453
+		user_id = 5486154
+		config_utils.USER_TAGS = {"AA": 358435, "CC": user_id, "DD": 5115684, "FF": user_id}
+		mock_get_main_message_sender.return_value = user_id
+		channel_data = [
+			(-10012345678, {channel_manager.SETTING_TYPES.REPORTED: ["CC", "DD"]}),
+			(-10087654321, {channel_manager.SETTING_TYPES.REPORTED: ["DD", "FF"]}),
+			(-10082165431, {channel_manager.SETTING_TYPES.REPORTED: ["dd", "ff"]}),
+		]
+
+		result_channels = forwarding_utils.filter_creator_channels(channel_data, main_channel_id, main_message_id)
+		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
+		self.assertEqual(result_channels, [])
+
 
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
 @patch("db_utils.get_scheduled_message_send_time", return_value=False)
 @patch("config_utils.USER_TAGS", {"AA": 123456, "BB": 516224})
+@patch("user_utils.get_member_ids_channel", return_value=[123456, 516224])
 @patch("db_utils.get_main_message_sender", return_value=123456)
 @patch("db_utils.get_custom_hashtag", return_value=None)
 @patch("db_utils.get_individual_channels_by_priority")
@@ -367,6 +387,7 @@ class FilterSubchannelByMembersTest(TestCase):
 
 
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("user_utils.get_member_ids_channel", return_value=[875135])
 @patch("db_utils.get_main_message_sender")
 @patch("hashtag_data.HashtagData.add_user")
 @patch("hashtag_data.HashtagData.get_updated_post_data")
@@ -391,6 +412,28 @@ class ForwardAndAddInlineKeyboardTest(TestCase):
 		forwarding_utils.forward_and_add_inline_keyboard(mock_bot, mock_message, True)
 		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
 		mock_add_user.assert_has_calls([call(user_tags[0]), call(user_tags[1])])
+		mock_get_updated_post_data.assert_called_once_with()
+		mock_update_main_message_content.assert_called_once_with(mock_bot, ANY, updated, mock_message)
+		mock_add_next_action_comment.assert_called_once_with(mock_bot, updated)
+		mock_add_control_buttons.assert_called_once_with(mock_bot, updated, ANY)
+		mock_forward_to_subchannel.assert_called_once_with(mock_bot, updated, ANY)
+
+	def test_user_no_workspace_member(self, mock_forward_to_subchannel, mock_add_control_buttons, mock_add_next_action_comment,
+					 mock_update_main_message_content, mock_get_updated_post_data, mock_add_user,
+					 mock_get_main_message_sender, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = -10087654321
+		main_message_id = 452
+		user_id = 875127
+		user_tags = ["CC", "DD"]
+		config_utils.USER_TAGS = {"AA": 2163156, "CC": user_id, "DD": user_id}
+		mock_message = test_helper.create_mock_message("", [], main_channel_id, main_message_id)
+		updated = mock_get_updated_post_data.return_value
+		mock_get_main_message_sender.return_value = user_id
+
+		forwarding_utils.forward_and_add_inline_keyboard(mock_bot, mock_message, True)
+		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
+		mock_add_user.assert_not_called()
 		mock_get_updated_post_data.assert_called_once_with()
 		mock_update_main_message_content.assert_called_once_with(mock_bot, ANY, updated, mock_message)
 		mock_add_next_action_comment.assert_called_once_with(mock_bot, updated)
@@ -860,6 +903,7 @@ class TestHandleCallback(TestCase):
 
 @patch("hashtag_data.HashtagData.__init__", return_value=None)
 @patch("config_utils.USER_TAGS", {"AA": 1, "BB": 2, "FF": 3, "NN": 4, "DD": 5})
+@patch("user_utils.get_member_ids_channel", return_value=[1, 2, 3, 5])
 @patch("hashtag_data.HashtagData.get_assigned_user", return_value="BB")
 @patch("hashtag_data.HashtagData.get_followed_users", return_value=["AA", "DD"])
 @patch("utils.create_callback_str")
@@ -875,13 +919,11 @@ class GenerateCcButtonsTest(TestCase):
 		mock_create_callback_str.assert_has_calls([
 			call(forwarding_utils.CALLBACK_PREFIX, forwarding_utils.CB_TYPES.TOGGLE_CC, "AA"),
 			call(forwarding_utils.CALLBACK_PREFIX, forwarding_utils.CB_TYPES.TOGGLE_CC, "FF"),
-			call(forwarding_utils.CALLBACK_PREFIX, forwarding_utils.CB_TYPES.TOGGLE_CC, "NN"),
 			call(forwarding_utils.CALLBACK_PREFIX, forwarding_utils.CB_TYPES.TOGGLE_CC, "DD"),
 		])
 		self.assertEqual(result.keyboard[0][0].text, "#AA" + config_utils.BUTTON_TEXTS["CHECK"])
 		self.assertEqual(result.keyboard[0][1].text, "#FF")
-		self.assertEqual(result.keyboard[0][2].text, "#NN")
-		self.assertEqual(result.keyboard[1][0].text, "#DD" + config_utils.BUTTON_TEXTS["CHECK"])
+		self.assertEqual(result.keyboard[0][2].text, "#DD" + config_utils.BUTTON_TEXTS["CHECK"])
 
 	def test_no_tags(self, mock_create_callback_str, mock_get_followed_users,
 					 mock_get_assigned_user, *args):
@@ -896,22 +938,50 @@ class GenerateCcButtonsTest(TestCase):
 		self.assertEqual(result, None)
 
 
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("utils.create_callback_str", return_value="")
+@patch("hashtag_data.HashtagData.get_priority_number", return_value=2)
+@patch("hashtag_data.HashtagData.get_assigned_user", return_value="BB")
+@patch("forwarding_utils.get_subchannels_forwarding_data", return_value=["AA 1", "AA 2", "AA 3",
+																		 	   "BB 1", "BB 2", "BB 3"])
+class GenerateSubchannelButtonsTest(TestCase):
+	def test_default(self, mock_get_subchannels_forwarding_data, mock_get_assigned_user, mock_get_priority_number,
+					 mock_create_callback_str, *args):
+		channel_id = -10012345678
+		message_id = 325
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		callback_calls = []
+		for i in mock_get_subchannels_forwarding_data.return_value:
+			callback_calls.append(call(forwarding_utils.CALLBACK_PREFIX, forwarding_utils.CB_TYPES.CHANGE_SUBCHANNEL, i))
+			if (i == "BB 2"):
+				callback_calls.append(call(forwarding_utils.CALLBACK_PREFIX, forwarding_utils.CB_TYPES.SAVE))
+
+		forwarding_utils.generate_subchannel_buttons(mock_message)
+		mock_get_subchannels_forwarding_data.assert_called_once_with(channel_id)
+		mock_get_assigned_user.assert_called_once_with()
+		mock_get_priority_number.assert_called_once_with()
+		mock_create_callback_str.assert_has_calls(callback_calls)
+		self.assertEqual(mock_create_callback_str.call_count, len(callback_calls))
+
+
+@patch("user_utils.get_member_ids_channel", return_value=[1, 2, 3, 5])
 @patch("config_utils.USER_TAGS", {"AA": 1, "BB": 2, "FF": 3, "NN": 4, "DD": 5})
 class GetSubchannelsForwardingData(TestCase):
 	def test_default(self, *args):
-		result = forwarding_utils.get_subchannels_forwarding_data()
+		channel_id = -10012345678
+		result = forwarding_utils.get_subchannels_forwarding_data(channel_id)
 		self.assertEqual(result, [
 			"AA 1", "AA 2", "AA 3",
 			"BB 1", "BB 2", "BB 3",
 			"FF 1", "FF 2", "FF 3",
-			"NN 1", "NN 2", "NN 3",
 			"DD 1", "DD 2", "DD 3"
 		])
 
 	def test_no_tags(self, *args):
+		channel_id = -10012345678
 		config_utils.USER_TAGS = {}
 
-		result = forwarding_utils.get_subchannels_forwarding_data()
+		result = forwarding_utils.get_subchannels_forwarding_data(channel_id)
 		self.assertEqual(result, [])
 
 

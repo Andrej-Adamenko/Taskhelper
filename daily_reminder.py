@@ -10,6 +10,7 @@ import db_utils
 import config_utils
 import forwarding_utils
 import interval_updating_utils
+import user_utils
 from hashtag_data import HashtagData
 
 _DAILY_CHECK_INTERVAL = 60 * 60 * 24
@@ -93,7 +94,7 @@ def get_message_for_reminding(user_id: int, user_tag: str):
 
 
 def send_daily_reminders(bot: telebot.TeleBot):
-	for (user_tag, user_id) in config_utils.USER_TAGS.items():
+	for (user_tag, user_id) in user_utils.get_user_tags().items():
 		if not db_utils.is_user_reminder_data_exists(user_tag):
 			db_utils.insert_or_update_last_user_interaction(user_tag, None)
 
