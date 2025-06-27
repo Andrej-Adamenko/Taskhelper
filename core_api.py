@@ -1,9 +1,8 @@
 import asyncio
 import functools
 import logging
-from math import ceil, floor
-from idlelib.rpc import RPCClient
-from typing import Union, Any, Coroutine
+from math import floor
+from typing import Union
 
 import pyrogram
 from pyrogram import Client, utils

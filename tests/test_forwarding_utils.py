@@ -600,7 +600,7 @@ class TestShowKeyboard(TestCase):
 		mock_generate_cc_buttons.assert_not_called()
 		mock_generate_keyboard.assert_called_once_with(mock_call)
 		self.assertEqual(mock_call.message.reply_markup, keyboard)
-		self.assertEqual(mock_call.data, f"{state},{settings_keyboard["data"]}")
+		self.assertEqual(mock_call.data, f"{state},{settings_keyboard['data']}")
 
 
 	@patch("utils.get_message_content_by_id")

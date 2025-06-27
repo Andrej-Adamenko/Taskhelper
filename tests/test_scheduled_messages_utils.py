@@ -268,7 +268,7 @@ class TestHandleCallback(TestCase):
 		mock_call.from_user = Mock(spec=User)
 		mock_call.from_user.id = user_id
 		callback_data = ['02.10.2025', '12', '00']
-		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._SCHEDULE_MESSAGE_CALLBACK}," + ','.join(callback_data)
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{self.scheduled_message_dispatcher._SCHEDULE_MESSAGE_CALLBACK},{','.join(callback_data)}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_get_newest_copied_message.return_value = 123
 
@@ -382,7 +382,7 @@ class TestGenerateKeyboard(TestCase):
 		mock_call.from_user.id = user_id
 		data = ['10.2025']
 		callback_data = self.scheduled_message_dispatcher._NEXT_MONTH_CALLBACK
-		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{callback_data}," + ','.join(data)
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{callback_data},{','.join(data)}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_change_month_event.return_value = [11, 2025]
 
@@ -408,7 +408,7 @@ class TestGenerateKeyboard(TestCase):
 		mock_call.from_user.id = user_id
 		data = ['10.2025']
 		callback_data = self.scheduled_message_dispatcher._PREVIOUS_MONTH_CALLBACK
-		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{callback_data}," + ','.join(data)
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{callback_data},{','.join(data)}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_change_month_event.return_value = [9, 2025]
 
@@ -431,14 +431,14 @@ class TestGenerateKeyboard(TestCase):
 		mock_call.from_user.id = user_id
 		data = ['02.10.2025']
 		callback_data = self.scheduled_message_dispatcher._SELECT_DAY_CALLBACK
-		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{callback_data}," + ','.join(data)
+		mock_call.data = f"{self.scheduled_message_dispatcher.CALLBACK_PREFIX},{callback_data},{','.join(data)}"
 		mock_call.message = test_helper.create_mock_message("", [], channel_id, message_id)
 		forwarding_utils.CHANNEL_TICKET_KEYBOARD_TYPE = {}
 
 		result = self.scheduled_message_dispatcher.generate_keyboard(mock_call)
 		mock_select_day_event.assert_called_once_with(data)
 		mock_set_channel_ticket_keyboard_state.assert_not_called()
-		self.assertEqual(result, [mock_select_day_event.return_value, f"{callback_data},{",".join(data)}"])
+		self.assertEqual(result, [mock_select_day_event.return_value, f"{callback_data},{','.join(data)}"])
 
 	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.select_hour_event")
 	def test_select_hour(self, mock_select_hour_event, mock_set_channel_ticket_keyboard_state,
@@ -460,7 +460,7 @@ class TestGenerateKeyboard(TestCase):
 		mock_get_newest_copied_message.assert_not_called()
 		mock_clear_channel_ticket_settings_state.assert_not_called()
 		mock_set_channel_ticket_keyboard_state.assert_not_called()
-		self.assertEqual(result, [mock_select_hour_event.return_value, f"{callback_data},{",".join(data)}"])
+		self.assertEqual(result, [mock_select_hour_event.return_value, f"{callback_data},{','.join(data)}"])
 
 
 @patch("utils.edit_message_keyboard")
