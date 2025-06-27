@@ -26,8 +26,10 @@ POSSIBLE_PRIORITIES = ["1", "2", "3"]
 
 
 class HashtagData:
-	def __init__(self, post_data: telebot.types.Message, main_channel_id: int, insert_default_tags: bool = False):
+	def __init__(self, post_data: telebot.types.Message, main_channel_id: int, insert_default_tags: bool = False,
+				 invalid_user_tag_to_default: bool = False):
 		self.ignore_comments = False
+		self.comment: tuple = None
 		self.hashtag_indexes = []
 		self.post_data = copy.deepcopy(post_data)
 		self.main_channel_id = main_channel_id
@@ -36,7 +38,7 @@ class HashtagData:
 		self.is_hashtag_line_present = self.check_last_line()
 		self.remove_strikethrough_entities()
 
-		hashtags = self.extract_hashtags(self.post_data, main_channel_id)
+		hashtags = self.extract_hashtags(self.post_data, main_channel_id, invalid_user_tag_to_default)
 		scheduled_tag, status_tag, user_tags, priority_tag = hashtags
 		self.scheduled_tag = scheduled_tag
 		self.status_tag = status_tag
@@ -159,7 +161,7 @@ class HashtagData:
 		return self.scheduled_tag[space_index + 1:]
 
 	def insert_default_user(self, default_user):
-		if not self.get_assigned_user():
+		if not self.get_assigned_user() and self.check_user_tag(default_user, self.main_channel_id):
 			self.assign_to_user(default_user)
 
 	def insert_default_priority(self):
@@ -184,18 +186,18 @@ class HashtagData:
 			self.insert_default_user(user)
 			self.insert_default_priority()
 
-	def is_service_tag(self, tag: str):
+	def is_service_tag(self, tag: str, check_all_user_tags: bool = False):
 		if self.check_scheduled_tag(tag, SCHEDULED_TAG):
 			return True
 		if self.check_priority_tag(tag, PRIORITY_TAG):
 			return True
 		if tag == OPENED_TAG or tag == CLOSED_TAG:
 			return True
-		if HashtagData.check_user_tag(tag, self.main_channel_id):
+		if HashtagData.check_user_tag(tag, self.main_channel_id if not check_all_user_tags else None):
 			return True
 		return False
 
-	def get_entities_to_ignore(self, text: str, entities: List[telebot.types.MessageEntity]):
+	def get_entities_to_ignore(self, text: str, entities: List[telebot.types.MessageEntity], all_user_tags: bool = False):
 		front_index = 0
 		current_offset = 0
 		while front_index < (len(entities)):
@@ -208,7 +210,7 @@ class HashtagData:
 					continue
 
 			tag = self.get_tag_from_entity(next_entity, text)
-			if not self.is_service_tag(tag):
+			if not self.is_service_tag(tag, all_user_tags):
 				break
 
 			text_in_between = text[current_offset:next_entity.offset]
@@ -243,7 +245,8 @@ class HashtagData:
 			back_index = front_index
 		return range(front_index, back_index + 1)
 
-	def find_hashtag_indexes(self, text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int):
+	def find_hashtag_indexes(self, text: str, entities: List[telebot.types.MessageEntity], main_channel_id: int,
+							 all_user_tags: bool = False):
 		scheduled_tag_index = None
 		status_tag_index = None
 		user_tag_indexes = []
@@ -255,7 +258,7 @@ class HashtagData:
 		if entities is None:
 			return None, None, [], None
 
-		entities_to_ignore = self.get_entities_to_ignore(text, entities)
+		entities_to_ignore = self.get_entities_to_ignore(text, entities, all_user_tags)
 
 		for entity_index in reversed(range(len(entities))):
 			if entity_index in entities_to_ignore:
@@ -279,7 +282,7 @@ class HashtagData:
 					status_tag_index = entity_index
 					continue
 
-				if self.check_user_tag(tag, main_channel_id):
+				if self.check_user_tag(tag, main_channel_id if not all_user_tags else None):
 					user_tag_indexes.insert(0, entity_index)
 					continue
 
@@ -292,10 +295,10 @@ class HashtagData:
 
 		return scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index
 
-	def extract_hashtags(self, post_data: telebot.types.Message, main_channel_id: int):
+	def extract_hashtags(self, post_data: telebot.types.Message, main_channel_id: int, invalid_assigned_user_to_default: bool):
 		text, entities = utils.get_post_content(post_data)
 
-		self.hashtag_indexes = self.find_hashtag_indexes(text, entities, main_channel_id)
+		self.hashtag_indexes = self.find_hashtag_indexes(text, entities, main_channel_id, invalid_assigned_user_to_default)
 		scheduled_tag_index, status_tag_index, user_tag_indexes, priority_tag_index = self.hashtag_indexes
 
 		scheduled_tag = None
@@ -310,10 +313,27 @@ class HashtagData:
 			status_tag = self.get_tag_from_entity(entities[status_tag_index], text)
 
 		user_tags = []
+		user_index_list = user_tag_indexes.copy()
+		update_assigned = False
 		if user_tag_indexes:
 			for user_tag_index in user_tag_indexes:
 				user_tag = self.get_tag_from_entity(entities[user_tag_index], text)
-				user_tags.append(user_tag)
+				if self.check_user_tag(user_tag, main_channel_id):
+					if user_tag not in user_tags:
+						if not user_tags and update_assigned:
+							self.comment = f"The ticket was reassigned to user tag #{user_tag} as the previous user is not a workspace member.", None
+						user_tags.append(user_tag)
+				else:
+					user_index_list.remove(user_tag_index)
+					if not user_tags:
+						update_assigned = True
+						user_default = self._get_default_assigned_user(main_channel_id, invalid_assigned_user_to_default)
+						if user_default:
+							self.comment = f"The ticket was reassigned to user tag #{user_default} as the previous user is not a workspace member.", None
+							user_tags.append(user_default)
+
+			if len(user_index_list) != len(user_tag_indexes):
+				self.hashtag_indexes = self.hashtag_indexes[:2] + (user_index_list,) + self.hashtag_indexes[3:]
 
 		priority_tag = None
 		if priority_tag_index is not None:
@@ -323,6 +343,19 @@ class HashtagData:
 		utils.set_post_content(post_data, text, entities)
 
 		return scheduled_tag, status_tag, user_tags, priority_tag
+
+	def _get_default_assigned_user(self, channel_id: int, invalid_assigned_user_to_default: bool) -> str | None:
+		if invalid_assigned_user_to_default:
+			if str(channel_id) in config_utils.DEFAULT_USER_DATA:
+				user_default, _ = config_utils.DEFAULT_USER_DATA[str(channel_id)].split(" ")
+				if self.check_user_tag(user_default, channel_id):
+					return user_default
+
+			for count_tickets, tag in db_utils.get_assigned_users_by_channel(channel_id):
+				if count_tickets > 0 and self.check_user_tag(tag, channel_id):
+					return tag
+
+		return None
 
 	def extract_other_hashtags(self):
 		text, entities = utils.get_post_content(self.post_data)

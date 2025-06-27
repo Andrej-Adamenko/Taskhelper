@@ -1,5 +1,5 @@
 import logging
-from typing import List, Union
+from typing import List, Optional, Union
 import time
 import datetime
 
@@ -310,6 +310,14 @@ def get_last_message(bot: telebot.TeleBot, channel_id: int):
 		db_utils.insert_or_update_last_msg_id(last_message_id, channel_id)
 
 	return last_message_id
+
+
+def send_message(bot: telebot.TeleBot, channel_id: int, text: str, reply_markup: Optional[telebot.REPLY_MARKUP_TYPES] = None,
+				 entities: Optional[List[telebot.types.MessageEntity]]=None):
+	try:
+		bot.send_message(chat_id=channel_id, text=text, reply_markup=reply_markup, entities=entities)
+	except Exception as E:
+		logging.error(f"Error during sending the message to {channel_id} with text {text} - {E}")
 
 
 def check_last_messages(bot: telebot.TeleBot):

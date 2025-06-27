@@ -493,7 +493,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_called_once_with(mock_bot, mock_message)
 		mock_update_post_link.assert_called_once_with(mock_bot, mock_message)
-		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_update_post_link.return_value)
+		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_update_post_link.return_value, check_ticket=True)
 		self.assertEqual(result, main_message_id)
 		self.assertEqual(mock_message.chat.id, main_channel_id)
 
@@ -517,7 +517,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_called_once_with(mock_bot, mock_message)
 		mock_update_post_link.assert_called_once_with(mock_bot, mock_message)
-		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_update_post_link.return_value)
+		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_update_post_link.return_value, check_ticket=True)
 		self.assertEqual(result, main_message_id)
 		self.assertEqual(mock_message.chat.id, main_channel_id)
 
@@ -587,7 +587,7 @@ class UpdateOlderMessageTest(TestCase):
 		mock_delete_main_channel_message.assert_not_called()
 		mock_check_content_type.assert_called_once_with(mock_bot, mock_message)
 		mock_update_post_link.assert_called_once_with(mock_bot, mock_message)
-		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_message)
+		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_message, check_ticket=True)
 		self.assertEqual(result, main_message_id)
 		self.assertEqual(mock_message.chat.id, main_channel_id)
 
@@ -702,6 +702,7 @@ class UpdateOlderMessageTest(TestCase):
 @patch("db_utils.clear_updates_in_progress")
 @patch("logging.info")
 @patch("interval_updating_utils._check_discussion_messages")
+@patch("user_utils.check_default_user_member")
 @patch("db_utils.get_main_channel_ids")
 @patch("db_utils.get_finished_update_channels")
 @patch("interval_updating_utils._check_main_messages")
@@ -710,8 +711,8 @@ class CheckAllMessagesTest(TestCase):
 	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"opened": "з"})
 	@patch("interval_updating_utils._STATUS", {"stop": False})
 	def test_default(self, mock_get_unfinished_update_channels, mock__check_main_messages, mock_get_finished_update_channels,
-					 mock_get_main_channel_ids, mock__check_discussion_messages, mock_info, mock_clear_updates_in_progress,
-					 mock_update_config, *args):
+					 mock_get_main_channel_ids, mock_check_default_user_member, mock__check_discussion_messages,
+					 mock_info, mock_clear_updates_in_progress, mock_update_config, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_get_unfinished_update_channels.return_value = {}
 		mock_get_finished_update_channels.return_value = []
@@ -724,6 +725,8 @@ class CheckAllMessagesTest(TestCase):
 		self.assertEqual(mock__check_main_messages.call_count, 2)
 		mock_get_finished_update_channels.assert_called_once_with()
 		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_default_user_member.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087456321)])
+		self.assertEqual(mock_check_default_user_member.call_count, 2)
 		mock__check_discussion_messages.assert_has_calls([call(mock_bot, -10012345678, -10032165487),
 														  call(mock_bot, -10087456321, -10036258147)])
 		self.assertEqual(mock__check_discussion_messages.call_count, 2)
@@ -735,8 +738,8 @@ class CheckAllMessagesTest(TestCase):
 	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", None)
 	@patch("interval_updating_utils._STATUS", {"stop": False})
 	def test_without_hashtags(self, mock_get_unfinished_update_channels, mock__check_main_messages, mock_get_finished_update_channels,
-					 mock_get_main_channel_ids, mock__check_discussion_messages, mock_info, mock_clear_updates_in_progress,
-					 mock_update_config, *args):
+							  mock_get_main_channel_ids, mock_check_default_user_member, mock__check_discussion_messages,
+							  mock_info, mock_clear_updates_in_progress, mock_update_config, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_get_unfinished_update_channels.return_value = {}
 		mock_get_main_channel_ids.return_value = [-10012345678, -10087456321, -10087654321]
@@ -749,6 +752,9 @@ class CheckAllMessagesTest(TestCase):
 		self.assertEqual(mock__check_main_messages.call_count, 3)
 		mock_get_finished_update_channels.assert_called_once_with()
 		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_default_user_member.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087456321),
+														 call(mock_bot, -10087654321)])
+		self.assertEqual(mock_check_default_user_member.call_count, 3)
 		mock__check_discussion_messages.assert_has_calls([call(mock_bot, -10012345678, -10032165487),
 														  call(mock_bot, -10087456321, -10036258147)])
 		self.assertEqual(mock__check_discussion_messages.call_count, 2)
@@ -759,8 +765,8 @@ class CheckAllMessagesTest(TestCase):
 	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", None)
 	@patch("interval_updating_utils._STATUS", {"stop": False})
 	def test_check_discussion(self, mock_get_unfinished_update_channels, mock__check_main_messages, mock_get_finished_update_channels,
-					 mock_get_main_channel_ids, mock__check_discussion_messages, mock_info, mock_clear_updates_in_progress,
-					 mock_update_config, *args):
+							  mock_get_main_channel_ids, mock_check_default_user_member, mock__check_discussion_messages,
+							  mock_info, mock_clear_updates_in_progress, mock_update_config, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_get_unfinished_update_channels.return_value = {}
 		mock_get_finished_update_channels.return_value = []
@@ -773,6 +779,8 @@ class CheckAllMessagesTest(TestCase):
 		self.assertEqual(mock__check_main_messages.call_count, 2)
 		mock_get_finished_update_channels.assert_called_once_with()
 		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_default_user_member.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087456321)])
+		self.assertEqual(mock_check_default_user_member.call_count, 2)
 		mock__check_discussion_messages.assert_has_calls([call(mock_bot, -10012345678, -10032165487),
 														  call(mock_bot, -10087456321, -10036258147)])
 		self.assertEqual(mock__check_discussion_messages.call_count, 2)
@@ -783,8 +791,8 @@ class CheckAllMessagesTest(TestCase):
 	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"opened": "з"})
 	@patch("interval_updating_utils._STATUS", {"stop": False})
 	def test_finished_update(self, mock_get_unfinished_update_channels, mock__check_main_messages, mock_get_finished_update_channels,
-					 mock_get_main_channel_ids, mock__check_discussion_messages, mock_info, mock_clear_updates_in_progress,
-					 mock_update_config, *args):
+							 mock_get_main_channel_ids, mock_check_default_user_member, mock__check_discussion_messages,
+							 mock_info, mock_clear_updates_in_progress, mock_update_config, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_get_unfinished_update_channels.return_value = {}
 		mock_get_finished_update_channels.return_value = [-10087654321]
@@ -797,6 +805,8 @@ class CheckAllMessagesTest(TestCase):
 		self.assertEqual(mock__check_main_messages.call_count, 2)
 		mock_get_finished_update_channels.assert_called_once_with()
 		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_default_user_member.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087456321)])
+		self.assertEqual(mock_check_default_user_member.call_count, 2)
 		mock__check_discussion_messages.assert_has_calls([call(mock_bot, -10012345678, -10032165487),
 														  call(mock_bot, -10087456321, -10036258147)])
 		self.assertEqual(mock__check_discussion_messages.call_count, 2)
@@ -808,8 +818,8 @@ class CheckAllMessagesTest(TestCase):
 	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"opened": "з"})
 	@patch("interval_updating_utils._STATUS", {"stop": False})
 	def test_unfinished_update(self, mock_get_unfinished_update_channels, mock__check_main_messages, mock_get_finished_update_channels,
-					 mock_get_main_channel_ids, mock__check_discussion_messages, mock_info, mock_clear_updates_in_progress,
-					 mock_update_config, *args):
+							   mock_get_main_channel_ids, mock_check_default_user_member, mock__check_discussion_messages,
+							   mock_info, mock_clear_updates_in_progress, mock_update_config, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_get_unfinished_update_channels.return_value = {-10012345678: 123}
 		mock_get_finished_update_channels.return_value = [-10012345678]
@@ -820,6 +830,7 @@ class CheckAllMessagesTest(TestCase):
 		mock__check_main_messages.assert_called_once_with(mock_bot, -10087456321, None)
 		mock_get_finished_update_channels.assert_called_once_with()
 		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_default_user_member.assert_called_once_with(mock_bot, -10087456321)
 		mock__check_discussion_messages.assert_called_once_with(mock_bot, -10087456321, -10036258147)
 		mock_info.assert_called_once_with("Interval check completed")
 		mock_clear_updates_in_progress.assert_called_once_with()
@@ -829,8 +840,8 @@ class CheckAllMessagesTest(TestCase):
 	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"opened": "з"})
 	@patch("interval_updating_utils._STATUS", {"stop": False})
 	def test_unfinished_update_no_main(self, mock_get_unfinished_update_channels, mock__check_main_messages, mock_get_finished_update_channels,
-					 mock_get_main_channel_ids, mock__check_discussion_messages, mock_info, mock_clear_updates_in_progress,
-					 mock_update_config, *args):
+									   mock_get_main_channel_ids, mock_check_default_user_member, mock__check_discussion_messages,
+									   mock_info, mock_clear_updates_in_progress, mock_update_config, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_get_unfinished_update_channels.return_value = {-10012345678: 123}
 		mock_get_finished_update_channels.return_value = [-10012345678]
@@ -841,6 +852,7 @@ class CheckAllMessagesTest(TestCase):
 		mock__check_main_messages.assert_called_once_with(mock_bot, -10087456321, None)
 		mock_get_finished_update_channels.assert_called_once_with()
 		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_default_user_member.assert_called_once_with(mock_bot, -10087456321)
 		mock__check_discussion_messages.assert_called_once_with(mock_bot, -10087456321, -10036258147)
 		mock_info.assert_called_once_with("Interval check completed")
 		mock_clear_updates_in_progress.assert_called_once_with()
@@ -850,8 +862,8 @@ class CheckAllMessagesTest(TestCase):
 	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"opened": "з"})
 	@patch("interval_updating_utils._STATUS", {"stop": False})
 	def test_unfinished_update_without_finished(self, mock_get_unfinished_update_channels, mock__check_main_messages, mock_get_finished_update_channels,
-					 mock_get_main_channel_ids, mock__check_discussion_messages, mock_info, mock_clear_updates_in_progress,
-					 mock_update_config, *args):
+												mock_get_main_channel_ids, mock_check_default_user_member, mock__check_discussion_messages,
+												mock_info, mock_clear_updates_in_progress, mock_update_config, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_get_unfinished_update_channels.return_value = {-10012345678: 123}
 		mock_get_finished_update_channels.return_value = []
@@ -864,6 +876,8 @@ class CheckAllMessagesTest(TestCase):
 		self.assertEqual(mock__check_main_messages.call_count, 2)
 		mock_get_finished_update_channels.assert_called_once_with()
 		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_default_user_member.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087456321)])
+		self.assertEqual(mock_check_default_user_member.call_count, 2)
 		mock__check_discussion_messages.assert_has_calls([call(mock_bot, -10012345678, -10032165487),
 														  call(mock_bot, -10087456321, -10036258147)])
 		self.assertEqual(mock__check_discussion_messages.call_count, 2)
@@ -875,8 +889,8 @@ class CheckAllMessagesTest(TestCase):
 	@patch("config_utils.HASHTAGS_BEFORE_UPDATE", {"opened": "з"})
 	@patch("interval_updating_utils._STATUS", {"stop": True})
 	def test_stopping_check(self, mock_get_unfinished_update_channels, mock__check_main_messages, mock_get_finished_update_channels,
-					 mock_get_main_channel_ids, mock__check_discussion_messages, mock_info, mock_clear_updates_in_progress,
-					 mock_update_config, *args):
+							mock_get_main_channel_ids, mock_check_default_user_member, mock__check_discussion_messages,
+							mock_info, mock_clear_updates_in_progress, mock_update_config, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_get_unfinished_update_channels.return_value = {-10012345678: 123}
 		mock_get_finished_update_channels.return_value = []
@@ -887,6 +901,7 @@ class CheckAllMessagesTest(TestCase):
 		mock__check_main_messages.assert_not_called()
 		mock_get_finished_update_channels.assert_called_once_with()
 		mock_get_main_channel_ids.assert_called_once_with()
+		mock_check_default_user_member.assert_not_called()
 		mock__check_discussion_messages.assert_not_called()
 		mock_info.assert_called_once_with("Interval check stopped prematurely")
 		mock_clear_updates_in_progress.assert_called_once_with()

@@ -1,7 +1,5 @@
-from asyncio import ProactorEventLoop
-from types import coroutine
 from unittest import main, TestCase
-from unittest.mock import patch, Mock, AsyncMock, ANY, call
+from unittest.mock import patch, Mock, call
 
 from telebot import TeleBot
 from telebot.apihelper import ApiTelegramException
@@ -498,6 +496,107 @@ class GetUserTagsTest(TestCase):
 		result = user_utils.get_user_tags(channel_id)
 		mock_get_member_ids_channel.assert_not_called()
 		self.assertEqual(result, {})
+
+
+@patch("config_utils.DISCUSSION_CHAT_DATA", {"-10012345678": -10087654321, "-10012378456": -10087624321})
+@patch("config_utils.DEFAULT_USER_DATA", {"-10012345678": "dd 1", "-10012378456": "aa 2", "-10032165487": "ff 2"})
+@patch("config_utils.USER_TAGS", {"aa": 1, "bb": 2, "cc": 3, "dd": 4, "ff": 5})
+@patch("config_utils.ADMIN_USERS", [2, 3, 5])
+@patch("user_utils.get_user")
+@patch("user_utils.get_member_ids_channel", return_value=[2,3,4])
+@patch("utils.send_message")
+@patch("hashtag_data.HashtagData.check_user_tag", side_effect=lambda tag, channel: tag in ["bb", "cc", "dd"])
+class CheckDefaultUserMemberTest(TestCase):
+	def test_default_user_is_member(self, mock_check_user_tag, mock_send_message, mock_get_member_ids_channel,
+									mock_get_user, *args):
+		channel_id = -10012345678
+		mock_bot = Mock(spec=TeleBot)
+
+		user_utils.check_default_user_member(mock_bot, channel_id)
+		mock_check_user_tag.assert_called_once_with("dd", channel_id)
+		mock_send_message.assert_not_called()
+		mock_get_member_ids_channel.assert_not_called()
+		mock_get_user.assert_not_called()
+
+	def test_default_user_is_not_member(self, mock_check_user_tag, mock_send_message, mock_get_member_ids_channel,
+										mock_get_user, *args):
+		channel_id = -10012378456
+		discussion_id = -10087624321
+		text = "Invalid default user tag: user not found in the workspace. Please update the default user tag accordingly."
+		text_channel = f"Invalid default user tag: user not found in the workspace with ID {channel_id}. Please update the default user tag accordingly."
+		mock_bot = Mock(spec=TeleBot)
+
+		user_utils.check_default_user_member(mock_bot, channel_id)
+		mock_check_user_tag.assert_called_once_with("aa", channel_id)
+		mock_send_message.assert_has_calls([call(mock_bot, discussion_id, text), call(mock_bot, 2, text_channel),
+											call(mock_bot, 3, text_channel)])
+		self.assertEqual(mock_send_message.call_count, 3)
+		mock_get_member_ids_channel.assert_called_once_with(channel_id)
+		mock_get_user.assert_not_called()
+
+	def test_default_user_is_not_member_with_admin_username(self, mock_check_user_tag, mock_send_message,
+															mock_get_member_ids_channel, mock_get_user, *args):
+		channel_id = -10012378456
+		discussion_id = -10087624321
+		text = "Invalid default user tag: user not found in the workspace. Please update the default user tag accordingly."
+		text_channel = f"Invalid default user tag: user not found in the workspace with ID {channel_id}. Please update the default user tag accordingly."
+		mock_bot = Mock(spec=TeleBot)
+		config_utils.ADMIN_USERS = [2, 3, "@user_name", "@user_name2"]
+		mock_get_user.side_effect = lambda bot, username: Mock(id=4) if username == "@user_name2" else None
+
+		user_utils.check_default_user_member(mock_bot, channel_id)
+		mock_check_user_tag.assert_called_once_with("aa", channel_id)
+		mock_send_message.assert_has_calls([call(mock_bot, discussion_id, text), call(mock_bot, 2, text_channel),
+											call(mock_bot, 3, text_channel), call(mock_bot, 4, text_channel)])
+		self.assertEqual(mock_send_message.call_count, 4)
+		mock_get_member_ids_channel.assert_called_once_with(channel_id)
+		mock_get_user.assert_has_calls([call(mock_bot, "@user_name"), call(mock_bot, "@user_name2")])
+		self.assertEqual(mock_get_user.call_count, 2)
+
+	def test_default_user_is_not_member_with_duplicate_admin(self, mock_check_user_tag, mock_send_message,
+															mock_get_member_ids_channel, mock_get_user, *args):
+		channel_id = -10012378456
+		discussion_id = -10087624321
+		text = "Invalid default user tag: user not found in the workspace. Please update the default user tag accordingly."
+		text_channel = f"Invalid default user tag: user not found in the workspace with ID {channel_id}. Please update the default user tag accordingly."
+		mock_bot = Mock(spec=TeleBot)
+		config_utils.ADMIN_USERS = [2, 3, "@user_name", "@user_name2"]
+		mock_get_user.side_effect = lambda bot, username: Mock(id=3) if username == "@user_name2" else None
+
+		user_utils.check_default_user_member(mock_bot, channel_id)
+		mock_check_user_tag.assert_called_once_with("aa", channel_id)
+		mock_send_message.assert_has_calls([call(mock_bot, discussion_id, text), call(mock_bot, 2, text_channel),
+											call(mock_bot, 3, text_channel)])
+		self.assertEqual(mock_send_message.call_count, 3)
+		mock_get_member_ids_channel.assert_called_once_with(channel_id)
+		mock_get_user.assert_has_calls([call(mock_bot, "@user_name"), call(mock_bot, "@user_name2")])
+		self.assertEqual(mock_get_user.call_count, 2)
+
+	def test_default_user_is_not_member_without_discussion(self, mock_check_user_tag, mock_send_message,
+														   mock_get_member_ids_channel, mock_get_user, *args):
+		channel_id = -10032165487
+		text_channel = f"Invalid default user tag: user not found in the workspace with ID {channel_id}. Please update the default user tag accordingly."
+		mock_bot = Mock(spec=TeleBot)
+
+		user_utils.check_default_user_member(mock_bot, channel_id)
+		mock_check_user_tag.assert_called_once_with("ff", channel_id)
+		mock_send_message.assert_has_calls([call(mock_bot, 2, text_channel), call(mock_bot, 3, text_channel)])
+		self.assertEqual(mock_send_message.call_count, 2)
+		mock_get_member_ids_channel.assert_called_once_with(channel_id)
+		mock_get_user.assert_not_called()
+
+	def test_default_user_is_not_member_without_user_tag(self, mock_check_user_tag, mock_send_message,
+														 mock_get_member_ids_channel, mock_get_user, *args):
+		channel_id = -10024687546
+		mock_bot = Mock(spec=TeleBot)
+
+		user_utils.check_default_user_member(mock_bot, channel_id)
+		mock_check_user_tag.assert_not_called()
+		mock_send_message.assert_not_called()
+		mock_get_member_ids_channel.assert_not_called()
+		mock_get_user.assert_not_called()
+
+
 
 
 if __name__ == "__main__":
