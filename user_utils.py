@@ -193,3 +193,63 @@ def insert_user_reference(user_tag: str, text: str):
 	else:
 		text = text[:placeholder_position] + str(user) + text[placeholder_position:]
 		return text, None
+
+
+def check_new_member(member_update: telebot.types.ChatMemberUpdated, bot: telebot.TeleBot):
+	old_status = member_update.old_chat_member.status
+	new_status = member_update.new_chat_member.status
+
+	if old_status not in ['left', 'kicked'] or new_status not in ['member', 'restricted', 'administrator']:
+		return
+
+	new_user = member_update.new_chat_member.user
+	user_id = new_user.id
+	channel = member_update.chat
+
+	if user_id not in get_user_tags().values():
+		if new_status != "administrator":
+			try:
+				bot.kick_chat_member(channel.id, user_id)
+				logging.info(f"Kicking member {user_id} from '{channel.title}")
+			except Exception as e:
+				logging.error(f"Error in kicking member {user_id} from '{channel.title}': {e}")
+	elif str(channel.id) in config_utils.DISCUSSION_CHAT_DATA:
+		user_tags = utils.get_keys_by_value(get_user_tags(), user_id)
+		user_tag_text = ", ".join([f"#{user_tag}" for user_tag in user_tags])
+		text = f"{{USER}} becomes a member. User {'tags' if len(user_tags) > 1 else 'tag'} is {user_tag_text}."
+		text, entities = insert_user_reference(user_tags[0], text)
+		bot.send_message(chat_id=config_utils.DISCUSSION_CHAT_DATA[str(channel.id)], text=text, entities=entities)
+
+
+def send_member_tags(channel_id: int, bot: telebot.TeleBot): # send info about the workspace member tags to discussion chat
+	if str(channel_id) not in config_utils.DISCUSSION_CHAT_DATA or not db_utils.is_main_channel_exists(channel_id):
+		return
+
+	user_ids = get_member_ids_channel(channel_id)
+	text = ""
+	entities = []
+
+	for user_id in user_ids:
+		tags = utils.get_keys_by_value(get_user_tags(), user_id)
+		if not tags:
+			continue
+
+		user_tag_text = ", ".join([f"#{tag}" for tag in tags])
+		comment_text = f"{{USER}} is a member. User {'tags' if len(tags) > 1 else 'tag'} is {user_tag_text}."
+		item_text, item_entities = insert_user_reference(tags[0], comment_text)
+		text += "\n" if len(text) > 0 else ""
+
+		if item_entities:
+			if text:
+				item_entities = map(lambda entity: entity.offset + len(text), item_entities)
+			entities.extend(item_entities)
+		text += item_text
+
+	if text:
+		try:
+			bot.send_message(chat_id=config_utils.DISCUSSION_CHAT_DATA[str(channel_id)], text=text, entities=entities)
+		except ApiTelegramException as E:
+			if E.error_code == 429:
+				raise E
+			logging.error(f"Error during send message to discussion {config_utils.DISCUSSION_CHAT_DATA[str(channel_id)]} - {E}")
+			return

@@ -264,7 +264,7 @@ def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity],
 	return text, entities
 
 
-def get_key_by_value(d: dict, value: object):
+def get_key_by_value[T](d: dict[T, object], value: object) -> T | None:
 	key_list = list(d.keys())
 	val_list = list(d.values())
 
@@ -276,7 +276,7 @@ def get_key_by_value(d: dict, value: object):
 	return key_list[position]
 
 
-def get_keys_by_value(d: dict, search: object):
+def get_keys_by_value[T](d: dict[T, object], search: object) -> list[T]:
 	result = []
 	for key, value in d.items():
 		if value == search:
@@ -467,3 +467,27 @@ def __get_content_type_pyrogram_message(message: pyrogram.types.Message):
 		if getattr(message, attr) is not None:
 			return attr
 	return "unknown"
+
+
+def check_bot_permission_for_messages(member: telebot.types.ChatMember, chat: telebot.types.Chat):
+	is_admin = member.status in ["administrator", "creator"]
+	chat_type = chat.type
+	permissions = chat.permissions
+
+	if chat_type in ["group", "supergroup"]: # For group and supergroup
+		global_block = permissions and permissions.can_send_messages is False
+		can_post = getattr(member, 'can_send_messages', None)
+		can_edit = getattr(member, 'can_edit_messages', None)
+		can_post = False if not is_admin and global_block else can_post
+	elif chat_type == "channel": # For channel
+		if is_admin:
+			can_post = getattr(member, 'can_post_messages', None)
+			can_edit = getattr(member, 'can_edit_messages', None)
+		else:
+			can_post = False
+			can_edit = False
+	else: # Example, private chat - no permissions needed
+		return True
+
+	return ((True if can_post is None else bool(can_post)) and
+			(True if can_edit is None else bool(can_edit)))

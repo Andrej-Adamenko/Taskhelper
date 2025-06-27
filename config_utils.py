@@ -19,7 +19,7 @@ MANDATORY_KEYS = ["BOT_TOKEN", "ADMIN_USERS", "APP_API_ID", "APP_API_HASH"]
 
 BOT_TOKEN: str = ""
 DUMP_CHAT_ID: str = ""
-DISCUSSION_CHAT_DATA: dict = {}
+DISCUSSION_CHAT_DATA: dict[str, int] = {}
 DEFAULT_USER_DATA: dict = {}
 USER_TAGS: dict = {}
 UPDATE_INTERVAL: int = 60
