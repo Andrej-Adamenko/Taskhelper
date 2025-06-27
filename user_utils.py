@@ -1,17 +1,18 @@
-import asyncio
 import logging
 import time
 from typing import Union
 
 import telebot.types
 from telebot.apihelper import ApiTelegramException
-from telebot.types import ChatMemberBanned
 
 import config_utils
 import core_api
 import db_utils
+from hashtag_data import HashtagData
 import threading_utils
+import user_utils
 import utils
+
 
 class MEMBER_CACHE_KEYS:
 	USER = "user_ids"
@@ -193,3 +194,39 @@ def insert_user_reference(user_tag: str, text: str):
 	else:
 		text = text[:placeholder_position] + str(user) + text[placeholder_position:]
 		return text, None
+
+
+def check_default_user_member(bot: telebot.TeleBot, channel_id: int):
+	channel_id_str = str(channel_id)
+	discussion_chat_id = config_utils.DISCUSSION_CHAT_DATA[channel_id_str] \
+						if channel_id_str in config_utils.DISCUSSION_CHAT_DATA else None
+	default_user = config_utils.DEFAULT_USER_DATA[channel_id_str] \
+						if channel_id_str in config_utils.DEFAULT_USER_DATA else None
+
+	if not default_user:
+		return
+
+	user_tag, _ = default_user.split(" ")
+
+	if HashtagData.check_user_tag(user_tag, channel_id):
+		return
+
+	if discussion_chat_id:
+		text = "Invalid default user tag: user not found in the workspace. Please update the default user tag accordingly."
+		utils.send_message(bot, discussion_chat_id, text)
+
+	text = f"Invalid default user tag: user not found in the workspace with ID {channel_id}. Please update the default user tag accordingly."
+	sent_to_users = []
+	members = user_utils.get_member_ids_channel(channel_id)
+	for user_id in config_utils.ADMIN_USERS:
+		if isinstance(user_id, str):
+			user = get_user(bot, user_id)
+			if user: user_id = user.id
+
+		if user_id in members and user_id not in sent_to_users:
+			sent_to_users.append(user_id)
+			utils.send_message(bot, user_id, text)
+	return None
+
+
+

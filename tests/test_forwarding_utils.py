@@ -386,19 +386,20 @@ class FilterSubchannelByMembersTest(TestCase):
 		self.assertEqual(result, [-10087654321])
 
 
-@patch("hashtag_data.HashtagData.__init__", return_value=None)
 @patch("user_utils.get_member_ids_channel", return_value=[875135])
+@patch("utils.edit_message_keyboard", return_value=None)
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
 @patch("db_utils.get_main_message_sender")
 @patch("hashtag_data.HashtagData.add_user")
 @patch("hashtag_data.HashtagData.get_updated_post_data")
 @patch("forwarding_utils.update_main_message_content")
 @patch("comment_utils.CommentDispatcher.add_next_action_comment")
-@patch("forwarding_utils.add_control_buttons")
+@patch("forwarding_utils.generate_control_buttons")
 @patch("forwarding_utils.forward_to_subchannel")
 class ForwardAndAddInlineKeyboardTest(TestCase):
-	def test_default(self, mock_forward_to_subchannel, mock_add_control_buttons, mock_add_next_action_comment,
+	def test_default(self, mock_forward_to_subchannel, mock_generate_control_buttons, mock_add_next_action_comment,
 					 mock_update_main_message_content, mock_get_updated_post_data, mock_add_user,
-					 mock_get_main_message_sender, *args):
+					 mock_get_main_message_sender, mock_init_hashtag_data, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10087654321
 		main_message_id = 452
@@ -410,17 +411,18 @@ class ForwardAndAddInlineKeyboardTest(TestCase):
 		mock_get_main_message_sender.return_value = user_id
 
 		forwarding_utils.forward_and_add_inline_keyboard(mock_bot, mock_message, True)
+		mock_init_hashtag_data.assert_called_once_with(mock_message, main_channel_id, True, False)
 		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
 		mock_add_user.assert_has_calls([call(user_tags[0]), call(user_tags[1])])
 		mock_get_updated_post_data.assert_called_once_with()
 		mock_update_main_message_content.assert_called_once_with(mock_bot, ANY, updated, mock_message)
 		mock_add_next_action_comment.assert_called_once_with(mock_bot, updated)
-		mock_add_control_buttons.assert_called_once_with(mock_bot, updated, ANY)
+		mock_generate_control_buttons.assert_called_once_with(ANY, updated)
 		mock_forward_to_subchannel.assert_called_once_with(mock_bot, updated, ANY)
 
-	def test_user_no_workspace_member(self, mock_forward_to_subchannel, mock_add_control_buttons, mock_add_next_action_comment,
+	def test_user_no_workspace_member(self, mock_forward_to_subchannel, mock_generate_control_buttons, mock_add_next_action_comment,
 					 mock_update_main_message_content, mock_get_updated_post_data, mock_add_user,
-					 mock_get_main_message_sender, *args):
+					 mock_get_main_message_sender, mock_init_hashtag_data, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10087654321
 		main_message_id = 452
@@ -432,17 +434,18 @@ class ForwardAndAddInlineKeyboardTest(TestCase):
 		mock_get_main_message_sender.return_value = user_id
 
 		forwarding_utils.forward_and_add_inline_keyboard(mock_bot, mock_message, True)
+		mock_init_hashtag_data.assert_called_once_with(mock_message, main_channel_id, True, False)
 		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
 		mock_add_user.assert_not_called()
 		mock_get_updated_post_data.assert_called_once_with()
 		mock_update_main_message_content.assert_called_once_with(mock_bot, ANY, updated, mock_message)
 		mock_add_next_action_comment.assert_called_once_with(mock_bot, updated)
-		mock_add_control_buttons.assert_called_once_with(mock_bot, updated, ANY)
+		mock_generate_control_buttons.assert_called_once_with(ANY, updated)
 		mock_forward_to_subchannel.assert_called_once_with(mock_bot, updated, ANY)
 
-	def test_empty_user_tag(self, mock_forward_to_subchannel, mock_add_control_buttons, mock_add_next_action_comment,
+	def test_empty_user_tag(self, mock_forward_to_subchannel, mock_generate_control_buttons, mock_add_next_action_comment,
 							mock_update_main_message_content, mock_get_updated_post_data, mock_add_user,
-							mock_get_main_message_sender, *args):
+							mock_get_main_message_sender, mock_init_hashtag_data, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10087654321
 		main_message_id = 452
@@ -453,18 +456,19 @@ class ForwardAndAddInlineKeyboardTest(TestCase):
 		updated = mock_get_updated_post_data.return_value
 
 		forwarding_utils.forward_and_add_inline_keyboard(mock_bot, mock_message, True)
+		mock_init_hashtag_data.assert_called_once_with(mock_message, main_channel_id, True, False)
 		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
 		mock_add_user.assert_not_called()
 		mock_get_updated_post_data.assert_called_once_with()
 		mock_update_main_message_content.assert_called_once_with(mock_bot, ANY, updated, mock_message)
 		mock_add_next_action_comment.assert_called_once_with(mock_bot, updated)
-		mock_add_control_buttons.assert_called_once_with(mock_bot, updated, ANY)
+		mock_generate_control_buttons.assert_called_once_with(ANY, updated)
 		mock_forward_to_subchannel.assert_called_once_with(mock_bot, updated, ANY)
 
 	@patch("utils.get_key_by_value")
-	def test_empty_sender(self, mock_get_keys_by_value, mock_forward_to_subchannel, mock_add_control_buttons,
+	def test_empty_sender(self, mock_get_keys_by_value, mock_forward_to_subchannel, mock_generate_control_buttons,
 						  mock_add_next_action_comment, mock_update_main_message_content, mock_get_updated_post_data,
-						  mock_add_user, mock_get_main_message_sender, *args):
+						  mock_add_user, mock_get_main_message_sender, mock_init_hashtag_data, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10087654321
 		main_message_id = 452
@@ -473,19 +477,20 @@ class ForwardAndAddInlineKeyboardTest(TestCase):
 		mock_get_main_message_sender.return_value = None
 
 		forwarding_utils.forward_and_add_inline_keyboard(mock_bot, mock_message, True)
+		mock_init_hashtag_data.assert_called_once_with(mock_message, main_channel_id, True, False)
 		mock_get_main_message_sender.assert_called_once_with(main_channel_id, main_message_id)
 		mock_get_keys_by_value.assert_not_called()
 		mock_add_user.assert_not_called()
 		mock_get_updated_post_data.assert_called_once_with()
 		mock_update_main_message_content.assert_called_once_with(mock_bot, ANY, updated, mock_message)
 		mock_add_next_action_comment.assert_called_once_with(mock_bot, updated)
-		mock_add_control_buttons.assert_called_once_with(mock_bot, updated, ANY)
+		mock_generate_control_buttons.assert_called_once_with(ANY, updated)
 		mock_forward_to_subchannel.assert_called_once_with(mock_bot, updated, ANY)
 
 	@patch("utils.get_key_by_value")
-	def test_new_ticket_false(self, mock_get_keys_by_value, mock_forward_to_subchannel, mock_add_control_buttons,
+	def test_new_ticket_false(self, mock_get_keys_by_value, mock_forward_to_subchannel, mock_generate_control_buttons,
 							  mock_add_next_action_comment, mock_update_main_message_content, mock_get_updated_post_data,
-							  mock_add_user, mock_get_main_message_sender, *args):
+							  mock_add_user, mock_get_main_message_sender, mock_init_hashtag_data, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10087654321
 		main_message_id = 452
@@ -493,13 +498,37 @@ class ForwardAndAddInlineKeyboardTest(TestCase):
 		updated = mock_get_updated_post_data.return_value
 
 		forwarding_utils.forward_and_add_inline_keyboard(mock_bot, mock_message, False)
+		mock_init_hashtag_data.assert_called_once_with(mock_message, main_channel_id, True, False)
 		mock_get_main_message_sender.assert_not_called()
 		mock_get_keys_by_value.assert_not_called()
 		mock_add_user.assert_not_called()
 		mock_get_updated_post_data.assert_called_once_with()
 		mock_update_main_message_content.assert_called_once_with(mock_bot, ANY, updated, mock_message)
 		mock_add_next_action_comment.assert_called_once_with(mock_bot, updated)
-		mock_add_control_buttons.assert_called_once_with(mock_bot, updated, ANY)
+		mock_generate_control_buttons.assert_called_once_with(ANY, updated)
+		mock_forward_to_subchannel.assert_called_once_with(mock_bot, updated, ANY)
+
+	def test_check_ticket(self, mock_forward_to_subchannel, mock_generate_control_buttons, mock_add_next_action_comment,
+					 mock_update_main_message_content, mock_get_updated_post_data, mock_add_user,
+					 mock_get_main_message_sender, mock_init_hashtag_data, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = -10087654321
+		main_message_id = 452
+		user_id = 875135
+		user_tags = ["CC", "DD"]
+		config_utils.USER_TAGS = {"AA": 2163156, "CC": user_id, "DD": user_id}
+		mock_message = test_helper.create_mock_message("", [], main_channel_id, main_message_id)
+		updated = mock_get_updated_post_data.return_value
+		mock_get_main_message_sender.return_value = user_id
+
+		forwarding_utils.forward_and_add_inline_keyboard(mock_bot, mock_message, check_ticket=True)
+		mock_init_hashtag_data.assert_called_once_with(mock_message, main_channel_id, True, True)
+		mock_get_main_message_sender.assert_not_called()
+		mock_add_user.assert_not_called()
+		mock_get_updated_post_data.assert_called_once_with()
+		mock_update_main_message_content.assert_called_once_with(mock_bot, ANY, updated, mock_message)
+		mock_add_next_action_comment.assert_called_once_with(mock_bot, updated)
+		mock_generate_control_buttons.assert_called_once_with(ANY, updated)
 		mock_forward_to_subchannel.assert_called_once_with(mock_bot, updated, ANY)
 
 
@@ -1119,8 +1148,9 @@ class TestSetGetChannelTicketKeyboard(TestCase):
 @patch("db_utils.get_main_message_ids")
 @patch("utils.get_last_message")
 @patch("db_utils.get_all_individual_channels")
+@patch("db_utils.delete_invalid_ticket_data")
 class GetInvalidTicketIdsTest(TestCase):
-	def test_default(self, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
+	def test_default(self, mock_delete_invalid_ticket_data, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
 					 mock_get_copied_message_ids_from_copied_channel, mock_get_messages, mock_get_forwarded_from_id,
 					 mock_update_forwarded_fields, mock_delete_forwarded_message, mock_sleep, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
@@ -1161,6 +1191,7 @@ class GetInvalidTicketIdsTest(TestCase):
 
 
 		forwarding_utils.get_invalid_ticket_ids(mock_bot)
+		mock_delete_invalid_ticket_data.assert_called_once_with()
 		mock_get_all_individual_channels.assert_called_once_with()
 		mock_get_last_message.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087654321)])
 		self.assertEqual(mock_get_last_message.call_count, len(channels_data))
@@ -1179,7 +1210,7 @@ class GetInvalidTicketIdsTest(TestCase):
 		mock_info.assert_has_calls(info_calls)
 		self.assertEqual(mock_info.call_count, len(info_calls))
 
-	def test_none_messages(self, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
+	def test_none_messages(self, mock_delete_invalid_ticket_data, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
 					 mock_get_copied_message_ids_from_copied_channel, mock_get_messages, mock_get_forwarded_from_id,
 					 mock_update_forwarded_fields, mock_delete_forwarded_message, mock_sleep, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
@@ -1200,6 +1231,7 @@ class GetInvalidTicketIdsTest(TestCase):
 			info_calls.append(call(f"Can't get messages in channel {ch_id}, scanning of invalid tickets is skipped"))
 
 		forwarding_utils.get_invalid_ticket_ids(mock_bot)
+		mock_delete_invalid_ticket_data.assert_called_once_with()
 		mock_get_all_individual_channels.assert_called_once_with()
 		mock_get_last_message.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087654321)])
 		self.assertEqual(mock_get_last_message.call_count, len(channels_data))
@@ -1216,7 +1248,7 @@ class GetInvalidTicketIdsTest(TestCase):
 		mock_info.assert_has_calls(info_calls)
 		self.assertEqual(mock_info.call_count, len(info_calls))
 
-	def test_none_last_msg(self, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
+	def test_none_last_msg(self, mock_delete_invalid_ticket_data, mock_get_all_individual_channels, mock_get_last_message, mock_get_main_message_ids,
 					 mock_get_copied_message_ids_from_copied_channel, mock_get_messages, mock_get_forwarded_from_id,
 					 mock_update_forwarded_fields, mock_delete_forwarded_message, mock_sleep, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
@@ -1229,6 +1261,7 @@ class GetInvalidTicketIdsTest(TestCase):
 			info_calls.append(call(f"Can't get last message in channel {ch_id}, scanning of invalid tickets is skipped"))
 
 		forwarding_utils.get_invalid_ticket_ids(mock_bot)
+		mock_delete_invalid_ticket_data.assert_called_once_with()
 		mock_get_all_individual_channels.assert_called_once_with()
 		mock_get_last_message.assert_has_calls([call(mock_bot, -10012345678), call(mock_bot, -10087654321)])
 		self.assertEqual(mock_get_last_message.call_count, len(channels_data))
@@ -1505,6 +1538,133 @@ class DeleteForwardedMessageTest(TestCase):
 		mock_set_settings_message_id.assert_not_called()
 		mock_info.assert_not_called()
 		mock_update_copied_message.assert_not_called()
+
+
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("forwarding_utils.forward_to_subchannel")
+@patch("forwarding_utils.add_control_buttons")
+@patch("comment_utils.CommentDispatcher.add_next_action_comment")
+@patch("forwarding_utils.update_main_message_content")
+@patch("hashtag_data.HashtagData.get_updated_post_data")
+class UpdateMessageAndForwardToSubchannelsTest(TestCase):
+	def test_default(self, mock_get_updated_post_data, mock_update_main_message_content, mock_add_next_action_comment,
+					 mock_add_control_buttons, mock_forward_to_subchannel, *args):
+		mock_bot = Mock(spec=TeleBot)
+		hashtag_data = HashtagData()
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message_updated = test_helper.create_mock_message("", [])
+		mock_get_updated_post_data.return_value = mock_message_updated
+
+		forwarding_utils.update_message_and_forward_to_subchannels(mock_bot, hashtag_data, mock_message,
+																   False, mock_add_control_buttons)
+		mock_get_updated_post_data.assert_called_once_with()
+		mock_update_main_message_content.assert_called_once_with(mock_bot, hashtag_data, mock_message_updated, mock_message)
+		mock_add_next_action_comment.assert_not_called()
+		mock_add_control_buttons.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
+		mock_forward_to_subchannel.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
+
+	def test_with_comment_aciton(self, mock_get_updated_post_data, mock_update_main_message_content, mock_add_next_action_comment,
+					 mock_add_control_buttons, mock_forward_to_subchannel, *args):
+		mock_bot = Mock(spec=TeleBot)
+		hashtag_data = HashtagData()
+		mock_message = test_helper.create_mock_message("", [])
+		mock_message_updated = test_helper.create_mock_message("", [])
+		mock_get_updated_post_data.return_value = mock_message_updated
+
+		forwarding_utils.update_message_and_forward_to_subchannels(mock_bot, hashtag_data, mock_message,
+																   True, mock_add_control_buttons)
+		mock_get_updated_post_data.assert_called_once_with()
+		mock_update_main_message_content.assert_called_once_with(mock_bot, hashtag_data, mock_message_updated, mock_message)
+		mock_add_next_action_comment.assert_called_once_with(mock_bot, mock_message_updated)
+		mock_add_control_buttons.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
+		mock_forward_to_subchannel.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
+
+
+@patch("hashtag_data.HashtagData.__init__", return_value=None)
+@patch("logging.info")
+@patch("utils.add_comment_to_ticket")
+@patch("utils.edit_message_content")
+@patch("utils.get_post_content", side_effect=lambda post_data: (post_data.text, post_data.entities))
+@patch("utils.is_post_data_equal", return_value=False)
+@patch("scheduled_messages_utils.ScheduledMessageDispatcher.update_status_from_tags")
+class UpdateMainMessageContentTest(TestCase):
+	def test_default(self, mock_update_status_from_tags, mock_is_post_data_equal, mock_get_post_content,
+					 mock_edit_message_content, mock_add_comment_to_ticket, mock_info, *args):
+		mock_bot = Mock(spec=TeleBot)
+		hashtag_data = HashtagData()
+		hashtag_data.comment = None
+		text = ""
+		entities = []
+		mock_message = test_helper.create_mock_message(text, entities)
+		mock_message.reply_markup = None
+		mock_message_orig = test_helper.create_mock_message(text, entities)
+
+		forwarding_utils.update_main_message_content(mock_bot, hashtag_data, mock_message, mock_message_orig)
+		mock_update_status_from_tags.assert_called_once_with(mock_bot, mock_message, hashtag_data)
+		mock_is_post_data_equal.assert_called_once_with(mock_message, mock_message_orig)
+		mock_get_post_content.assert_called_once_with(mock_message)
+		mock_edit_message_content.assert_called_once_with(mock_bot, mock_message, text=text, entities=entities, reply_markup=None)
+		mock_add_comment_to_ticket.assert_not_called()
+		mock_info.assert_not_called()
+
+	def test_equal_posts(self, mock_update_status_from_tags, mock_is_post_data_equal, mock_get_post_content,
+					 mock_edit_message_content, mock_add_comment_to_ticket, mock_info, *args):
+		mock_bot = Mock(spec=TeleBot)
+		hashtag_data = HashtagData()
+		hashtag_data.comment = None
+		text = ""
+		entities = []
+		mock_is_post_data_equal.return_value = True
+		mock_message = test_helper.create_mock_message(text, entities)
+		mock_message.reply_markup = None
+		mock_message_orig = test_helper.create_mock_message(text, entities)
+
+		forwarding_utils.update_main_message_content(mock_bot, hashtag_data, mock_message, mock_message_orig)
+		mock_update_status_from_tags.assert_called_once_with(mock_bot, mock_message, hashtag_data)
+		mock_is_post_data_equal.assert_called_once_with(mock_message, mock_message_orig)
+		mock_get_post_content.assert_not_called()
+		mock_edit_message_content.assert_not_called()
+		mock_add_comment_to_ticket.assert_not_called()
+		mock_info.assert_not_called()
+
+	def test_equal_posts_no_original(self, mock_update_status_from_tags, mock_is_post_data_equal, mock_get_post_content,
+					 mock_edit_message_content, mock_add_comment_to_ticket, mock_info, *args):
+		mock_bot = Mock(spec=TeleBot)
+		hashtag_data = HashtagData()
+		hashtag_data.comment = None
+		text = ""
+		entities = []
+		mock_message = test_helper.create_mock_message(text, entities)
+		mock_message.reply_markup = None
+
+		forwarding_utils.update_main_message_content(mock_bot, hashtag_data, mock_message)
+		mock_update_status_from_tags.assert_called_once_with(mock_bot, mock_message, hashtag_data)
+		mock_is_post_data_equal.assert_not_called()
+		mock_get_post_content.assert_called_once_with(mock_message)
+		mock_edit_message_content.assert_called_once_with(mock_bot, mock_message, text=text, entities=entities, reply_markup=None)
+		mock_add_comment_to_ticket.assert_not_called()
+		mock_info.assert_not_called()
+
+	def test_with_comment(self, mock_update_status_from_tags, mock_is_post_data_equal, mock_get_post_content,
+					 mock_edit_message_content, mock_add_comment_to_ticket, mock_info, *args):
+		mock_bot = Mock(spec=TeleBot)
+		hashtag_data = HashtagData()
+		comment_text = "Test comment"
+		comment_entities = None
+		hashtag_data.comment = (comment_text, comment_entities)
+		text = ""
+		entities = []
+		mock_message = test_helper.create_mock_message(text, entities)
+		mock_message.reply_markup = None
+		mock_message_orig = test_helper.create_mock_message(text, entities)
+
+		forwarding_utils.update_main_message_content(mock_bot, hashtag_data, mock_message, mock_message_orig)
+		mock_update_status_from_tags.assert_called_once_with(mock_bot, mock_message, hashtag_data)
+		mock_is_post_data_equal.assert_called_once_with(mock_message, mock_message_orig)
+		mock_get_post_content.assert_called_once_with(mock_message)
+		mock_edit_message_content.assert_called_once_with(mock_bot, mock_message, text=text, entities=entities, reply_markup=None)
+		mock_add_comment_to_ticket.assert_called_once_with(mock_bot, mock_message, comment_text, comment_entities)
+		mock_info.assert_not_called()
 
 
 

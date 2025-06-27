@@ -8,6 +8,7 @@ from telebot.apihelper import ApiTelegramException
 import comment_utils
 import config_utils
 import core_api
+import user_utils
 import utils
 import db_utils
 import forwarding_utils
@@ -59,7 +60,7 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_messag
 	if not updated_message:
 		updated_message = forwarded_message
 
-	forwarding_utils.forward_and_add_inline_keyboard(bot, updated_message)
+	forwarding_utils.forward_and_add_inline_keyboard(bot, updated_message, check_ticket=True)
 
 	return forwarded_message.id
 
@@ -172,6 +173,8 @@ def _check_all_messages(bot: telebot.TeleBot):
 
 		if _STATUS[__STOP_STATUS_KEY]:
 			break
+
+		user_utils.check_default_user_member(bot, channel_id)
 
 		start_message = unfinished_channels.get(channel_id)
 		_check_main_messages(bot, channel_id, start_message)

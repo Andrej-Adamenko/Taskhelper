@@ -3,7 +3,7 @@ import json
 import logging
 import threading
 import time
-from typing import List
+from typing import List, Callable
 
 import telebot
 from telebot.apihelper import ApiTelegramException
@@ -696,9 +696,10 @@ def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.Callback
 
 	hashtag_data.set_status_tag(is_ticket_opened)
 
-	updated_post_data = hashtag_data.get_updated_post_data()
+	update_message_and_forward_to_subchannels(bot, hashtag_data, post_data, keyboard_function=_update_stat_button)
 
-	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
+def _update_stat_button(bot: telebot.TeleBot, updated_post_data: telebot.types.Message, hashtag: HashtagData):
+	is_ticket_opened = hashtag.is_opened()
 	for button in updated_post_data.reply_markup.keyboard[0]:
 		cb_type, _ = utils.parse_callback_str(button.callback_data)
 		if cb_type == CB_TYPES.OPEN or cb_type == CB_TYPES.CLOSE:
@@ -707,9 +708,7 @@ def change_state_button_event(bot: telebot.TeleBot, call: telebot.types.Callback
 			state_btn_text = config_utils.BUTTON_TEXTS["OPENED_TICKET" if is_ticket_opened else "CLOSED_TICKET"]
 			button.text = state_btn_text
 			break
-	add_control_buttons(bot, updated_post_data, hashtag_data)
-	forward_to_subchannel(bot, updated_post_data, hashtag_data)
-
+	add_control_buttons(bot, updated_post_data, hashtag)
 
 def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, new_subchannel_name: str):
 	post_data = call.message
@@ -743,11 +742,8 @@ def change_subchannel_button_event(bot: telebot.TeleBot, call: telebot.types.Cal
 
 	hashtag_data.set_priority(subchannel_priority)
 
-	updated_post_data = hashtag_data.get_updated_post_data()
+	update_message_and_forward_to_subchannels(bot, hashtag_data, post_data)
 
-	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
-	add_control_buttons(bot, updated_post_data, hashtag_data)
-	forward_to_subchannel(bot, updated_post_data, hashtag_data)
 
 
 def change_priority_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, new_priority: str):
@@ -764,11 +760,7 @@ def change_priority_button_event(bot: telebot.TeleBot, call: telebot.types.Callb
 	utils.add_comment_to_ticket(bot, post_data, f"{call.from_user.first_name} changed ticket's priority to {new_priority}. ")
 	hashtag_data.set_priority(new_priority)
 
-	updated_post_data = hashtag_data.get_updated_post_data()
-
-	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
-	add_control_buttons(bot, updated_post_data, hashtag_data)
-	forward_to_subchannel(bot, updated_post_data, hashtag_data)
+	update_message_and_forward_to_subchannels(bot, hashtag_data, post_data)
 
 
 def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQuery, selected_user: str):
@@ -790,18 +782,16 @@ def toggle_cc_button_event(bot: telebot.TeleBot, call: telebot.types.CallbackQue
 	text, entities = user_utils.insert_user_reference(selected_user, comment_text)
 	utils.add_comment_to_ticket(bot, post_data, text, entities)
 
-	updated_post_data = hashtag_data.get_updated_post_data()
-
-	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
-	show_cc_buttons(bot, updated_post_data)
-	forward_to_subchannel(bot, updated_post_data, hashtag_data)
+	update_message_and_forward_to_subchannels(bot, hashtag_data, post_data,
+			keyboard_function=lambda bot_item, updated_post_data, hashtag: show_cc_buttons(bot_item, updated_post_data))
 
 
-def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, new_ticket: bool = False):
+def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.types.Message, new_ticket: bool = False,
+									check_ticket: bool = False):
 	main_channel_id = post_data.chat.id
 	main_message_id = post_data.message_id
 
-	hashtag_data = HashtagData(post_data, main_channel_id, True)
+	hashtag_data = HashtagData(post_data, main_channel_id, True, check_ticket)
 
 	if new_ticket:
 		sender_id = db_utils.get_main_message_sender(main_channel_id, main_message_id)
@@ -810,18 +800,17 @@ def forward_and_add_inline_keyboard(bot: telebot.TeleBot, post_data: telebot.typ
 			for user_tag in user_tags:
 				hashtag_data.add_user(user_tag)
 
-	updated_post_data = hashtag_data.get_updated_post_data()
-
-	update_main_message_content(bot, hashtag_data, updated_post_data, post_data)
-	comment_dispatcher.add_next_action_comment(bot, updated_post_data)
-	add_control_buttons(bot, updated_post_data, hashtag_data)
-	forward_to_subchannel(bot, updated_post_data, hashtag_data)
+	update_message_and_forward_to_subchannels(bot, hashtag_data, post_data, True)
 
 
-def update_message_and_forward_to_subchannels(bot: telebot.TeleBot, hashtag_data: HashtagData):
+def update_message_and_forward_to_subchannels(bot: telebot.TeleBot, hashtag_data: HashtagData, post_data: telebot.types.Message = None,
+											  add_next_action_comment: bool = False,
+											  keyboard_function: Callable[[telebot.TeleBot, telebot.types.Message, HashtagData], None] = add_control_buttons):
 	updated_message = hashtag_data.get_updated_post_data()
-	update_main_message_content(bot, hashtag_data, updated_message)
-	add_control_buttons(bot, updated_message, hashtag_data)
+	update_main_message_content(bot, hashtag_data, updated_message, post_data)
+	if add_next_action_comment:
+		comment_dispatcher.add_next_action_comment(bot, updated_message)
+	keyboard_function(bot, updated_message, hashtag_data)
 	forward_to_subchannel(bot, updated_message, hashtag_data)
 
 
@@ -835,6 +824,9 @@ def update_main_message_content(bot: telebot.TeleBot, hashtag_data: HashtagData,
 	try:
 		text, entities = utils.get_post_content(post_data)
 		utils.edit_message_content(bot, post_data, text=text, entities=entities, reply_markup=post_data.reply_markup)
+		if hashtag_data.comment:
+			comment_text, comment_entities = hashtag_data.comment
+			utils.add_comment_to_ticket(bot, post_data, comment_text, comment_entities)
 	except ApiTelegramException as E:
 		if E.error_code == 429:
 			raise E
@@ -844,6 +836,7 @@ def update_main_message_content(bot: telebot.TeleBot, hashtag_data: HashtagData,
 
 def get_invalid_ticket_ids(bot: telebot.TeleBot):
 	logging.info("Deleting invalid ticket ids")
+	db_utils.delete_invalid_ticket_data()
 	channels_data = db_utils.get_all_individual_channels()
 	for channel_data in channels_data:
 		count_invalid = 0

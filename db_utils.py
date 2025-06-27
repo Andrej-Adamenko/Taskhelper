@@ -731,6 +731,19 @@ def set_ticket_update_time(main_message_id, main_channel_id, update_time):
 
 
 @db_thread_lock
+def get_assigned_users_by_channel(main_channel_id) -> list:
+	sql = '''SELECT count(td.user_tags) count_tickets,
+	 				iif(instr(td.user_tags, ","),substr(td.user_tags, 1, instr(td.user_tags, ",") - 1), td.user_tags) user_tag
+	 		 FROM tickets_data td
+			 LEFT JOIN main_messages mm ON mm.main_message_id = td.main_message_id and mm.main_channel_id = td.main_channel_id
+			 WHERE td.main_channel_id = (?) and mm.id IS NOT NULL
+			 GROUP BY user_tag
+			 ORDER BY count_tickets DESC'''
+	CURSOR.execute(sql, (main_channel_id, ))
+	return CURSOR.fetchall()
+
+
+@db_thread_lock
 def get_user_highest_priority(main_channel_id, user_tag):
 	sql = "SELECT min(priority) FROM tickets_data WHERE user_tags LIKE '%' || ? || '%' AND main_channel_id=(?)"
 	CURSOR.execute(sql, (user_tag, main_channel_id,))
@@ -743,6 +756,22 @@ def delete_ticket_data(main_message_id, main_channel_id):
 	sql = "DELETE FROM tickets_data WHERE main_message_id=(?) AND main_channel_id=(?)"
 	CURSOR.execute(sql, (main_message_id, main_channel_id,))
 	DB_CONNECTION.commit()
+
+
+@db_thread_lock
+def delete_invalid_ticket_data():
+	sql = '''SELECT td.id FROM tickets_data td
+			 LEFT JOIN main_messages mm ON mm.main_message_id = td.main_message_id and mm.main_channel_id = td.main_channel_id
+			 WHERE mm.id IS NULL'''
+	CURSOR.execute(sql)
+	result = CURSOR.fetchall()
+	if result:
+		result = [row[0] for row in result]
+		format_string = ",".join(["?"] * len(result))
+		sql ="DELETE FROM tickets_data WHERE id IN (%s)"
+		CURSOR.execute(sql % format_string, tuple(result))
+	DB_CONNECTION.commit()
+
 
 
 @db_thread_lock
