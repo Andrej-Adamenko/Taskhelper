@@ -93,6 +93,7 @@ for key in config_json:
 
 
 def load_discussion_chat_ids(bot: telebot.TeleBot):
+	data = {}
 	main_channel_ids = db_utils.get_main_channel_ids()
 	for channel_id in main_channel_ids:
 		try:
@@ -100,7 +101,11 @@ def load_discussion_chat_ids(bot: telebot.TeleBot):
 		except ApiTelegramException:
 			logging.error(f"Can't load discussion chat data for {channel_id}")
 			continue
-		DISCUSSION_CHAT_DATA[str(channel_id)] = channel_data.linked_chat_id
+		if channel_data.linked_chat_id:
+			data[str(channel_id)] = channel_data.linked_chat_id
+
+	DISCUSSION_CHAT_DATA.clear()
+	DISCUSSION_CHAT_DATA.update(data)
 
 
 def update_config(updated_config_data):
