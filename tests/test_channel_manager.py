@@ -1679,6 +1679,7 @@ class TestHandleCallback(TestCase):
 		result = channel_manager._set_channel_ticket_settings_state(mock_call, state)
 
 
+@patch("config_utils.DISCUSSION_CHAT_DATA", {"-10087654321": -10012345678})
 @patch("db_utils.is_main_channel_exists", return_value=False)
 @patch("db_utils.is_individual_channel_exists", return_value=False)
 @patch("logging.warning")
@@ -1708,6 +1709,21 @@ class InitializeChannelTest(TestCase):
 		user_id = 852364
 		mock_bot.get_chat_administrators.return_value = []
 		mock_is_main_channel_exists.return_value = True
+
+		channel_manager.initialize_channel(mock_bot, channel_id, user_id)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_bot.get_chat_administrators.assert_not_called()
+		mock_warning.assert_not_called()
+		mock_insert_individual_channel.assert_not_called()
+		mock_create_settings_message.assert_not_called()
+
+	def test_discussion_chat(self, mock_create_settings_message, mock_insert_individual_channel,
+					 mock_warning, mock_is_individual_channel_exists, mock_is_main_channel_exists, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		user_id = 852364
+		mock_bot.get_chat_administrators.return_value = []
 
 		channel_manager.initialize_channel(mock_bot, channel_id, user_id)
 		mock_is_main_channel_exists.assert_called_once_with(channel_id)

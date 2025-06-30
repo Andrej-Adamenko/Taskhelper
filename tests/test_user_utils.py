@@ -355,8 +355,8 @@ class AddNewMemberTest(TestCase):
 		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
 		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
 		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
-		comment_text = f"{{USER}} becomes a member. User tag is #{user_tag[0]}."
-		text = f"{user_id} becomes a member. User tag is #{user_tag[0]}."
+		comment_text = f"{{USER}} has become a member. Assigned user tag: #{user_tag[0]}."
+		text = f"{user_id} has become a member. Assigned user tag: #{user_tag[0]}."
 		mock_insert_user_reference.return_value = text, None
 
 		user_utils.check_new_member(mock_member_update, mock_bot)
@@ -400,8 +400,8 @@ class AddNewMemberTest(TestCase):
 		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
 		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
 		user_tag_text = ", ".join([f"#{user_tag}" for user_tag in user_tags])
-		comment_text = f"{{USER}} becomes a member. User tags is {user_tag_text}."
-		text = f"{user_id} becomes a member. User tags is {user_tag_text}."
+		comment_text = f"{{USER}} has become a member. Assigned user tags: {user_tag_text}."
+		text = f"{user_id} has become a member. Assigned user tags: {user_tag_text}."
 		mock_insert_user_reference.return_value = text, None
 
 		user_utils.check_new_member(mock_member_update, mock_bot)

@@ -261,7 +261,7 @@ def get_exist_settings_message(bot: telebot.TeleBot, channel_id):
 
 
 def initialize_channel(bot: telebot.TeleBot, channel_id: int, user_id: int = None):
-	if db_utils.is_main_channel_exists(channel_id):
+	if db_utils.is_main_channel_exists(channel_id) or utils.get_key_by_value(config_utils.DISCUSSION_CHAT_DATA, channel_id):
 		return
 
 	if not db_utils.is_individual_channel_exists(channel_id):

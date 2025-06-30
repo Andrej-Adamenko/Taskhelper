@@ -205,7 +205,7 @@ def check_new_member(member_update: telebot.types.ChatMemberUpdated, bot: telebo
 	elif str(channel.id) in config_utils.DISCUSSION_CHAT_DATA:
 		user_tags = utils.get_keys_by_value(config_utils.USER_TAGS, user_id)
 		user_tag_text = ", ".join([f"#{user_tag}" for user_tag in user_tags])
-		text = f"{{USER}} becomes a member. User {'tags' if len(user_tags) > 1 else 'tag'} is {user_tag_text}."
+		text = f"{{USER}} has become a member. Assigned user {'tags' if len(user_tags) > 1 else 'tag'}: {user_tag_text}."
 		text, entities = insert_user_reference(user_tags[0], text)
 		bot.send_message(chat_id=config_utils.DISCUSSION_CHAT_DATA[str(channel.id)], text=text, entities=entities)
 
