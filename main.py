@@ -73,8 +73,8 @@ def handle_automatically_forwarded_message(msg_data: telebot.types.Message):
 	if msg_data.media_group_id:
 		return
 
-	forwarded_from_str = str(msg_data.forward_from_chat.id)
-	if forwarded_from_str not in DISCUSSION_CHAT_DATA:
+	forwarded_from_str = str(msg_data.forward_from_chat.id) if msg_data.forward_from_chat else None
+	if not forwarded_from_str or forwarded_from_str not in DISCUSSION_CHAT_DATA:
 		return
 
 	discussion_chat_id = DISCUSSION_CHAT_DATA[forwarded_from_str]
