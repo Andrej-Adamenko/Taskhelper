@@ -18,7 +18,7 @@ import threading
 from config_utils import DISCUSSION_CHAT_DATA, DELAY_AFTER_ONE_SCAN
 
 __STOP_STATUS_KEY = "stop"
-
+_CHECK_DEFAULT_USER_MEMBER = {}
 _EXPORT_BATCH_SIZE = 50
 _INTERVAL_UPDATING_THREAD: threading.Thread = None
 _STATUS: dict = {
@@ -173,7 +173,9 @@ def _check_all_messages(bot: telebot.TeleBot):
 		if _STATUS[__STOP_STATUS_KEY]:
 			break
 
-		user_utils.check_default_user_member(bot, channel_id)
+		if channel_id not in _CHECK_DEFAULT_USER_MEMBER or time.time() - _CHECK_DEFAULT_USER_MEMBER[channel_id] > 24 * 60 * 60:
+			user_utils.check_default_user_member(bot, channel_id)
+			_CHECK_DEFAULT_USER_MEMBER[channel_id] = time.time()
 
 		start_message = unfinished_channels.get(channel_id)
 		_check_main_messages(bot, channel_id, start_message)
