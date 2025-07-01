@@ -732,6 +732,35 @@ class HandleMainChannelChangeTest(TestCase):
         mock_delete_main_channel.assert_not_called()
         mock_load_discussion_chat_ids.assert_called_once_with(mock_bot)
 
+    def test_add_main_channel_order(self, mock_is_main_channel_exists, mock_insert_main_channel,
+                              mock_get_individual_channel_settings, mock_delete_individual_channel,
+                              mock_delete_forwarded_message, mock_send_member_tags, mock_delete_main_channel,
+                              mock_load_discussion_chat_ids, *args):
+        mock_bot = Mock(spec=TeleBot)
+        channel_id = -10012345678
+        main_channel_id = -10087654321
+        settings_id = 2
+        arguments = str(main_channel_id)
+        mock_message = test_helper.create_mock_message("/add_main_channel -10087654321", [], channel_id)
+        mock_is_main_channel_exists.return_value = False
+        mock_get_individual_channel_settings.return_value = ("{\"settings_message_id\": " + f"{settings_id}" + "}", "1,2")
+        manager = Mock()
+        manager.attach_mock(mock_is_main_channel_exists, "a")
+        manager.attach_mock(mock_insert_main_channel, "b")
+        manager.attach_mock(mock_get_individual_channel_settings, "c")
+        manager.attach_mock(mock_delete_forwarded_message, "d")
+        manager.attach_mock(mock_delete_individual_channel, "e")
+        manager.attach_mock(mock_send_member_tags, "f")
+        manager.attach_mock(mock_bot.send_message, "g")
+        manager.attach_mock(mock_delete_main_channel, "h")
+        manager.attach_mock(mock_load_discussion_chat_ids, "i")
+        expected_calls = [call.a(main_channel_id), call.b(main_channel_id), call.i(mock_bot), call.c(main_channel_id),
+                          call.d(mock_bot, main_channel_id, settings_id), call.e(main_channel_id),
+                          call.f(main_channel_id, mock_bot), call.g(chat_id=channel_id, text="Main channel was successfully added.")]
+
+        command_utils.handle_main_channel_change(mock_bot, mock_message, arguments)
+        self.assertEqual(manager.mock_calls, expected_calls)
+
     def test_add_main_channel_not_exist_settings_message_id(self, mock_is_main_channel_exists, mock_insert_main_channel,
                               mock_get_individual_channel_settings, mock_delete_individual_channel,
                               mock_delete_forwarded_message, mock_send_member_tags,
@@ -821,6 +850,32 @@ class HandleMainChannelChangeTest(TestCase):
         mock_delete_forwarded_message.assert_not_called()
         mock_send_member_tags.assert_not_called()
         mock_load_discussion_chat_ids.assert_called_once_with(mock_bot)
+
+    def test_delete_main_channel_order(self, mock_is_main_channel_exists, mock_insert_main_channel,
+                                 mock_get_individual_channel_settings, mock_delete_individual_channel,
+                                 mock_delete_forwarded_message, mock_send_member_tags, mock_delete_main_channel,
+                                 mock_load_discussion_chat_ids, *args):
+        mock_bot = Mock(spec=TeleBot)
+        channel_id = -10012345678
+        main_channel_id = -10087654321
+        arguments = str(main_channel_id)
+        mock_message = test_helper.create_mock_message("/remove_main_channel -10087654321", [], channel_id)
+        mock_is_main_channel_exists.return_value = True
+        manager = Mock()
+        manager.attach_mock(mock_is_main_channel_exists, "a")
+        manager.attach_mock(mock_insert_main_channel, "b")
+        manager.attach_mock(mock_get_individual_channel_settings, "c")
+        manager.attach_mock(mock_delete_forwarded_message, "d")
+        manager.attach_mock(mock_delete_individual_channel, "e")
+        manager.attach_mock(mock_send_member_tags, "f")
+        manager.attach_mock(mock_bot.send_message, "g")
+        manager.attach_mock(mock_delete_main_channel, "h")
+        manager.attach_mock(mock_load_discussion_chat_ids, "i")
+        expected_calls = [call.a(main_channel_id), call.h(main_channel_id), call.i(mock_bot),
+                          call.g(chat_id=channel_id, text="Main channel was successfully removed.")]
+
+        command_utils.handle_main_channel_change(mock_bot, mock_message, arguments)
+        self.assertEqual(manager.mock_calls, expected_calls)
 
     def test_delete_main_channel_not_exist(self, mock_is_main_channel_exists, mock_insert_main_channel,
                                            mock_get_individual_channel_settings, mock_delete_individual_channel,
