@@ -1,5 +1,7 @@
 from unittest import TestCase, main
-from unittest.mock import patch
+from unittest.mock import patch, Mock
+
+from telebot import TeleBot
 
 import config_utils
 
@@ -110,6 +112,28 @@ class AddUsersFromDB(TestCase):
 		self.assertEqual(config_utils.USER_TAGS, {user_tag: user_id})
 		mock_update_config.assert_not_called()
 		mock_delete_users_table.assert_not_called()
+
+
+@patch("db_utils.get_main_channel_ids", return_value=[-10012345678, -10032165487, -10087654321])
+@patch("logging.error")
+class LoadDiscussionChatIdTest(TestCase):
+	@patch("config_utils.DISCUSSION_CHAT_DATA", {})
+	def test_emtpy_chat_data(self, *args):
+		discussion_chats = {-10012345678: -10087654321, -10032165487: -10087321564}
+		mock_bot = Mock(spec=TeleBot)
+		mock_bot.get_chat.side_effect = lambda channel_id: Mock(id=channel_id, linked_chat_id=discussion_chats[channel_id] if channel_id in discussion_chats else None)
+
+		config_utils.load_discussion_chat_ids(mock_bot)
+		self.assertEqual(config_utils.DISCUSSION_CHAT_DATA, {"-10012345678": -10087654321, "-10032165487": -10087321564})
+
+	@patch("config_utils.DISCUSSION_CHAT_DATA", {"-10012345678": -1002156724, "-1001549783544": -10025874136})
+	def test_filled_chat_data(self, *args):
+		discussion_chats = {-10012345678: -10087654321, -10032165487: -10087321564}
+		mock_bot = Mock(spec=TeleBot)
+		mock_bot.get_chat.side_effect = lambda channel_id: Mock(id=channel_id, linked_chat_id=discussion_chats[channel_id] if channel_id in discussion_chats else None)
+
+		config_utils.load_discussion_chat_ids(mock_bot)
+		self.assertEqual(config_utils.DISCUSSION_CHAT_DATA, {"-10012345678": -10087654321, "-10032165487": -10087321564})
 
 
 if __name__ == "__main__":

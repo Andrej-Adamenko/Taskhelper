@@ -864,6 +864,13 @@ def get_individual_channel_settings(channel_id):
 	result = CURSOR.fetchone()
 	return result
 
+@db_thread_lock
+def get_individual_channel_user_id(channel_id):
+	sql = "SELECT user_id FROM individual_channel_settings WHERE channel_id=(?)"
+	CURSOR.execute(sql, (channel_id,))
+	result = CURSOR.fetchone()
+	return result
+
 
 @db_thread_lock
 def insert_individual_channel(channel_id, settings, user_id):

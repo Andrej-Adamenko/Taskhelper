@@ -5,7 +5,7 @@ from typing import List, Dict
 
 import telebot
 from telebot.apihelper import ApiTelegramException
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberOwner, Message
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ChatMemberOwner, Message, User
 
 import config_utils
 import core_api
@@ -283,11 +283,13 @@ def initialize_channel(bot: telebot.TeleBot, channel_id: int, user_id: int = Non
 
 		settings_str = json.dumps(_DEFAULT_SETTINGS)
 		db_utils.insert_individual_channel(channel_id, settings_str, user_id)
+	elif not user_id:
+		user_id = db_utils.get_individual_channel_user_id(channel_id)
 
-	create_settings_message(bot, channel_id)
+	create_settings_message(bot, channel_id, user_id)
 
 
-def create_settings_message(bot: telebot.TeleBot, channel_id: int):
+def create_settings_message(bot: telebot.TeleBot, channel_id: int, user_id: int):
 	settings_message_id = get_settings_message_id(channel_id)
 	if settings_message_id:
 		settings_message = utils.get_message_content_by_id(bot, channel_id, settings_message_id)
@@ -308,6 +310,8 @@ def create_settings_message(bot: telebot.TeleBot, channel_id: int):
 		keyboard = generate_settings_keyboard(channel_id)
 		text = generate_current_settings_text(channel_id)
 		msg = bot.send_message(chat_id=channel_id, reply_markup=keyboard, text=text)
+		call = CallbackQuery(0, User(user_id, False, "Bot"), "", "", "", message=msg)
+		_set_channel_ticket_settings_state(call, CB_TYPES.OPEN_CHANNEL_SETTINGS)
 		set_settings_message_id(channel_id, msg.id)
 		db_utils.insert_or_update_last_msg_id(msg.id, channel_id)
 
@@ -435,15 +439,6 @@ def _call_settings_button(bot: telebot.TeleBot, call: CallbackQuery,
 									  reply_markup=ticket_keyboard)
 
 
-def update_settings_keyboard(bot: telebot.TeleBot, message: Message, keyboard: InlineKeyboardMarkup = None):
-	channel_id = message.chat.id
-	message_id = message.id
-	if keyboard is None:
-		keyboard = generate_settings_keyboard(channel_id)
-	text = generate_current_settings_text(channel_id)
-	bot.edit_message_text(chat_id=channel_id, message_id=message_id, reply_markup=keyboard, text=text)
-
-
 def update_settings_message(bot: telebot.TeleBot, channel_id: int, message_id: int,
 							keyboard: InlineKeyboardMarkup = None):
 	text = generate_current_settings_text(channel_id)
@@ -532,7 +527,7 @@ def handle_callback(bot: telebot.TeleBot, call: CallbackQuery):
 		toggle_button(bot, call, callback_type, other_data)
 	elif callback_type == CB_TYPES.CREATE_CHANNEL_SETTINGS:
 		_set_channel_ticket_settings_state(call, CB_TYPES.OPEN_CHANNEL_SETTINGS)
-		create_settings_message(bot, message.chat.id)
+		create_settings_message(bot, message.chat.id, call.from_user.id)
 
 
 def _set_channel_ticket_settings_state(call: CallbackQuery, state: str):
