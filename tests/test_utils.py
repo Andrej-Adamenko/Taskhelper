@@ -431,6 +431,12 @@ class CheckBotPermissionForMessagesTest(TestCase):
 		mock_member = Mock(status="administrator", can_post_messages=None, can_edit_messages=None)
 		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
 
+		mock_member = Mock(status="left", can_post_messages=True, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="kicked", can_post_messages=True, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
 	def test_member_group(self):
 		mock_member = Mock(status="member", can_send_messages=True, can_edit_messages=True)
 		mock_chat = Mock(type="group", permissions=Mock(can_send_message=None))
@@ -453,6 +459,12 @@ class CheckBotPermissionForMessagesTest(TestCase):
 
 		mock_member = Mock(status="administrator", can_send_messages=None, can_edit_messages=None)
 		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="left", can_send_messages=True, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="kicked", can_send_messages=True, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
 
 	def test_member_group_no_send_message(self):
 		mock_member = Mock(status="member", can_send_messages=True, can_edit_messages=True)
@@ -477,6 +489,12 @@ class CheckBotPermissionForMessagesTest(TestCase):
 		mock_member = Mock(status="administrator", can_send_messages=None, can_edit_messages=None)
 		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
 
+		mock_member = Mock(status="left", can_send_messages=True, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="kicked", can_send_messages=True, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
 	def test_another_type(self):
 		mock_member = Mock(status="member", can_send_messages=True, can_edit_messages=True)
 		mock_chat = Mock(type="private", permissions=Mock(can_send_messages=False))
@@ -500,6 +518,11 @@ class CheckBotPermissionForMessagesTest(TestCase):
 		mock_member = Mock(status="administrator", can_send_messages=None, can_edit_messages=None)
 		self.assertTrue(utils.check_bot_permission_for_messages(mock_member, mock_chat))
 
+		mock_member = Mock(status="left", can_send_messages=True, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+		mock_member = Mock(status="kicked", can_send_messages=True, can_edit_messages=True)
+		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
 
 
 if __name__ == "__main__":

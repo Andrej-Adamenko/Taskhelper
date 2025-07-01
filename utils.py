@@ -478,6 +478,9 @@ def __get_content_type_pyrogram_message(message: pyrogram.types.Message):
 
 
 def check_bot_permission_for_messages(member: telebot.types.ChatMember, chat: telebot.types.Chat):
+	if member.status in ['left', 'kicked']:
+		return False
+
 	is_admin = member.status in ["administrator", "creator"]
 	chat_type = chat.type
 	permissions = chat.permissions
