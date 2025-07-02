@@ -475,26 +475,26 @@ class HandleHelpCommandTest(TestCase):
         chat_id = -10087654321
         msg_data = test_helper.create_mock_message("", [], chat_id)
         help_text = ""
-        help_text += "/set_dump_chat_id <CHAT_ID> — changes dump chat id\n\n"
-        help_text += "/set_interval_check_time <MINUTES> — changes delay between interval checks\n\n"
-        help_text += "/add_main_channel <CHANNEL_ID> — add main channel\n\n"
-        help_text += "/remove_main_channel <CHANNEL_ID> — remove main channel\n\n"
-        help_text += "/set_timezone <TIMEZONE> — changes timezone identifier\n"
+        help_text += "/set_dump_chat_id <CHAT_ID> — change the dump chat id\n\n"
+        help_text += "/set_interval_check_time <MINUTES> — change the delay between interval checks\n\n"
+        help_text += "/add_main_channel <CHANNEL_ID> — add the channel as a workspace\n\n"
+        help_text += "/remove_main_channel <CHANNEL_ID> — remove the channel as a workspace\n\n"
+        help_text += "/set_timezone <TIMEZONE> — change the timezone identifier\n"
         help_text += "Example: /set_timezone Europe/Kiev\n\n"
-        help_text += "/set_user_tag <TAG> <USERNAME_OR_USER_ID> — add or change username or user id of the tag\n"
+        help_text += "/set_user_tag <TAG> <USERNAME_OR_USER_ID> — add or change the username or the user id of the tag\n"
         help_text += "Example with username: /set_user_tag aa @username\n"
         help_text += "Example with user id: /set_user_tag aa 321123321\n\n"
-        help_text += "/remove_user_tag <TAG> — remove user assigned to specified tag\n"
+        help_text += "/remove_user_tag <TAG> — remove the user assigned to the specified tag\n"
         help_text += "Example with username: /remove_user_tag aa\n\n"
-        help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — changes default subchannel\n"
+        help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — change the default user tag and priority on the workspace\n"
         help_text += "Example: /set_default_subchannel -100987987987 aa 1\n\n"
-        help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — changes text on one of the buttons\n"
+        help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — change the text on one of the buttons\n"
         help_text += "Available buttons: opened, closed, assigned, cc, defer, check, priority\n"
         help_text += "Example: /set_button_text opened Op\n\n"
-        help_text += "/set_hashtag_text <HASHTAG_NAME> <NEW_VALUE> — changes hashtag text of one of the service hashtags\n"
+        help_text += "/set_hashtag_text <HASHTAG_NAME> <NEW_VALUE> — change the hashtag text of one of the service hashtags\n"
         help_text += "Available hashtags: opened, closed, deferred, priority\n"
         help_text += "Example: /set_hashtag_text opened Op\n\n"
-        help_text += "/set_remind_without_interaction <MINUTES> — changes timeout for skipping daily reminder if user is interacted with tickets within this time\n"
+        help_text += "/set_remind_without_interaction <MINUTES> — change the timeout for skipping a daily reminder if a user has interacted with tickets within that time\n"
         help_text += "Example: /set_remind_without_interaction 1440\n\n"
 
         command_utils.handle_help_command(mock_bot, msg_data, "")
@@ -656,6 +656,114 @@ class HandleMainChannelChangeTest(TestCase):
         mock_delete_individual_channel.assert_not_called()
         mock_delete_forwarded_message.assert_not_called()
         mock_load_discussion_chat_ids.assert_not_called()
+
+
+@patch("config_utils.USER_TAGS", {"aa": 1, "bb": 2, "cc": 3, "dd": 4, "ff": 5})
+@patch("config_utils.update_config")
+@patch("user_utils.get_member_ids_channel", return_value=[3, 4])
+@patch("db_utils.is_main_channel_exists")
+class HandleSetDefaultSubchannelTest(TestCase):
+    @patch("config_utils.DEFAULT_USER_DATA", {})
+    def test_default(self, mock_is_main_channel_exists, mock_get_member_ids_channel, mock_update_config, *args):
+        mock_bot = Mock(spec=TeleBot)
+        chat_id = 65487123
+        main_channel_id = "-10012345678"
+        tag = "cc"
+        priority = 2
+        arguments = f"{main_channel_id} {tag} {priority}"
+        mock_message = test_helper.create_mock_message("", [], chat_id)
+
+        command_utils.handle_set_default_subchannel(mock_bot, mock_message, arguments)
+        mock_is_main_channel_exists.assert_called_once_with(main_channel_id)
+        mock_get_member_ids_channel.assert_called_once_with(int(main_channel_id))
+        mock_bot.send_message.assert_called_once_with(chat_id=chat_id, text="Default user tag and priority have been successfully updated.")
+        mock_update_config.assert_called_once_with({"DEFAULT_USER_DATA": {main_channel_id: f"{tag} {priority}"}})
+        self.assertEqual(config_utils.DEFAULT_USER_DATA, {main_channel_id: f"{tag} {priority}"})
+
+    @patch("config_utils.DEFAULT_USER_DATA", {})
+    def test_incorrect_tag(self, mock_is_main_channel_exists, mock_get_member_ids_channel, mock_update_config, *args):
+        mock_bot = Mock(spec=TeleBot)
+        chat_id = 65487123
+        main_channel_id = "-10012345678"
+        tag = "ee"
+        priority = 2
+        arguments = f"{main_channel_id} {tag} {priority}"
+        mock_message = test_helper.create_mock_message("", [], chat_id)
+
+        command_utils.handle_set_default_subchannel(mock_bot, mock_message, arguments)
+        mock_is_main_channel_exists.assert_called_once_with(main_channel_id)
+        mock_get_member_ids_channel.assert_not_called()
+        mock_bot.send_message.assert_called_once_with(chat_id=chat_id, text="Failed to set user tag as default: user tag not found.")
+        mock_update_config.assert_not_called()
+        self.assertEqual(config_utils.DEFAULT_USER_DATA, {})
+
+    @patch("config_utils.DEFAULT_USER_DATA", {})
+    def test_non_member_tag(self, mock_is_main_channel_exists, mock_get_member_ids_channel, mock_update_config, *args):
+        mock_bot = Mock(spec=TeleBot)
+        chat_id = 65487123
+        main_channel_id = "-10012345678"
+        tag = "aa"
+        priority = 2
+        arguments = f"{main_channel_id} {tag} {priority}"
+        mock_message = test_helper.create_mock_message("", [], chat_id)
+
+        command_utils.handle_set_default_subchannel(mock_bot, mock_message, arguments)
+        mock_is_main_channel_exists.assert_called_once_with(main_channel_id)
+        mock_get_member_ids_channel.assert_called_once_with(int(main_channel_id))
+        mock_bot.send_message.assert_called_once_with(chat_id=chat_id, text="Failed to set user tag as default: user is not a workspace member.")
+        mock_update_config.assert_not_called()
+        self.assertEqual(config_utils.DEFAULT_USER_DATA, {})
+
+    @patch("config_utils.DEFAULT_USER_DATA", {"-10012345678": "aa 1", "-10012234568": "bb 3"})
+    def test_update_default_user(self, mock_is_main_channel_exists, mock_get_member_ids_channel, mock_update_config, *args):
+        mock_bot = Mock(spec=TeleBot)
+        chat_id = 65487123
+        main_channel_id = "-10012345678"
+        tag = "cc"
+        priority = 2
+        arguments = f"{main_channel_id} {tag} {priority}"
+        mock_message = test_helper.create_mock_message("", [], chat_id)
+
+        command_utils.handle_set_default_subchannel(mock_bot, mock_message, arguments)
+        mock_is_main_channel_exists.assert_called_once_with(main_channel_id)
+        mock_get_member_ids_channel.assert_called_once_with(int(main_channel_id))
+        mock_bot.send_message.assert_called_once_with(chat_id=chat_id, text="Default user tag and priority have been successfully updated.")
+        mock_update_config.assert_called_once_with({"DEFAULT_USER_DATA": {main_channel_id: f"{tag} {priority}", "-10012234568": "bb 3"}})
+        self.assertEqual(config_utils.DEFAULT_USER_DATA, {main_channel_id: f"{tag} {priority}", "-10012234568": "bb 3"})
+
+    @patch("config_utils.DEFAULT_USER_DATA", {"-10012345678": "aa 1"})
+    def test_no_main_channel_exists(self, mock_is_main_channel_exists, mock_get_member_ids_channel, mock_update_config, *args):
+        mock_bot = Mock(spec=TeleBot)
+        chat_id = 65487123
+        main_channel_id = "-10012345678"
+        tag = "cc"
+        priority = 2
+        arguments = f"{main_channel_id} {tag} {priority}"
+        mock_message = test_helper.create_mock_message("", [], chat_id)
+        mock_is_main_channel_exists.return_value = False
+
+        command_utils.handle_set_default_subchannel(mock_bot, mock_message, arguments)
+        mock_is_main_channel_exists.assert_called_once_with(main_channel_id)
+        mock_get_member_ids_channel.assert_not_called()
+        mock_bot.send_message.assert_called_once_with(chat_id=chat_id, text="Wrong main channel id.")
+        mock_update_config.assert_not_called()
+        self.assertEqual(config_utils.DEFAULT_USER_DATA, {"-10012345678": "aa 1"})
+
+    @patch("config_utils.DEFAULT_USER_DATA", {"-10012345678": "aa 1"})
+    def test_wrong_arguments(self, mock_is_main_channel_exists, mock_get_member_ids_channel, mock_update_config, *args):
+        mock_bot = Mock(spec=TeleBot)
+        chat_id = 65487123
+        main_channel_id = "-10012345678"
+        tag = "cc"
+        arguments = f"{main_channel_id} {tag}"
+        mock_message = test_helper.create_mock_message("", [], chat_id)
+
+        command_utils.handle_set_default_subchannel(mock_bot, mock_message, arguments)
+        mock_is_main_channel_exists.assert_not_called()
+        mock_get_member_ids_channel.assert_not_called()
+        mock_bot.send_message.assert_called_once_with(chat_id=chat_id, text="Wrong arguments.")
+        mock_update_config.assert_not_called()
+        self.assertEqual(config_utils.DEFAULT_USER_DATA, {"-10012345678": "aa 1"})
 
 
 
