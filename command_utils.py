@@ -135,6 +135,7 @@ def handle_main_channel_change(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 			bot.send_message(chat_id=msg_data.chat.id, text="This channel already added.")
 			return
 		db_utils.insert_main_channel(channel_id)
+		config_utils.load_discussion_chat_ids(bot)
 		channel_manager.delete_individual_settings_for_workspace(bot, channel_id)
 		user_utils.send_member_tags(channel_id, bot)
 		bot.send_message(chat_id=msg_data.chat.id, text="Main channel was successfully added.")
@@ -143,9 +144,8 @@ def handle_main_channel_change(bot: telebot.TeleBot, msg_data: telebot.types.Mes
 			bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 			return
 		db_utils.delete_main_channel(channel_id)
+		config_utils.load_discussion_chat_ids(bot)
 		bot.send_message(chat_id=msg_data.chat.id, text="Main channel was successfully removed.")
-
-	config_utils.load_discussion_chat_ids(bot)
 
 
 def handle_user_change(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
