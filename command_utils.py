@@ -60,26 +60,26 @@ def handle_command(bot: telebot.TeleBot, msg_data: telebot.types.Message):
 
 def handle_help_command(bot: telebot.TeleBot, msg_data: telebot.types.Message, arguments: str):
 	help_text = ""
-	help_text += "/set_dump_chat_id <CHAT_ID> — changes dump chat id\n\n"
-	help_text += "/set_interval_check_time <MINUTES> — changes delay between interval checks\n\n"
-	help_text += "/add_main_channel <CHANNEL_ID> — add main channel\n\n"
-	help_text += "/remove_main_channel <CHANNEL_ID> — remove main channel\n\n"
-	help_text += "/set_timezone <TIMEZONE> — changes timezone identifier\n"
+	help_text += "/set_dump_chat_id <CHAT_ID> — change the dump chat id\n\n"
+	help_text += "/set_interval_check_time <MINUTES> — change the delay between interval checks\n\n"
+	help_text += "/add_main_channel <CHANNEL_ID> — add the channel as a workspace\n\n"
+	help_text += "/remove_main_channel <CHANNEL_ID> — remove the channel as a workspace\n\n"
+	help_text += "/set_timezone <TIMEZONE> — change the timezone identifier\n"
 	help_text += "Example: /set_timezone Europe/Kiev\n\n"
-	help_text += "/set_user_tag <TAG> <USERNAME_OR_USER_ID> — add or change username or user id of the tag\n"
+	help_text += "/set_user_tag <TAG> <USERNAME_OR_USER_ID> — add or change the username or the user id of the tag\n"
 	help_text += "Example with username: /set_user_tag aa @username\n"
 	help_text += "Example with user id: /set_user_tag aa 321123321\n\n"
-	help_text += "/remove_user_tag <TAG> — remove user assigned to specified tag\n"
+	help_text += "/remove_user_tag <TAG> — remove the user assigned to the specified tag\n"
 	help_text += "Example with username: /remove_user_tag aa\n\n"
-	help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — changes default subchannel\n"
+	help_text += "/set_default_subchannel <MAIN_CHANNEL_ID> <DEFAULT_USER_TAG> <DEFAULT_PRIORITY> — change the default user tag and priority on the workspace\n"
 	help_text += "Example: /set_default_subchannel -100987987987 aa 1\n\n"
-	help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — changes text on one of the buttons\n"
+	help_text += "/set_button_text <BUTTON_NAME> <NEW_VALUE> — change the text on one of the buttons\n"
 	help_text += "Available buttons: opened, closed, assigned, cc, defer, check, priority\n"
 	help_text += "Example: /set_button_text opened Op\n\n"
-	help_text += "/set_hashtag_text <HASHTAG_NAME> <NEW_VALUE> — changes hashtag text of one of the service hashtags\n"
+	help_text += "/set_hashtag_text <HASHTAG_NAME> <NEW_VALUE> — change the hashtag text of one of the service hashtags\n"
 	help_text += "Available hashtags: opened, closed, deferred, priority\n"
 	help_text += "Example: /set_hashtag_text opened Op\n\n"
-	help_text += "/set_remind_without_interaction <MINUTES> — changes timeout for skipping daily reminder if user is interacted with tickets within this time\n"
+	help_text += "/set_remind_without_interaction <MINUTES> — change the timeout for skipping a daily reminder if a user has interacted with tickets within that time\n"
 	help_text += "Example: /set_remind_without_interaction 1440\n\n"
 	bot.send_message(chat_id=msg_data.chat.id, text=help_text)
 
@@ -269,9 +269,17 @@ def handle_set_default_subchannel(bot: telebot.TeleBot, msg_data: telebot.types.
 		bot.send_message(chat_id=msg_data.chat.id, text="Wrong main channel id.")
 		return
 
+	if tag not in user_utils.get_user_tags():
+		bot.send_message(chat_id=msg_data.chat.id, text="Failed to set user tag as default: user tag not found.")
+		return
+
+	if tag not in user_utils.get_user_tags(int(main_channel_id)):
+		bot.send_message(chat_id=msg_data.chat.id, text="Failed to set user tag as default: user is not a workspace member.")
+		return
+
 	config_utils.DEFAULT_USER_DATA[main_channel_id] = f"{tag} {priority}"
 
-	bot.send_message(chat_id=msg_data.chat.id, text="Default subchannel successfully changed.")
+	bot.send_message(chat_id=msg_data.chat.id, text="Default user tag and priority have been successfully updated.")
 	config_utils.update_config({"DEFAULT_USER_DATA": config_utils.DEFAULT_USER_DATA})
 
 
