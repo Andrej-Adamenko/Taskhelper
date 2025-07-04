@@ -196,7 +196,7 @@ def insert_user_reference(user_tag: str, text: str):
 		return text, None
 
 
-def check_default_user_member(bot: telebot.TeleBot, channel_id: int):
+def check_invalid_default_user_member(bot: telebot.TeleBot, channel_id: int, send_messages: bool = False):
 	channel_id_str = str(channel_id)
 	discussion_chat_id = config_utils.DISCUSSION_CHAT_DATA[channel_id_str] \
 						if channel_id_str in config_utils.DISCUSSION_CHAT_DATA else None
@@ -210,6 +210,9 @@ def check_default_user_member(bot: telebot.TeleBot, channel_id: int):
 
 	if HashtagData.check_user_tag(user_tag, channel_id):
 		return
+
+	if not send_messages:
+		return True
 
 	if discussion_chat_id:
 		text = "Invalid default user tag: user not found in the workspace. Please update the default user tag accordingly."
@@ -226,7 +229,7 @@ def check_default_user_member(bot: telebot.TeleBot, channel_id: int):
 		if user_id in members and user_id not in sent_to_users:
 			sent_to_users.append(user_id)
 			utils.send_message(bot, user_id, text)
-	return None
+	return True
 
 
 

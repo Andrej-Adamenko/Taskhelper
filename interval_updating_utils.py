@@ -174,9 +174,12 @@ def _check_all_messages(bot: telebot.TeleBot):
 		if _STATUS[__STOP_STATUS_KEY]:
 			break
 
-		if channel_id not in _CHECK_DEFAULT_USER_MEMBER or time.time() - _CHECK_DEFAULT_USER_MEMBER[channel_id] > 24 * 60 * 60:
-			user_utils.check_default_user_member(bot, channel_id)
-			_CHECK_DEFAULT_USER_MEMBER[channel_id] = time.time()
+		if user_utils.check_invalid_default_user_member(bot, channel_id):
+			if channel_id not in _CHECK_DEFAULT_USER_MEMBER or time.time() - _CHECK_DEFAULT_USER_MEMBER[channel_id] > 24 * 60 * 60:
+				user_utils.check_invalid_default_user_member(bot, channel_id, True)
+				_CHECK_DEFAULT_USER_MEMBER[channel_id] = time.time()
+		elif channel_id in _CHECK_DEFAULT_USER_MEMBER:
+			del _CHECK_DEFAULT_USER_MEMBER[channel_id]
 
 		start_message = unfinished_channels.get(channel_id)
 		_check_main_messages(bot, channel_id, start_message)
