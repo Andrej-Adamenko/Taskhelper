@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import logging
+import sqlite3
 from math import floor
 from typing import Union
 
@@ -31,9 +32,9 @@ def get_peer_type_fixed(peer_id: int) -> str:
 # replace original function with fixed version
 utils.get_peer_type = get_peer_type_fixed
 
-def create_client() -> pyrogram.Client:
+def create_client(name: str = None) -> pyrogram.Client:
 	return Client(
-		"pyrogram_bot",
+		"pyrogram_bot" + (f"_{name}" if name else ""),
 		api_id=APP_API_ID, api_hash=APP_API_HASH,
 		bot_token=BOT_TOKEN
 	)
@@ -46,6 +47,11 @@ def thread_error(func):
 			logging.info(f"Wait {E.value} seconds")
 			await asyncio.sleep(E.value)
 			return await inner_function(*args, **kwargs)
+		except sqlite3.OperationalError as E:
+			if str(E) == "database is locked":
+				logging.error(f"Core api {func.__name__}{args} exception - {E}. Wait 10 seconds")
+				await asyncio.sleep(10)
+				return await inner_function(*args, **kwargs)
 		except Exception as E:
 			logging.error(f"Core api {func.__name__}{args} exception - {E}")
 		return None
@@ -59,7 +65,7 @@ def thread_async_to_sync(func):
 		@functools.wraps(func)
 		async def inner_function_async(*args, **kwargs):
 			if "client" not in kwargs:
-				async with create_client() as client:
+				async with create_client(func.__name__) as client:
 					kwargs["client"] = client
 					return await func(*args, **kwargs)
 			return await func(*args, **kwargs)

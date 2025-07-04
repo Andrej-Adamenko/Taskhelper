@@ -196,9 +196,21 @@ def insert_user_reference(user_tag: str, text: str):
 		return text, None
 
 
+def update_data_on_member_change(member_update: telebot.types.ChatMemberUpdated, bot: telebot.TeleBot):
+	old_status = member_update.old_chat_member.status
+	new_status = member_update.new_chat_member.status
+	user_id = member_update.new_chat_member.user.id
+	channel_id = member_update.chat.id
+
+	if old_status in ["left", "kicked"] or new_status in ["left", "kicked"] and user_id != bot.user.id:
+		if db_utils.is_main_channel_exists(channel_id) or db_utils.is_individual_channel_exists(channel_id):
+			user_utils.set_member_ids_channels([member_update.chat.id])
+
+
 def check_new_member(member_update: telebot.types.ChatMemberUpdated, bot: telebot.TeleBot):
 	old_status = member_update.old_chat_member.status
 	new_status = member_update.new_chat_member.status
+	update_data_on_member_change(member_update, bot)
 
 	if old_status not in ['left', 'kicked'] or new_status not in ['member', 'restricted', 'administrator']:
 		return

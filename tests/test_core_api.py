@@ -3,6 +3,7 @@ from unittest.mock import patch, AsyncMock, Mock, call, MagicMock
 
 from pyrogram import Client
 
+import config_utils
 import core_api
 
 
@@ -178,6 +179,21 @@ class GetMembersTest(TestCase):
 		mock_sleep.assert_has_calls([call(0.5), call(0.5)])
 		self.assertEqual(mock_sleep.call_count, 2)
 		self.assertEqual(result, {-10012345678: [], -10087654321: [1, 2, 3]})
+
+
+@patch("pyrogram.client.Client.__init__", return_value=None)
+class CreateClientTest(TestCase):
+	def test_default(self, mock_init_client, *args):
+		core_api.create_client()
+		mock_init_client.assert_called_once_with("pyrogram_bot", api_id=config_utils.APP_API_ID,
+												 api_hash=config_utils.APP_API_HASH, bot_token=config_utils.BOT_TOKEN)
+
+	def test_with_name(self, mock_init_client, *args):
+		name = "test_method"
+		core_api.create_client(name)
+		mock_init_client.assert_called_once_with(f"pyrogram_bot_{name}", api_id=config_utils.APP_API_ID,
+												 api_hash=config_utils.APP_API_HASH, bot_token=config_utils.BOT_TOKEN)
+
 
 
 

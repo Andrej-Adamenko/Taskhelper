@@ -13,6 +13,7 @@ import db_utils
 import post_link_utils
 import threading_utils
 import channel_manager
+import user_utils
 from config_utils import MAX_BUTTONS_IN_ROW
 
 SAME_MSG_CONTENT_ERROR = "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message"
@@ -502,3 +503,25 @@ def check_bot_permission_for_messages(member: telebot.types.ChatMember, chat: te
 
 	return ((True if can_post is None else bool(can_post)) and
 			(True if can_edit is None else bool(can_edit)))
+
+
+def bot_changed_permission(member_update: telebot.types.ChatMemberUpdated, bot: telebot.TeleBot):
+	user_utils.update_data_on_member_change(member_update, bot)
+	has_permissions = check_bot_permission_for_messages(member_update.new_chat_member, member_update.chat)
+	if has_permissions:
+		time.sleep(1)
+		channel_manager.initialize_channel(bot, member_update.chat.id, user_id=member_update.from_user.id)
+		added_to_channel = (member_update.old_chat_member.status in ['left', 'kicked'] and
+							member_update.new_chat_member.status in ['member', 'restricted', 'administrator'])
+		if added_to_channel:
+			user_utils.send_member_tags(member_update.chat.id, bot)
+			channel_id = get_key_by_value(config_utils.DISCUSSION_CHAT_DATA, member_update.chat.id)
+			if channel_id:
+				user_utils.send_member_tags(int(channel_id), bot)
+		logging.info(f"Bot received permissions for channel {member_update.chat.id}")
+	else:
+		logging.info(f"Bot permissions for channel {member_update.chat.id} was removed")
+
+	if member_update.new_chat_member.status in ["left", "kicked"]:
+		if db_utils.is_individual_channel_exists(member_update.chat.id):
+			db_utils.delete_individual_channel(member_update.chat.id)

@@ -277,11 +277,14 @@ class CheckMembersOnMainChannelsTest(TestCase):
 
 @patch("config_utils.DISCUSSION_CHAT_DATA", {"-10012345678": -10087654321})
 @patch("config_utils.USER_TAGS", {"AA": 12345, "BB": 48615, "CC": 189735, "DD": 48615})
+@patch("db_utils.is_main_channel_exists", side_effect=lambda channel: channel in [-10012345678, -10012345654])
+@patch("db_utils.is_individual_channel_exists", side_effect=lambda channel: channel == -10012378456)
 @patch("user_utils.insert_user_reference")
 @patch("logging.error")
 @patch("logging.info")
-class AddNewMemberTest(TestCase):
-	def test_no_tag(self, mock_info, mock_error, mock_insert_user_reference, *args):
+@patch("user_utils.set_member_ids_channels")
+class CheckNewMemberTest(TestCase):
+	def test_no_tag(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
 		user_id = 12456
 		channel_id = -10012345678
 		channel_title = "Test channel"
@@ -295,12 +298,13 @@ class AddNewMemberTest(TestCase):
 		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
 
 		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
 		mock_bot.kick_chat_member.assert_called_once_with(channel_id, user_id)
 		mock_info.assert_called_once_with(f"Kicking member {user_id} from '{channel_title}")
 		mock_error.assert_not_called()
 		mock_insert_user_reference.assert_not_called()
 
-	def test_no_tag_error_kick(self, mock_info, mock_error, mock_insert_user_reference, *args):
+	def test_no_tag_error_kick(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
 		user_id = 12456
 		channel_id = -10012345678
 		channel_title = "Test channel"
@@ -315,12 +319,13 @@ class AddNewMemberTest(TestCase):
 		mock_bot.kick_chat_member.side_effect = Exception("Error test")
 
 		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
 		mock_bot.kick_chat_member.assert_called_once_with(channel_id, user_id)
 		mock_info.assert_not_called()
 		mock_error.assert_called_once_with(f"Error in kicking member {user_id} from '{channel_title}': Error test")
 		mock_insert_user_reference.assert_not_called()
 
-	def test_no_tag_from_ban(self, mock_info, mock_error, mock_insert_user_reference, *args):
+	def test_no_tag_from_ban(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
 		user_id = 12456
 		channel_id = -10012345678
 		channel_title = "Test channel"
@@ -334,12 +339,13 @@ class AddNewMemberTest(TestCase):
 		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
 
 		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
 		mock_bot.kick_chat_member.assert_called_once_with(channel_id, user_id)
 		mock_info.assert_called_once_with(f"Kicking member {user_id} from '{channel_title}")
 		mock_error.assert_not_called()
 		mock_insert_user_reference.assert_not_called()
 
-	def test_with_tag(self, mock_info, mock_error, mock_insert_user_reference, *args):
+	def test_with_tag(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
 		user_id = 12345
 		user_tag = ["AA"]
 		channel_id = -10012345678
@@ -358,12 +364,14 @@ class AddNewMemberTest(TestCase):
 		mock_insert_user_reference.return_value = text, None
 
 		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
 		mock_insert_user_reference.assert_called_once_with(user_tag[0], comment_text)
 		mock_bot.send_message.assert_called_once_with(chat_id=discussion_id, text=text, entities=None)
 		mock_info.assert_not_called()
 		mock_error.assert_not_called()
 
-	def test_with_tag_no_discussion_chat(self, mock_info, mock_error, mock_insert_user_reference, *args):
+	def test_with_tag_no_discussion_chat(self, mock_set_member_ids_channels, mock_info, mock_error,
+										 mock_insert_user_reference, *args):
 		user_id = 12345
 		channel_id = -10012345654
 		channel_title = "Test channel"
@@ -378,12 +386,13 @@ class AddNewMemberTest(TestCase):
 		mock_insert_user_reference.return_value = "", None
 
 		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
 		mock_insert_user_reference.assert_not_called()
 		mock_bot.send_message.assert_not_called()
 		mock_info.assert_not_called()
 		mock_error.assert_not_called()
 
-	def test_with_few_tags(self, mock_info, mock_error, mock_insert_user_reference, *args):
+	def test_with_few_tags(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
 		user_id = 48615
 		user_tags = ["BB", "DD"]
 		channel_id = -10012345678
@@ -403,10 +412,355 @@ class AddNewMemberTest(TestCase):
 		mock_insert_user_reference.return_value = text, None
 
 		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
 		mock_insert_user_reference.assert_called_once_with(user_tags[0], comment_text)
 		mock_bot.send_message.assert_called_once_with(chat_id=discussion_id, text=text, entities=None)
 		mock_info.assert_not_called()
 		mock_error.assert_not_called()
+
+	def test_left_channel(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12456
+		channel_id = -10012345678
+		channel_title = "Test channel"
+		old_status = "member"
+		new_status = "left"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+
+		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+		mock_bot.kick_chat_member.assert_not_called()
+		mock_info.assert_not_called()
+		mock_error.assert_not_called()
+		mock_insert_user_reference.assert_not_called()
+
+	def test_ban_channel(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12456
+		channel_id = -10012345678
+		channel_title = "Test channel"
+		old_status = "member"
+		new_status = "kicked"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+
+		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+		mock_bot.kick_chat_member.assert_not_called()
+		mock_info.assert_not_called()
+		mock_error.assert_not_called()
+		mock_insert_user_reference.assert_not_called()
+
+	def test_change_permission(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12456
+		channel_id = -10012345678
+		channel_title = "Test channel"
+		old_status = "member"
+		new_status = "administrator"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+
+		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_not_called()
+		mock_bot.kick_chat_member.assert_not_called()
+		mock_info.assert_not_called()
+		mock_error.assert_not_called()
+		mock_insert_user_reference.assert_not_called()
+
+	def test_ban_channel_subchannel(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12456
+		channel_id = -10012378456
+		channel_title = "Test channel"
+		old_status = "member"
+		new_status = "kicked"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+
+		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+		mock_bot.kick_chat_member.assert_not_called()
+		mock_info.assert_not_called()
+		mock_error.assert_not_called()
+		mock_insert_user_reference.assert_not_called()
+
+	def test_ban_channel_another_channel(self, mock_set_member_ids_channels, mock_info, mock_error, mock_insert_user_reference, *args):
+		user_id = 12456
+		channel_id = -100125874263
+		channel_title = "Test channel"
+		old_status = "member"
+		new_status = "kicked"
+		mock_bot = Mock(spec=TeleBot)
+		mock_user = Mock(id=user_id)
+		mock_member_update = Mock(spec=ChatMemberUpdated)
+		mock_member_update.chat = Mock(id=channel_id, title=channel_title)
+		mock_member_update.old_chat_member = Mock(status=old_status, user=mock_user)
+		mock_member_update.new_chat_member = Mock(status=new_status, user=mock_user)
+
+		user_utils.check_new_member(mock_member_update, mock_bot)
+		mock_set_member_ids_channels.assert_not_called()
+		mock_bot.kick_chat_member.assert_not_called()
+		mock_info.assert_not_called()
+		mock_error.assert_not_called()
+		mock_insert_user_reference.assert_not_called()
+
+
+@patch("db_utils.is_main_channel_exists", side_effect=lambda channel: channel == -10012345678)
+@patch("db_utils.is_individual_channel_exists", side_effect=lambda channel: channel == -10087654321)
+@patch("user_utils.set_member_ids_channels")
+class UpdateDataOnMemberChangeTest(TestCase):
+	def test_workspace_add(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+						   mock_is_main_channel_exists, *args):
+		channel_id = -10012345678
+		user_id = 123487
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+
+	def test_private_channel_add(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+								 mock_is_main_channel_exists, *args):
+		channel_id = -10087654321
+		user_id = 123487
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+
+	def test_other_channel_add(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+							   mock_is_main_channel_exists, *args):
+		channel_id = -10012378456
+		user_id = 123487
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
+		mock_set_member_ids_channels.assert_not_called()
+
+	def test_workspace_add_bot(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+						   mock_is_main_channel_exists, *args):
+		channel_id = -10012345678
+		user_id = 12354
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+
+	def test_private_channel_add_bot(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+								 mock_is_main_channel_exists, *args):
+		channel_id = -10087654321
+		user_id = 12354
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+
+	def test_other_channel_add_bot(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+							   mock_is_main_channel_exists, *args):
+		channel_id = -10012378456
+		user_id = 12354
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "left"
+		new_status = "member"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
+		mock_set_member_ids_channels.assert_not_called()
+
+	def test_workspace_remove(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+							  mock_is_main_channel_exists, *args):
+		channel_id = -10012345678
+		user_id = 123487
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "member"
+		new_status = "left"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+
+	def test_private_channel_remove(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+									mock_is_main_channel_exists, *args):
+		channel_id = -10087654321
+		user_id = 123487
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "member"
+		new_status = "left"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
+		mock_set_member_ids_channels.assert_called_once_with([channel_id])
+
+	def test_other_channel_remove(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+								  mock_is_main_channel_exists, *args):
+		channel_id = -10012378456
+		user_id = 123487
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "member"
+		new_status = "left"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_called_once_with(channel_id)
+		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
+		mock_set_member_ids_channels.assert_not_called()
+
+	def test_workspace_remove_bot(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+							  mock_is_main_channel_exists, *args):
+		channel_id = -10012345678
+		user_id = 12354
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "member"
+		new_status = "left"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_not_called()
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_set_member_ids_channels.assert_not_called()
+
+	def test_private_channel_remove_bot(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+									mock_is_main_channel_exists, *args):
+		channel_id = -10087654321
+		user_id = 12354
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "member"
+		new_status = "left"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_not_called()
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_set_member_ids_channels.assert_not_called()
+
+	def test_other_channel_remove_bot(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+								  mock_is_main_channel_exists, *args):
+		channel_id = -10012378456
+		user_id = 12354
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "member"
+		new_status = "left"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_not_called()
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_set_member_ids_channels.assert_not_called()
+
+	def test_update_permission_workspace(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+										 mock_is_main_channel_exists, *args):
+		channel_id = -10012378456
+		user_id = 123487
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "member"
+		new_status = "administrator"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_not_called()
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_set_member_ids_channels.assert_not_called()
+
+	def test_update_permission_private_channel(self, mock_set_member_ids_channels, mock_is_individual_channel_exists,
+										 mock_is_main_channel_exists, *args):
+		channel_id = -10087654321
+		user_id = 123487
+		mock_user = Mock(id=user_id)
+		bot_id = 12354
+		old_status = "administrator"
+		new_status = "member"
+		mock_bot = Mock(user=Mock(id=bot_id))
+		mock_member = Mock(chat=Mock(id=channel_id), old_chat_member=Mock(status=old_status, user=mock_user),
+						   new_chat_member=Mock(status=new_status, user=mock_user))
+
+		user_utils.update_data_on_member_change(mock_member, mock_bot)
+		mock_is_main_channel_exists.assert_not_called()
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_set_member_ids_channels.assert_not_called()
 
 
 @patch("config_utils.DISCUSSION_CHAT_DATA", {"-10012345678": -10087654321, "-10045612378": -10054123687})

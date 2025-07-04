@@ -1,5 +1,5 @@
 from unittest import TestCase, main
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 
 from pyrogram.types import InlineKeyboardMarkup
 from telebot import TeleBot
@@ -523,6 +523,146 @@ class CheckBotPermissionForMessagesTest(TestCase):
 
 		mock_member = Mock(status="kicked", can_send_messages=True, can_edit_messages=True)
 		self.assertFalse(utils.check_bot_permission_for_messages(mock_member, mock_chat))
+
+
+@patch("config_utils.DISCUSSION_CHAT_DATA", {"-10012345678": -10087654321})
+@patch("db_utils.delete_individual_channel")
+@patch("db_utils.is_individual_channel_exists")
+@patch("logging.info")
+@patch("utils.get_key_by_value", side_effect=lambda dict, channel_id: "-10012345678" if channel_id in [-10087654321, -10012365478] else None)
+@patch("user_utils.send_member_tags")
+@patch("channel_manager.initialize_channel")
+@patch("time.sleep")
+@patch("utils.check_bot_permission_for_messages", side_effect=lambda member, chat: chat.id in [-10012345678, -10087654321] and member.status not in ['left', 'kicked'])
+@patch("user_utils.update_data_on_member_change")
+class BotChangedPermissionTest(TestCase):
+	def test_add_with_permissions(self, mock_update_data_on_member_change, mock_check_bot_permission_for_messages,
+								  mock_sleep, mock_initialize_channel, mock_send_member_tags, mock_get_key_by_value,
+								  mock_info, mock_is_individual_channel_exists, mock_delete_individual_channel, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		mock_chat = Mock(id=channel_id)
+		user_id = 12565
+		mock_user = Mock(id=user_id)
+		old_status = "left"
+		mock_old_member = Mock(status=old_status)
+		new_status = "member"
+		mock_new_member = Mock(status=new_status)
+		mock_member = Mock(new_chat_member=mock_new_member, old_chat_member=mock_old_member, chat=mock_chat, from_user=mock_user)
+
+		utils.bot_changed_permission(mock_member, mock_bot)
+		mock_update_data_on_member_change.assert_called_once_with(mock_member, mock_bot)
+		mock_check_bot_permission_for_messages.assert_called_once_with(mock_new_member, mock_chat)
+		mock_sleep.assert_called_once_with(1)
+		mock_initialize_channel.assert_called_once_with(mock_bot, channel_id, user_id=user_id)
+		mock_send_member_tags.assert_called_once_with(channel_id, mock_bot)
+		mock_get_key_by_value.assert_called_once_with(config_utils.DISCUSSION_CHAT_DATA, channel_id)
+		mock_info.assert_called_once_with(f"Bot received permissions for channel {channel_id}")
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_delete_individual_channel.assert_not_called()
+
+	def test_add_to_description_with_permissions(self, mock_update_data_on_member_change, mock_check_bot_permission_for_messages,
+												 mock_sleep, mock_initialize_channel, mock_send_member_tags, mock_get_key_by_value,
+												 mock_info, mock_is_individual_channel_exists, mock_delete_individual_channel, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10087654321
+		main_channel_id = -10012345678
+		mock_chat = Mock(id=channel_id)
+		user_id = 12565
+		mock_user = Mock(id=user_id)
+		old_status = "left"
+		mock_old_member = Mock(status=old_status)
+		new_status = "member"
+		mock_new_member = Mock(status=new_status)
+		mock_member = Mock(new_chat_member=mock_new_member, old_chat_member=mock_old_member, chat=mock_chat, from_user=mock_user)
+
+		utils.bot_changed_permission(mock_member, mock_bot)
+		mock_update_data_on_member_change.assert_called_once_with(mock_member, mock_bot)
+		mock_check_bot_permission_for_messages.assert_called_once_with(mock_new_member, mock_chat)
+		mock_sleep.assert_called_once_with(1)
+		mock_initialize_channel.assert_called_once_with(mock_bot, channel_id, user_id=user_id)
+		mock_send_member_tags.assert_has_calls([call(channel_id, mock_bot), call(main_channel_id, mock_bot)])
+		self.assertEqual(mock_send_member_tags.call_count, 2)
+		mock_get_key_by_value.assert_called_once_with(config_utils.DISCUSSION_CHAT_DATA, channel_id)
+		mock_info.assert_called_once_with(f"Bot received permissions for channel {channel_id}")
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_delete_individual_channel.assert_not_called()
+
+	def test_add_without_permissions(self, mock_update_data_on_member_change, mock_check_bot_permission_for_messages, mock_sleep,
+									 mock_initialize_channel, mock_send_member_tags, mock_get_key_by_value, mock_info,
+									 mock_is_individual_channel_exists, mock_delete_individual_channel, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10087456321
+		mock_chat = Mock(id=channel_id)
+		user_id = 12565
+		mock_user = Mock(id=user_id)
+		old_status = "left"
+		mock_old_member = Mock(status=old_status)
+		new_status = "member"
+		mock_new_member = Mock(status=new_status)
+		mock_member = Mock(new_chat_member=mock_new_member, old_chat_member=mock_old_member, chat=mock_chat, from_user=mock_user)
+
+		utils.bot_changed_permission(mock_member, mock_bot)
+		mock_update_data_on_member_change.assert_called_once_with(mock_member, mock_bot)
+		mock_check_bot_permission_for_messages.assert_called_once_with(mock_new_member, mock_chat)
+		mock_sleep.assert_not_called()
+		mock_initialize_channel.assert_not_called()
+		mock_send_member_tags.assert_not_called()
+		mock_get_key_by_value.assert_not_called()
+		mock_info.assert_called_once_with(f"Bot permissions for channel {channel_id} was removed")
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_delete_individual_channel.assert_not_called()
+
+	def test_add_to_description_without_permissions(self, mock_update_data_on_member_change, mock_check_bot_permission_for_messages,
+													mock_sleep, mock_initialize_channel, mock_send_member_tags, mock_get_key_by_value,
+													mock_info, mock_is_individual_channel_exists, mock_delete_individual_channel, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012365478
+		mock_chat = Mock(id=channel_id)
+		user_id = 12565
+		mock_user = Mock(id=user_id)
+		old_status = "left"
+		mock_old_member = Mock(status=old_status)
+		new_status = "member"
+		mock_new_member = Mock(status=new_status)
+		mock_member = Mock(new_chat_member=mock_new_member, old_chat_member=mock_old_member, chat=mock_chat, from_user=mock_user)
+
+		utils.bot_changed_permission(mock_member, mock_bot)
+		mock_update_data_on_member_change.assert_called_once_with(mock_member, mock_bot)
+		mock_check_bot_permission_for_messages.assert_called_once_with(mock_new_member, mock_chat)
+		mock_sleep.assert_not_called()
+		mock_initialize_channel.assert_not_called()
+		mock_send_member_tags.assert_not_called()
+		mock_get_key_by_value.assert_not_called()
+		mock_info.assert_called_once_with(f"Bot permissions for channel {channel_id} was removed")
+		mock_is_individual_channel_exists.assert_not_called()
+		mock_delete_individual_channel.assert_not_called()
+
+	def test_remove(self, mock_update_data_on_member_change, mock_check_bot_permission_for_messages, mock_sleep,
+					mock_initialize_channel, mock_send_member_tags, mock_get_key_by_value, mock_info,
+					mock_is_individual_channel_exists, mock_delete_individual_channel, *args):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012365478
+		mock_chat = Mock(id=channel_id)
+		user_id = 12565
+		mock_user = Mock(id=user_id)
+		old_status = "member"
+		mock_old_member = Mock(status=old_status)
+		new_status = "left"
+		mock_new_member = Mock(status=new_status)
+		mock_member = Mock(new_chat_member=mock_new_member, old_chat_member=mock_old_member, chat=mock_chat, from_user=mock_user)
+
+		utils.bot_changed_permission(mock_member, mock_bot)
+		mock_update_data_on_member_change.assert_called_once_with(mock_member, mock_bot)
+		mock_check_bot_permission_for_messages.assert_called_once_with(mock_new_member, mock_chat)
+		mock_sleep.assert_not_called()
+		mock_initialize_channel.assert_not_called()
+		mock_send_member_tags.assert_not_called()
+		mock_get_key_by_value.assert_not_called()
+		mock_info.assert_called_once_with(f"Bot permissions for channel {channel_id} was removed")
+		mock_is_individual_channel_exists.assert_called_once_with(channel_id)
+		mock_delete_individual_channel.assert_called_once_with(channel_id)
+
 
 
 if __name__ == "__main__":

@@ -132,24 +132,7 @@ def handle_edited_post(post_data: telebot.types.Message):
 
 @bot.my_chat_member_handler()
 def handle_bot_changed_permissions(member_update: telebot.types.ChatMemberUpdated):
-	has_permissions = utils.check_bot_permission_for_messages(member_update.new_chat_member, member_update.chat)
-	if has_permissions:
-		time.sleep(1)
-		channel_manager.initialize_channel(bot, member_update.chat.id, user_id=member_update.from_user.id)
-		added_to_channel = (member_update.old_chat_member.status in ['left', 'kicked'] and
-							member_update.new_chat_member.status in ['member', 'restricted', 'administrator'])
-		if added_to_channel:
-			user_utils.send_member_tags(member_update.chat.id, bot)
-			channel_id = utils.get_key_by_value(config_utils.DISCUSSION_CHAT_DATA, member_update.chat.id)
-			if channel_id:
-				user_utils.send_member_tags(int(channel_id), bot)
-		logging.info(f"Bot received permissions for channel {member_update.chat.id}")
-	else:
-		logging.info(f"Bot permissions for channel {member_update.chat.id} was removed")
-
-	if member_update.new_chat_member.status in ["left", "kicked"]:
-		if db_utils.is_individual_channel_exists(member_update.chat.id):
-			db_utils.delete_individual_channel(member_update.chat.id)
+	utils.bot_changed_permission(member_update, bot)
 
 
 @bot.callback_query_handler(func=lambda call: main_channel_filter(call.message))
@@ -229,6 +212,7 @@ def handler_check_new_member(member_update: telebot.types.ChatMemberUpdated):
 
 @bot.chat_member_handler(func=subchannel_filter)
 def handle_changed_permissions_subchannel(member_update: telebot.types.ChatMemberUpdated):
+	user_utils.update_data_on_member_change(member_update, bot)
 	chat_id = member_update.chat.id
 	if db_utils.is_individual_channel_exists(chat_id):
 		chat_admins = bot.get_chat_administrators(chat_id)
