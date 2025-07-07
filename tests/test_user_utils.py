@@ -866,11 +866,12 @@ class CheckDefaultUserMemberTest(TestCase):
 		channel_id = -10012345678
 		mock_bot = Mock(spec=TeleBot)
 
-		user_utils.check_default_user_member(mock_bot, channel_id)
+		result = user_utils.check_invalid_default_user_member(mock_bot, channel_id, True)
 		mock_check_user_tag.assert_called_once_with("dd", channel_id)
 		mock_send_message.assert_not_called()
 		mock_get_member_ids_channel.assert_not_called()
 		mock_get_user.assert_not_called()
+		self.assertIsNone(result)
 
 	def test_default_user_is_not_member(self, mock_check_user_tag, mock_send_message, mock_get_member_ids_channel,
 										mock_get_user, *args):
@@ -880,13 +881,26 @@ class CheckDefaultUserMemberTest(TestCase):
 		text_channel = f"Invalid default user tag: user not found in the workspace with ID {channel_id}. Please update the default user tag accordingly."
 		mock_bot = Mock(spec=TeleBot)
 
-		user_utils.check_default_user_member(mock_bot, channel_id)
+		result = user_utils.check_invalid_default_user_member(mock_bot, channel_id, True)
 		mock_check_user_tag.assert_called_once_with("aa", channel_id)
 		mock_send_message.assert_has_calls([call(mock_bot, discussion_id, text), call(mock_bot, 2, text_channel),
 											call(mock_bot, 3, text_channel)])
 		self.assertEqual(mock_send_message.call_count, 3)
 		mock_get_member_ids_channel.assert_called_once_with(channel_id)
 		mock_get_user.assert_not_called()
+		self.assertTrue(result)
+
+	def test_default_user_is_not_member_without_send(self, mock_check_user_tag, mock_send_message, mock_get_member_ids_channel,
+										mock_get_user, *args):
+		channel_id = -10012378456
+		mock_bot = Mock(spec=TeleBot)
+
+		result = user_utils.check_invalid_default_user_member(mock_bot, channel_id)
+		mock_check_user_tag.assert_called_once_with("aa", channel_id)
+		mock_send_message.assert_not_called()
+		mock_get_member_ids_channel.assert_not_called()
+		mock_get_user.assert_not_called()
+		self.assertTrue(result)
 
 	def test_default_user_is_not_member_with_admin_username(self, mock_check_user_tag, mock_send_message,
 															mock_get_member_ids_channel, mock_get_user, *args):
@@ -898,7 +912,7 @@ class CheckDefaultUserMemberTest(TestCase):
 		config_utils.ADMIN_USERS = [2, 3, "@user_name", "@user_name2"]
 		mock_get_user.side_effect = lambda bot, username: Mock(id=4) if username == "@user_name2" else None
 
-		user_utils.check_default_user_member(mock_bot, channel_id)
+		result = user_utils.check_invalid_default_user_member(mock_bot, channel_id, True)
 		mock_check_user_tag.assert_called_once_with("aa", channel_id)
 		mock_send_message.assert_has_calls([call(mock_bot, discussion_id, text), call(mock_bot, 2, text_channel),
 											call(mock_bot, 3, text_channel), call(mock_bot, 4, text_channel)])
@@ -906,6 +920,7 @@ class CheckDefaultUserMemberTest(TestCase):
 		mock_get_member_ids_channel.assert_called_once_with(channel_id)
 		mock_get_user.assert_has_calls([call(mock_bot, "@user_name"), call(mock_bot, "@user_name2")])
 		self.assertEqual(mock_get_user.call_count, 2)
+		self.assertTrue(result)
 
 	def test_default_user_is_not_member_with_duplicate_admin(self, mock_check_user_tag, mock_send_message,
 															mock_get_member_ids_channel, mock_get_user, *args):
@@ -917,7 +932,7 @@ class CheckDefaultUserMemberTest(TestCase):
 		config_utils.ADMIN_USERS = [2, 3, "@user_name", "@user_name2"]
 		mock_get_user.side_effect = lambda bot, username: Mock(id=3) if username == "@user_name2" else None
 
-		user_utils.check_default_user_member(mock_bot, channel_id)
+		result = user_utils.check_invalid_default_user_member(mock_bot, channel_id, True)
 		mock_check_user_tag.assert_called_once_with("aa", channel_id)
 		mock_send_message.assert_has_calls([call(mock_bot, discussion_id, text), call(mock_bot, 2, text_channel),
 											call(mock_bot, 3, text_channel)])
@@ -925,6 +940,7 @@ class CheckDefaultUserMemberTest(TestCase):
 		mock_get_member_ids_channel.assert_called_once_with(channel_id)
 		mock_get_user.assert_has_calls([call(mock_bot, "@user_name"), call(mock_bot, "@user_name2")])
 		self.assertEqual(mock_get_user.call_count, 2)
+		self.assertTrue(result)
 
 	def test_default_user_is_not_member_without_discussion(self, mock_check_user_tag, mock_send_message,
 														   mock_get_member_ids_channel, mock_get_user, *args):
@@ -932,23 +948,25 @@ class CheckDefaultUserMemberTest(TestCase):
 		text_channel = f"Invalid default user tag: user not found in the workspace with ID {channel_id}. Please update the default user tag accordingly."
 		mock_bot = Mock(spec=TeleBot)
 
-		user_utils.check_default_user_member(mock_bot, channel_id)
+		result = user_utils.check_invalid_default_user_member(mock_bot, channel_id, True)
 		mock_check_user_tag.assert_called_once_with("ff", channel_id)
 		mock_send_message.assert_has_calls([call(mock_bot, 2, text_channel), call(mock_bot, 3, text_channel)])
 		self.assertEqual(mock_send_message.call_count, 2)
 		mock_get_member_ids_channel.assert_called_once_with(channel_id)
 		mock_get_user.assert_not_called()
+		self.assertTrue(result)
 
 	def test_default_user_is_not_member_without_user_tag(self, mock_check_user_tag, mock_send_message,
 														 mock_get_member_ids_channel, mock_get_user, *args):
 		channel_id = -10024687546
 		mock_bot = Mock(spec=TeleBot)
 
-		user_utils.check_default_user_member(mock_bot, channel_id)
+		result = user_utils.check_invalid_default_user_member(mock_bot, channel_id, True)
 		mock_check_user_tag.assert_not_called()
 		mock_send_message.assert_not_called()
 		mock_get_member_ids_channel.assert_not_called()
 		mock_get_user.assert_not_called()
+		self.assertIsNone(result)
 
 
 
