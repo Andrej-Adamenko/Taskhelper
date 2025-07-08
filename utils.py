@@ -265,7 +265,7 @@ def cut_entity_from_post(text: str, entities: List[telebot.types.MessageEntity],
 	return text, entities
 
 
-def get_key_by_value[T](d: dict[T, object], value: object) -> T | None:
+def get_key_by_value(d: dict[object, object], value: object) -> object | None:
 	key_list = list(d.keys())
 	val_list = list(d.values())
 
