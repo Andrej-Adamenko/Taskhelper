@@ -277,7 +277,7 @@ def get_key_by_value(d: dict[object, object], value: object) -> object | None:
 	return key_list[position]
 
 
-def get_keys_by_value[T](d: dict[T, object], search: object) -> list[T]:
+def get_keys_by_value(d: dict[object, object], search: object) -> list[object]:
 	result = []
 	for key, value in d.items():
 		if value == search:
