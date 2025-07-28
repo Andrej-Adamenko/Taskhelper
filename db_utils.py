@@ -781,7 +781,7 @@ def insert_or_update_last_user_interaction(user_tag, interaction_time):
 	if is_user_reminder_data_exists(user_tag):
 		sql = "UPDATE user_reminder_data SET last_interaction_time=(?) WHERE user_tag=(?)"
 	else:
-		sql = "INSERT INTO user_reminder_data(last_interaction_time, user_tag) VALUES (?, ?, ?)"
+		sql = "INSERT INTO user_reminder_data(last_interaction_time, user_tag) VALUES (?, ?)"
 	CURSOR.execute(sql, (interaction_time, user_tag))
 	DB_CONNECTION.commit()
 
