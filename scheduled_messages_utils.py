@@ -58,7 +58,7 @@ class ScheduledMessageDispatcher:
 
 			hashtag_data.set_scheduled_tag(date_str)
 
-			forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
+			forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data, message)
 
 			return
 
@@ -72,7 +72,7 @@ class ScheduledMessageDispatcher:
 
 		db_utils.insert_scheduled_message(main_message_id, main_channel_id, 0, 0, send_time)
 
-		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
+		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data, message)
 
 		self.insert_scheduled_message_info(main_message_id, main_channel_id, send_time)
 
@@ -308,7 +308,7 @@ class ScheduledMessageDispatcher:
 
 		hashtag_data = HashtagData(message, main_channel_id)
 
-		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
+		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data, message)
 
 		current_time = int(time.time())
 		db_utils.insert_or_update_sent_scheduled_message(main_message_id, main_channel_id, current_time)

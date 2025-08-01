@@ -24,7 +24,20 @@ _INTERVAL_UPDATING_THREAD: threading.Thread = None
 _STATUS: dict = {
 	__STOP_STATUS_KEY: True
 }
+_UPDATED_MESSAGES: dict = {}
 
+def _check_updating_message(channel_id: int, message_id: int) -> bool:
+	return channel_id in _UPDATED_MESSAGES and message_id in _UPDATED_MESSAGES[channel_id]
+
+def set_updating_message(channel_id: int, message_id: int):
+	if channel_id not in _UPDATED_MESSAGES:
+		_UPDATED_MESSAGES[channel_id] = []
+	if message_id not in _UPDATED_MESSAGES[channel_id]:
+		_UPDATED_MESSAGES[channel_id].append(message_id)
+
+def _clear_updating_channel(channel_id: int):
+	if channel_id in _UPDATED_MESSAGES:
+		del _UPDATED_MESSAGES[channel_id]
 
 def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_message_id: int,
 						 forwarded_message: pyrogram.types.Message = None):
@@ -32,7 +45,7 @@ def update_older_message(bot: telebot.TeleBot, main_channel_id: int, main_messag
 		logging.info(f"Ticket update for {main_channel_id, main_message_id} was skipped because it's not in db")
 		return
 
-	if not forwarded_message:
+	if not forwarded_message or _check_updating_message(main_channel_id, main_message_id):
 		try:
 			forwarded_message = utils.get_main_message_content_by_id(bot, main_channel_id, main_message_id)
 		except ApiTelegramException:
@@ -207,6 +220,7 @@ def _check_main_messages(bot: telebot.TeleBot, main_channel_id: int, start_from_
 		return
 
 	main_message_ids.sort(reverse=True)
+	_clear_updating_channel(main_channel_id)
 	if len(main_message_ids) > 5:
 		result = update_by_core(bot, main_channel_id, main_message_ids)
 	else:

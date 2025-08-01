@@ -230,9 +230,10 @@ class StoreDiscussionMessageTest(TestCase):
 @patch("db_utils.insert_or_update_channel_update_progress")
 @patch("interval_updating_utils.update_by_bot")
 @patch("interval_updating_utils.update_by_core")
+@patch("interval_updating_utils._clear_updating_channel")
 @patch('db_utils.get_main_message_ids')
 class CheckMainMessagesTest(TestCase):
-	def test_five_messages(self, mock_get_main_message_ids, mock_update_by_core, mock_update_by_bot,
+	def test_five_messages(self, mock_get_main_message_ids, mock__clear_updating_channel, mock_update_by_core, mock_update_by_bot,
 						mock_insert_or_update_channel_update_progress, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
@@ -243,12 +244,13 @@ class CheckMainMessagesTest(TestCase):
 
 		interval_updating_utils._check_main_messages(mock_bot, main_channel_id)
 		mock_get_main_message_ids.assert_called_once_with(main_channel_id)
+		mock__clear_updating_channel.assert_called_once_with(main_channel_id)
 		mock_update_by_core.assert_not_called()
 		mock_update_by_bot.assert_called_once_with(mock_bot, main_channel_id, main_message_sorted)
 		mock_insert_or_update_channel_update_progress.assert_called_once_with(main_channel_id, 0)
 		mock_info.assert_called_once_with(f"Main channel check completed in {main_channel_id}")
 
-	def test_messages_with_start_from_messages(self, mock_get_main_message_ids, mock_update_by_core, mock_update_by_bot,
+	def test_messages_with_start_from_messages(self, mock_get_main_message_ids, mock__clear_updating_channel, mock_update_by_core, mock_update_by_bot,
 						mock_insert_or_update_channel_update_progress, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
@@ -260,12 +262,13 @@ class CheckMainMessagesTest(TestCase):
 
 		interval_updating_utils._check_main_messages(mock_bot, main_channel_id, start_from_message)
 		mock_get_main_message_ids.assert_called_once_with(main_channel_id)
+		mock__clear_updating_channel.assert_called_once_with(main_channel_id)
 		mock_update_by_core.assert_not_called()
 		mock_update_by_bot.assert_called_once_with(mock_bot, main_channel_id, main_message_sorted)
 		mock_insert_or_update_channel_update_progress.assert_called_once_with(main_channel_id, 0)
 		mock_info.assert_called_once_with(f"Main channel check completed in {main_channel_id}")
 
-	def test_six_messages(self, mock_get_main_message_ids, mock_update_by_core, mock_update_by_bot,
+	def test_six_messages(self, mock_get_main_message_ids, mock__clear_updating_channel, mock_update_by_core, mock_update_by_bot,
 						mock_insert_or_update_channel_update_progress, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
@@ -276,12 +279,13 @@ class CheckMainMessagesTest(TestCase):
 
 		interval_updating_utils._check_main_messages(mock_bot, main_channel_id)
 		mock_get_main_message_ids.assert_called_once_with(main_channel_id)
+		mock__clear_updating_channel.assert_called_once_with(main_channel_id)
 		mock_update_by_core.assert_called_once_with(mock_bot, main_channel_id, main_message_sorted)
 		mock_update_by_bot.assert_not_called()
 		mock_insert_or_update_channel_update_progress.assert_called_once_with(main_channel_id, 0)
 		mock_info.assert_called_once_with(f"Main channel check completed in {main_channel_id}")
 
-	def test_false_bot_update(self, mock_get_main_message_ids, mock_update_by_core, mock_update_by_bot,
+	def test_false_bot_update(self, mock_get_main_message_ids, mock__clear_updating_channel, mock_update_by_core, mock_update_by_bot,
 						mock_insert_or_update_channel_update_progress, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
@@ -294,12 +298,13 @@ class CheckMainMessagesTest(TestCase):
 
 		interval_updating_utils._check_main_messages(mock_bot, main_channel_id, start_from_message)
 		mock_get_main_message_ids.assert_called_once_with(main_channel_id)
+		mock__clear_updating_channel.assert_called_once_with(main_channel_id)
 		mock_update_by_core.assert_not_called()
 		mock_update_by_bot.assert_called_once_with(mock_bot, main_channel_id, main_message_sorted)
 		mock_insert_or_update_channel_update_progress.assert_not_called()
 		mock_info.assert_not_called()
 
-	def test_false_core_update(self, mock_get_main_message_ids, mock_update_by_core, mock_update_by_bot,
+	def test_false_core_update(self, mock_get_main_message_ids, mock__clear_updating_channel, mock_update_by_core, mock_update_by_bot,
 						mock_insert_or_update_channel_update_progress, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
@@ -311,12 +316,13 @@ class CheckMainMessagesTest(TestCase):
 
 		interval_updating_utils._check_main_messages(mock_bot, main_channel_id)
 		mock_get_main_message_ids.assert_called_once_with(main_channel_id)
+		mock__clear_updating_channel.assert_called_once_with(main_channel_id)
 		mock_update_by_core.assert_called_once_with(mock_bot, main_channel_id, main_message_sorted)
 		mock_update_by_bot.assert_not_called()
 		mock_insert_or_update_channel_update_progress.assert_not_called()
 		mock_info.assert_not_called()
 
-	def test_empty_messages(self, mock_get_main_message_ids, mock_update_by_core, mock_update_by_bot,
+	def test_empty_messages(self, mock_get_main_message_ids, mock__clear_updating_channel, mock_update_by_core, mock_update_by_bot,
 						mock_insert_or_update_channel_update_progress, mock_info, *args):
 		mock_bot = Mock(spec=TeleBot)
 		main_channel_id = -10012345678
@@ -326,6 +332,7 @@ class CheckMainMessagesTest(TestCase):
 
 		interval_updating_utils._check_main_messages(mock_bot, main_channel_id)
 		mock_get_main_message_ids.assert_called_once_with(main_channel_id)
+		mock__clear_updating_channel.assert_not_called()
 		mock_update_by_core.assert_not_called()
 		mock_update_by_bot.assert_not_called()
 		mock_insert_or_update_channel_update_progress.assert_not_called()
@@ -465,6 +472,7 @@ class UpdateIntervalMessageTest(TestCase):
 		self.assertEqual(result, False)
 
 
+@patch("interval_updating_utils._UPDATED_MESSAGES", {-10012345678: [345, 342, 456]})
 @patch("forwarding_utils.forward_and_add_inline_keyboard")
 @patch("post_link_utils.update_post_link")
 @patch("utils.check_content_type", return_value=True)
@@ -520,6 +528,35 @@ class UpdateOlderMessageTest(TestCase):
 		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_update_post_link.return_value, check_ticket=True)
 		self.assertEqual(result, main_message_id)
 		self.assertEqual(mock_message.chat.id, main_channel_id)
+
+	def test_with_message_and_updated(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
+						  mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
+						  mock_update_post_link, mock_forward_and_add_inline_keyboard, *args):
+		mock_bot = Mock(spec=TeleBot)
+		main_channel_id = -10012345678
+		main_message_id = 345
+		mock_message = test_helper.create_mock_pyrogram_message("", [], main_channel_id, main_message_id)
+		mock_message.forward_from_message_id = main_message_id
+		mock_message.service = None
+		mock_message.empty = None
+		mock_message.forward_from_chat = mock_message.chat
+		mock_message_telebot = test_helper.create_mock_message("", [], main_channel_id, main_message_id)
+		mock_message_telebot.forward_from_message_id = main_message_id
+		mock_message_telebot.forward_from_chat = mock_message.chat
+		mock_get_main_message_content_by_id.return_value = mock_message_telebot
+
+
+		result = interval_updating_utils.update_older_message(mock_bot, main_channel_id, main_message_id, forwarded_message=mock_message)
+		mock_is_main_message_exists.assert_called_once_with(main_channel_id, main_message_id)
+		mock_info.assert_not_called()
+		mock_get_main_message_content_by_id.assert_called_once_with(mock_bot, main_channel_id, main_message_id)
+		mock_delete_main_message.assert_not_called()
+		mock_delete_main_channel_message.assert_not_called()
+		mock_check_content_type.assert_called_once_with(mock_bot, mock_message_telebot)
+		mock_update_post_link.assert_called_once_with(mock_bot, mock_message_telebot)
+		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_update_post_link.return_value, check_ticket=True)
+		self.assertEqual(result, main_message_id)
+		self.assertEqual(mock_message_telebot.chat.id, main_channel_id)
 
 	def test_with_empty_message(self, mock_is_main_message_exists, mock_info, mock_get_main_message_content_by_id,
 								mock_delete_main_message, mock_delete_main_channel_message, mock_check_content_type,
@@ -1031,8 +1068,34 @@ class CheckAllMessagesTest(TestCase):
 		self.assertEqual(config_utils.HASHTAGS_BEFORE_UPDATE, {"opened": "з"})
 
 
+class UpdatedMessagesTest(TestCase):
+	@patch("interval_updating_utils._UPDATED_MESSAGES", {-10012345678: [1, 3, 5, 6]})
+	def test_check_updating_message(self):
+		self.assertTrue(interval_updating_utils._check_updating_message(-10012345678, 5))
+		self.assertFalse(interval_updating_utils._check_updating_message(-10012345678, 4))
+		self.assertFalse(interval_updating_utils._check_updating_message(-100887654321, 2))
 
+	@patch("interval_updating_utils._UPDATED_MESSAGES", {-10012345678: [1, 3, 5, 6], -10012378456: [2, 5]})
+	def test_clear_updating_channel(self):
+		interval_updating_utils._clear_updating_channel(-10087654321)
+		self.assertEqual(interval_updating_utils._UPDATED_MESSAGES, {-10012345678: [1, 3, 5, 6], -10012378456: [2, 5]})
 
+		interval_updating_utils._clear_updating_channel(-10012345678)
+		self.assertEqual(interval_updating_utils._UPDATED_MESSAGES, {-10012378456: [2, 5]})
+
+		interval_updating_utils._clear_updating_channel(-10087654321)
+		self.assertEqual(interval_updating_utils._UPDATED_MESSAGES, {-10012378456: [2, 5]})
+
+	@patch("interval_updating_utils._UPDATED_MESSAGES", {-10012345678: [1, 3, 5, 6]})
+	def test_set_updating_message(self):
+		interval_updating_utils.set_updating_message(-10087654321, 3)
+		self.assertEqual(interval_updating_utils._UPDATED_MESSAGES, {-10012345678: [1, 3, 5, 6], -10087654321: [3]})
+
+		interval_updating_utils.set_updating_message(-10012345678, 7)
+		self.assertEqual(interval_updating_utils._UPDATED_MESSAGES, {-10012345678: [1, 3, 5, 6, 7], -10087654321: [3]})
+
+		interval_updating_utils.set_updating_message(-10012345678, 5)
+		self.assertEqual(interval_updating_utils._UPDATED_MESSAGES, {-10012345678: [1, 3, 5, 6, 7], -10087654321: [3]})
 
 
 if __name__ == "__main__":

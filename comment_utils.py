@@ -1,3 +1,4 @@
+import copy
 import logging
 
 import telebot
@@ -97,10 +98,12 @@ class CommentDispatcher:
 		if not is_service_hashtag_exists and not main_message_data:
 			return
 
+		main_message_data_origin = utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
+		if not main_message_data_origin:
+			return
+
 		if not main_message_data:
-			main_message_data = utils.get_message_content_by_id(bot, main_channel_id, main_message_id)
-			if not main_message_data:
-				return
+			main_message_data = main_message_data_origin
 
 		main_message_data.chat.id = main_channel_id
 		main_message_data.message_id = main_message_id
@@ -132,7 +135,7 @@ class CommentDispatcher:
 					hashtag_data.set_scheduled_tag(hashtag_data.extract_scheduled_tag_from_text(text, entity)[len(scheduled_hashtag) + 1:])
 
 		hashtag_data.ignore_comments = True
-		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data)
+		forwarding_utils.update_message_and_forward_to_subchannels(bot, hashtag_data, main_message_data_origin)
 
 	def update_next_action(self, bot: telebot.TeleBot, main_message_id: int, main_channel_id: int, next_action: str,
 						   comment_msg_data: telebot.types.Message):
@@ -173,7 +176,11 @@ class CommentDispatcher:
 			text = text[:last_line_start] + next_action_with_prefix + text[last_line_start:]
 		else:
 			text += next_action_with_prefix
+
+		post_data_origin = copy.deepcopy(post_data)
 		utils.set_post_content(post_data, text, entities)
+		if not utils.is_post_data_equal(post_data, post_data_origin):
+			interval_updating_utils.set_updating_message(main_channel_id, main_message_id)
 
 		hashtag_data = HashtagData(post_data, main_channel_id)
 		post_data.reply_markup = forwarding_utils.generate_control_buttons(hashtag_data, post_data)

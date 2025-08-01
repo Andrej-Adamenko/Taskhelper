@@ -1,5 +1,5 @@
 from unittest import TestCase, main
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, ANY
 
 import pytz
 import datetime
@@ -209,7 +209,7 @@ class ScheduleMessageTest(TestCase):
 	@patch("utils.add_comment_to_ticket")
 	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
 	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.insert_scheduled_message_info")
-	def test_not_scheduled_message(self, mock_insert_scheduled_message_info, *args):
+	def test_not_scheduled_message(self, mock_insert_scheduled_message_info, mock_update_message_and_forward_to_subchannels, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 
@@ -222,6 +222,7 @@ class ScheduleMessageTest(TestCase):
 
 		self.scheduled_message_dispatcher.schedule_message(mock_bot, mock_call, send_time)
 		mock_insert_scheduled_message_info.assert_called_once()
+		mock_update_message_and_forward_to_subchannels.assert_called_once_with(mock_bot, ANY, mock_call.message)
 
 	@patch("db_utils.is_main_channel_exists", return_value=True)
 	@patch("hashtag_data.HashtagData.find_scheduled_tag_in_other_hashtags", return_value=None)
@@ -230,7 +231,8 @@ class ScheduleMessageTest(TestCase):
 	@patch("forwarding_utils.update_message_and_forward_to_subchannels")
 	@patch("utils.add_comment_to_ticket")
 	@patch("scheduled_messages_utils.ScheduledMessageDispatcher.update_scheduled_time")
-	def test_already_scheduled_message(self, mock_update_scheduled_time, mock_add_comment_to_ticket, *args):
+	def test_already_scheduled_message(self, mock_update_scheduled_time, mock_add_comment_to_ticket,
+									   mock_update_message_and_forward_to_subchannels, *args):
 		mock_bot = Mock(spec=TeleBot)
 		mock_call = Mock(spec=CallbackQuery)
 
@@ -243,6 +245,7 @@ class ScheduleMessageTest(TestCase):
 
 		self.scheduled_message_dispatcher.schedule_message(mock_bot, mock_call, send_time)
 		mock_update_scheduled_time.assert_called_once()
+		mock_update_message_and_forward_to_subchannels.assert_called_once_with(mock_bot, ANY, mock_call.message)
 		mock_add_comment_to_ticket.assert_called_once_with(mock_bot, mock_call.message,
 										"Name deferred again the ticket to be sent on 2024-08-01 13:00.")
 

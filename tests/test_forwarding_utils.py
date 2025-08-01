@@ -1547,36 +1547,66 @@ class DeleteForwardedMessageTest(TestCase):
 @patch("forwarding_utils.add_control_buttons")
 @patch("comment_utils.CommentDispatcher.add_next_action_comment")
 @patch("forwarding_utils.update_main_message_content")
+@patch("interval_updating_utils.set_updating_message")
+@patch("utils.is_post_data_equal")
 @patch("hashtag_data.HashtagData.get_updated_post_data")
 class UpdateMessageAndForwardToSubchannelsTest(TestCase):
-	def test_default(self, mock_get_updated_post_data, mock_update_main_message_content, mock_add_next_action_comment,
-					 mock_add_control_buttons, mock_forward_to_subchannel, *args):
+	def test_default(self, mock_get_updated_post_data, mock_is_post_data_equal, mock_set_updating_message,
+					 mock_update_main_message_content, mock_add_next_action_comment, mock_add_control_buttons,
+					 mock_forward_to_subchannel, *args):
 		mock_bot = Mock(spec=TeleBot)
 		hashtag_data = HashtagData()
 		mock_message = test_helper.create_mock_message("", [])
 		mock_message_updated = test_helper.create_mock_message("", [])
 		mock_get_updated_post_data.return_value = mock_message_updated
+		mock_is_post_data_equal.return_value = True
 
 		forwarding_utils.update_message_and_forward_to_subchannels(mock_bot, hashtag_data, mock_message,
 																   False, mock_add_control_buttons)
 		mock_get_updated_post_data.assert_called_once_with()
+		mock_set_updating_message.assert_not_called()
 		mock_update_main_message_content.assert_called_once_with(mock_bot, hashtag_data, mock_message_updated, mock_message)
 		mock_add_next_action_comment.assert_not_called()
 		mock_add_control_buttons.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
 		mock_forward_to_subchannel.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
 
-	def test_with_comment_aciton(self, mock_get_updated_post_data, mock_update_main_message_content, mock_add_next_action_comment,
-					 mock_add_control_buttons, mock_forward_to_subchannel, *args):
+	def test_with_comment_aciton(self, mock_get_updated_post_data, mock_is_post_data_equal, mock_set_updating_message,
+								 mock_update_main_message_content, mock_add_next_action_comment, mock_add_control_buttons,
+								 mock_forward_to_subchannel, *args):
 		mock_bot = Mock(spec=TeleBot)
 		hashtag_data = HashtagData()
-		mock_message = test_helper.create_mock_message("", [])
-		mock_message_updated = test_helper.create_mock_message("", [])
+		channel_id = -10012345678
+		message_id = 12354
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message_updated = test_helper.create_mock_message("", [], channel_id, message_id)
 		mock_get_updated_post_data.return_value = mock_message_updated
+		mock_is_post_data_equal.return_value = False
 
 		forwarding_utils.update_message_and_forward_to_subchannels(mock_bot, hashtag_data, mock_message,
 																   True, mock_add_control_buttons)
 		mock_get_updated_post_data.assert_called_once_with()
+		mock_set_updating_message.assert_called_once_with(channel_id, message_id)
 		mock_update_main_message_content.assert_called_once_with(mock_bot, hashtag_data, mock_message_updated, mock_message)
+		mock_add_next_action_comment.assert_called_once_with(mock_bot, mock_message_updated)
+		mock_add_control_buttons.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
+		mock_forward_to_subchannel.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
+
+	def test_without_message(self, mock_get_updated_post_data, mock_is_post_data_equal, mock_set_updating_message,
+								 mock_update_main_message_content, mock_add_next_action_comment, mock_add_control_buttons,
+								 mock_forward_to_subchannel, *args):
+		mock_bot = Mock(spec=TeleBot)
+		hashtag_data = HashtagData()
+		channel_id = -10012345678
+		message_id = 12354
+		mock_message_updated = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_get_updated_post_data.return_value = mock_message_updated
+		mock_is_post_data_equal.return_value = False
+
+		forwarding_utils.update_message_and_forward_to_subchannels(mock_bot, hashtag_data, None,
+																   True, mock_add_control_buttons)
+		mock_get_updated_post_data.assert_called_once_with()
+		mock_set_updating_message.assert_not_called()
+		mock_update_main_message_content.assert_called_once_with(mock_bot, hashtag_data, mock_message_updated, None)
 		mock_add_next_action_comment.assert_called_once_with(mock_bot, mock_message_updated)
 		mock_add_control_buttons.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)
 		mock_forward_to_subchannel.assert_called_once_with(mock_bot, mock_message_updated, hashtag_data)

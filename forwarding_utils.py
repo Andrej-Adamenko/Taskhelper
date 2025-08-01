@@ -11,6 +11,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQu
 
 import channel_manager
 import core_api
+import interval_updating_utils
 from comment_utils import comment_dispatcher
 import config_utils
 import daily_reminder
@@ -807,6 +808,8 @@ def update_message_and_forward_to_subchannels(bot: telebot.TeleBot, hashtag_data
 											  add_next_action_comment: bool = False,
 											  keyboard_function: Callable[[telebot.TeleBot, telebot.types.Message, HashtagData], None] = add_control_buttons):
 	updated_message = hashtag_data.get_updated_post_data()
+	if post_data and not utils.is_post_data_equal(updated_message, post_data):
+		interval_updating_utils.set_updating_message(updated_message.chat.id, updated_message.message_id)
 	update_main_message_content(bot, hashtag_data, updated_message, post_data)
 	if add_next_action_comment:
 		comment_dispatcher.add_next_action_comment(bot, updated_message)
