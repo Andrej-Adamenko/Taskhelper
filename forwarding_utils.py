@@ -12,6 +12,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQu
 import channel_manager
 import core_api
 import interval_updating_utils
+import post_link_utils
 from comment_utils import comment_dispatcher
 import config_utils
 import daily_reminder
@@ -872,3 +873,19 @@ def get_invalid_ticket_ids(bot: telebot.TeleBot):
 
 		logging.info(f"Count deleted invalid tickets in channel {channel_id} is {count_invalid}")
 
+
+def handle_edited_post(bot: telebot.TeleBot, post_data: telebot.types.Message):
+	if post_data.media_group_id:
+		return
+
+	"""
+		After post is created in the main channel it will be edited by the telegram after it was copied to
+		discussion channel and there is no way to determine if user edited the post or the telegram itself
+		so if post was edited in first 5 seconds after it was created the notification will not be sent
+	"""
+	if (post_data.edit_date - post_data.date) > 5:
+		utils.add_comment_to_ticket(bot, post_data, "A user edited the ticket.")
+		interval_updating_utils.set_updating_message(post_data.chat.id, post_data.message_id)
+
+	post_link_utils.update_post_link(bot, post_data)
+	forward_and_add_inline_keyboard(bot, post_data)

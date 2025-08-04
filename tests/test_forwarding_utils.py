@@ -1699,6 +1699,56 @@ class UpdateMainMessageContentTest(TestCase):
 		mock_info.assert_not_called()
 
 
+@patch("forwarding_utils.forward_and_add_inline_keyboard")
+@patch("post_link_utils.update_post_link")
+@patch("interval_updating_utils.set_updating_message")
+@patch("utils.add_comment_to_ticket")
+class EditedPostTest(TestCase):
+	def test_default(self, mock_add_comment_to_ticket, mock_set_updating_message, mock_update_post_link,
+					 mock_forward_and_add_inline_keyboard):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 12345
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message.media_group_id = None
+		mock_message.edit_date = 1754316972
+		mock_message.date = 1754316872
+
+		forwarding_utils.handle_edited_post(mock_bot, mock_message)
+		mock_add_comment_to_ticket.assert_called_once_with(mock_bot, mock_message, "A user edited the ticket.")
+		mock_set_updating_message.assert_called_once_with(channel_id, message_id)
+		mock_update_post_link.assert_called_once_with(mock_bot, mock_message)
+		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_message)
+
+	def test_edit_date_less_5_seconds(self, mock_add_comment_to_ticket, mock_set_updating_message, mock_update_post_link,
+									  mock_forward_and_add_inline_keyboard):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 12345
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message.media_group_id = None
+		mock_message.edit_date = 1754316972
+		mock_message.date = 1754316970
+
+		forwarding_utils.handle_edited_post(mock_bot, mock_message)
+		mock_add_comment_to_ticket.assert_not_called()
+		mock_set_updating_message.assert_not_called()
+		mock_update_post_link.assert_called_once_with(mock_bot, mock_message)
+		mock_forward_and_add_inline_keyboard.assert_called_once_with(mock_bot, mock_message)
+
+	def test_with_media_group_id(self, mock_add_comment_to_ticket, mock_set_updating_message, mock_update_post_link,
+									  mock_forward_and_add_inline_keyboard):
+		mock_bot = Mock(spec=TeleBot)
+		channel_id = -10012345678
+		message_id = 12345
+		mock_message = test_helper.create_mock_message("", [], channel_id, message_id)
+		mock_message.media_group_id = 12
+
+		forwarding_utils.handle_edited_post(mock_bot, mock_message)
+		mock_add_comment_to_ticket.assert_not_called()
+		mock_set_updating_message.assert_not_called()
+		mock_update_post_link.assert_not_called()
+		mock_forward_and_add_inline_keyboard.assert_not_called()
 
 
 if __name__ == "__main__":

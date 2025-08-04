@@ -115,19 +115,7 @@ def handle_edit_channel_title(post_data: telebot.types.Message):
 
 @bot.edited_channel_post_handler(func=main_channel_filter, content_types=SUPPORTED_CONTENT_TYPES_TICKET)
 def handle_edited_post(post_data: telebot.types.Message):
-	if post_data.media_group_id:
-		return
-
-	"""
-		After post is created in the main channel it will be edited by the telegram after it was copied to
-		discussion channel and there is no way to determine if user edited the post or the telegram itself
-		so if post was edited in first 5 seconds after it was created the notification will not be sent
-	"""
-	if (post_data.edit_date - post_data.date) > 5:
-		utils.add_comment_to_ticket(bot, post_data, "A user edited the ticket.")
-
-	post_link_utils.update_post_link(bot, post_data)
-	forwarding_utils.forward_and_add_inline_keyboard(bot, post_data)
+	forwarding_utils.handle_edited_post(bot, post_data)
 
 
 @bot.my_chat_member_handler()
